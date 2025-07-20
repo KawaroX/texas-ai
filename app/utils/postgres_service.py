@@ -1,10 +1,11 @@
 import psycopg2
-import os
+from config import settings
 
+# 使用 config.settings 获取数据库连接信息
 conn = psycopg2.connect(
-    dbname=os.getenv("POSTGRES_DB"),
-    user=os.getenv("POSTGRES_USER"),
-    password=os.getenv("POSTGRES_PASSWORD"),
+    dbname=settings.POSTGRES_DB,
+    user=settings.POSTGRES_USER,
+    password=settings.POSTGRES_PASSWORD,
     host="db",  # 容器内部用服务名连接
     port=5432,
 )
@@ -18,7 +19,7 @@ def insert_messages(messages):
     with conn.cursor() as cur:
         cur.executemany(
             """
-            INSERT INTO messages (channel_id, sender, content, timestamp)
+            INSERT INTO messages (channel_id, role, content, created_at)
             VALUES (%s, %s, %s, %s)
             """,
             messages,

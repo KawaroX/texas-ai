@@ -17,7 +17,7 @@ async def merge_context(
     2. 其他频道的 2h 聊天记录，AI 摘录摘要信息，整合进 prompt 最后一段 user 消息中
     """
     now = now or datetime.utcnow()
-    two_hours_ago = now - timedelta(hours=2)
+    six_hours_ago = now - timedelta(hours=2)
 
     logger.info(f"🔍 Merging context for channel: {channel_id}")
 

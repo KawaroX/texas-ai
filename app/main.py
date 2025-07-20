@@ -3,6 +3,7 @@ from config import settings
 import asyncio
 
 from mattermost_client import MattermostWebSocketClient
+from services.redis_cleanup_service import start_redis_cleanup
 
 app = FastAPI(title=settings.BOT_NAME)
 
@@ -12,6 +13,10 @@ def read_root():
 
 @app.on_event("startup")
 async def startup_event():
-    """启动 WebSocket 客户端"""
+    """启动 WebSocket 客户端和Redis清理服务"""
+    # 启动 WebSocket 客户端
     ws_client = MattermostWebSocketClient()
     asyncio.create_task(ws_client.connect())
+    
+    # 启动 Redis 清理服务
+    asyncio.create_task(start_redis_cleanup())

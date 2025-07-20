@@ -58,11 +58,27 @@ class ChatEngine:
         """获取其他频道的摘要信息"""
         other_channels = list_channels(exclude=[channel_id])
         summary_tasks = []
+        all_latest_timestamps = []
+
+        # 获取当前频道最新消息的时间戳
+        current_channel_messages = get_channel_memory(channel_id).get_recent_messages()
+        if current_channel_messages:
+            # 假设消息是按时间倒序排列的，或者我们取最后一条
+            latest_current_message_time = datetime.fromisoformat(
+                current_channel_messages[-1]["timestamp"]
+            )
+            all_latest_timestamps.append(latest_current_message_time)
 
         for other_channel in other_channels:
             messages = get_channel_memory(other_channel).get_recent_messages()
             if not messages:
                 continue
+
+            # 获取其他频道最新消息的时间戳
+            latest_other_message_time = datetime.fromisoformat(
+                messages[-1]["timestamp"]
+            )
+            all_latest_timestamps.append(latest_other_message_time)
 
             # 为每个频道创建异步摘要任务
             task = asyncio.create_task(
@@ -70,9 +86,6 @@ class ChatEngine:
                 name=f"summary_{other_channel}",
             )
             summary_tasks.append(task)
-
-        if not summary_tasks:
-            return []
 
         # 等待所有摘要任务完成
         summaries = await asyncio.gather(*summary_tasks, return_exceptions=True)
@@ -86,7 +99,103 @@ class ChatEngine:
             if summary and summary.strip() and summary.strip() != "空":
                 summary_notes.append(summary)
 
-        logger.info(f"✅ 成功获取 {len(summary_notes)} 个频道摘要")
+        # 计算时间差并生成“谴责”提示
+        if all_latest_timestamps:
+            latest_overall_message_time = max(all_latest_timestamps)
+            current_utc_time = datetime.utcnow()  # 使用 UTC 时间
+            time_diff = current_utc_time - latest_overall_message_time
+
+            if time_diff > timedelta(hours=1):
+                # 判断是否在东八区睡眠时间（23:00 - 07:00）
+                # 将 UTC 时间转换为东八区时间进行判断
+                latest_local_time = latest_overall_message_time + timedelta(hours=8)
+                current_local_time = current_utc_time + timedelta(hours=8)
+
+                is_during_sleep_time = False
+                # 检查时间段是否与睡眠时间高度重合
+                # 简化判断：如果最新消息时间和当前时间都在睡眠时间段内，或者跨越了睡眠时间段
+                # 睡眠时间：23:00 (23) 到次日 7:00 (7)
+
+                # 定义睡眠时间段的开始和结束小时（东八区）
+                SLEEP_START_HOUR = 23
+                SLEEP_END_HOUR = 7
+
+                # 检查时间段是否完全落在睡眠时间段内
+                # 情况1: 都在同一天，且在睡眠时间段内 (例如 23:30 -> 00:30) - 不可能，因为跨天了
+                # 情况2: 跨天，从前一天的睡眠时间到当前天的睡眠时间 (例如 23:30 -> 06:30)
+                # 情况3: 从非睡眠时间进入睡眠时间 (例如 22:30 -> 00:30)
+                # 情况4: 从睡眠时间进入非睡眠时间 (例如 06:30 -> 08:30)
+
+                # 辅助函数：判断一个小时是否在睡眠时间段内
+                def is_in_sleep_range(hour):
+                    if SLEEP_START_HOUR <= SLEEP_END_HOUR:  # 同一天
+                        return SLEEP_START_HOUR <= hour < SLEEP_END_HOUR
+                    else:  # 跨天
+                        return hour >= SLEEP_START_HOUR or hour < SLEEP_END_HOUR
+
+                # 检查时间段内是否有大部分时间落在睡眠时间
+                # 简单判断：如果开始时间和结束时间都在睡眠时间段内，或者时间段跨越了睡眠时间段的大部分
+                # 这里可以更精确地计算重合时长，但为了简化，先判断起点和终点
+
+                # 如果开始时间在睡眠时间段内
+                if is_in_sleep_range(latest_local_time.hour):
+                    is_during_sleep_time = True
+                # 如果结束时间在睡眠时间段内
+                elif is_in_sleep_range(current_local_time.hour):
+                    is_during_sleep_time = True
+                # 如果时间段跨越了睡眠时间段（例如从晚上22点到早上8点）
+                elif (
+                    latest_local_time.hour < SLEEP_START_HOUR
+                    and current_local_time.hour >= SLEEP_END_HOUR
+                    and time_diff > timedelta(hours=8)
+                ):
+                    # 粗略判断，如果时间差超过8小时，且跨越了整个睡眠时间段
+                    is_during_sleep_time = True
+
+                # 更精确的判断：计算时间段内有多少小时落在睡眠时间
+                total_sleep_overlap_seconds = 0
+                current_check_time = latest_overall_message_time  # UTC时间
+
+                while current_check_time < current_utc_time:
+                    # 将当前检查时间转换为东八区时间
+                    local_check_time = current_check_time + timedelta(hours=8)
+
+                    # 计算到下一个小时边界的时间
+                    next_hour_utc = (current_check_time + timedelta(hours=1)).replace(
+                        minute=0, second=0, microsecond=0
+                    )
+
+                    # 确保不超过 current_utc_time
+                    end_of_interval_utc = min(next_hour_utc, current_utc_time)
+
+                    # 计算当前小时内重叠的秒数
+                    overlap_seconds_in_this_hour = 0
+
+                    # 如果当前小时在睡眠时间段内
+                    if is_in_sleep_range(local_check_time.hour):
+                        # 计算当前小时内，从 current_check_time 到 end_of_interval_utc 的秒数
+                        overlap_seconds_in_this_hour = (
+                            end_of_interval_utc - current_check_time
+                        ).total_seconds()
+
+                    total_sleep_overlap_seconds += overlap_seconds_in_this_hour
+                    current_check_time = end_of_interval_utc  # 移动到下一个检查点
+
+                # 如果睡眠时间重合超过总时间差的50% (或者一个固定阈值，比如4小时)
+                # 这里设定一个阈值，比如至少有4小时的睡眠时间重合
+                if total_sleep_overlap_seconds >= timedelta(hours=4).total_seconds():
+                    is_during_sleep_time = True
+
+                if not is_during_sleep_time:
+                    hours_diff = int(time_diff.total_seconds() // 3600)
+                    minutes_diff = int((time_diff.total_seconds() % 3600) // 60)
+                    condemn_message = (
+                        f"【参考资料】\n"
+                        f"注意：距离Kawaro你上次在任何频道（包括当前频道）回复我，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。Kawaro你的最新消息与上次回复的内容是否有关联？请根据上下文判断是否需要对此进行适当的评论或“谴责”。"
+                    )
+                    summary_notes.insert(0, condemn_message)  # 将谴责信息放在最前面
+
+        logger.info(f"✅ 成功获取 {len(summary_notes)} 个频道摘要 (包括潜在的谴责提示)")
         return summary_notes
 
     async def _summarize_channel(
@@ -105,7 +214,9 @@ class ChatEngine:
             )
             summary = await call_ai_summary(prompt)
 
-            summary.replace("user", "Kawaro").replace("assistant", "你")
+            summary = summary.replace("user", "Kawaro").replace(
+                "assistant", "你"
+            )  # 直接赋值给 summary
 
             if summary and summary.strip() and summary.strip() != "空":
                 return f"频道 [{channel_id}] 的摘要信息：\n{summary}"
@@ -116,9 +227,14 @@ class ChatEngine:
             return ""
 
     async def stream_reply(
-        self, channel_id: str, messages: List[str], context_info: Optional[Dict] = None
+        self,
+        channel_id: str,
+        messages: List[str],
+        channel_info: Optional[Dict] = None,
+        user_info: Optional[Dict] = None,
+        context_info: Optional[Dict] = None,
     ):
-        """流式生成回复，支持消息列表和预收集的上下文"""
+        """流式生成回复，支持消息列表和预收集的上下文，并包含频道和用户信息"""
         logger.info(
             f"🧠 流式生成回复 for channel {channel_id}, 消息数: {len(messages)}"
         )
@@ -127,41 +243,69 @@ class ChatEngine:
         if context_info is None:
             context_info = await self._collect_context_info(channel_id, messages)
 
-        # 构建完整的用户查询
-        latest_query = "\n".join(messages) if len(messages) > 1 else messages[0]
-
         # 构建消息列表
         prompt_messages = []
 
-        # 1. 系统提示词
-        prompt_messages.append({"role": "system", "content": self.system_prompt})
+        # 1. 系统提示词 (根据频道和用户信息动态生成)
+        dynamic_system_prompt = self.system_prompt
+        if channel_info:
+            dynamic_system_prompt += (
+                f"\n\n当前频道信息：\n"
+                f"- 频道名称 (系统): {channel_info.get('name', '未知')}\n"
+                f"- 频道显示名称: {channel_info.get('display_name', '未知')}\n"
+                f"- 频道类型: {channel_info.get('type', '未知')}"
+                "\n\n可以根据频道信息进行定制化处理。"
+            )
+        if user_info:
+            dynamic_system_prompt += (
+                f"\n\n当前用户信息：\n"
+                f"- 用户名: {user_info.get('username', '未知')}\n"
+                f"- 全名: {user_info.get('full_name', '未知')}\n"
+                f"- 昵称: {user_info.get('nickname', '未知')}"
+                "\n\n如果不是Kawaro的话，你应该表现得更冷漠。你的温柔应该留给Kawaro."
+            )
+
+        prompt_messages.append({"role": "system", "content": dynamic_system_prompt})
 
         # 2. 本频道上下文
         prompt_messages.extend(context_info["chat_context"])
 
         # 3. 构建用户消息（包含参考资料）
+        condemn_note = ""
+        if context_info["summary_notes"] and context_info["summary_notes"][
+            0
+        ].startswith("【参考资料】\n注意：距离Kawaro你上次"):
+            condemn_note = context_info["summary_notes"].pop(0)
+
         reference_note = "\n\n".join(context_info["summary_notes"])
 
-        # 如果有现有的用户消息，先移除最后一个
-        # 这一步是针对 chat_context 中可能包含的最后一条用户消息
-        if prompt_messages and prompt_messages[-1]["role"] == "user":
+        if (
+            prompt_messages
+            and prompt_messages[-1]["role"] == "user"
+            and prompt_messages[-1]["content"] == messages[-1]
+        ):
             prompt_messages.pop()
 
-        # 添加参考资料作为单独的用户消息
         if reference_note:
             prompt_messages.append(
                 {"role": "user", "content": f"【参考资料】\n{reference_note}"}
             )
 
-        # 将用户发送的每一条消息作为独立的user消息添加到prompt_messages中
+        if condemn_note:
+            prompt_messages.append({"role": "user", "content": condemn_note})
+
         for i, msg in enumerate(messages):
             prompt_messages.append({"role": "user", "content": msg})
 
-        # 在最后一条用户消息中添加回复要求
         if prompt_messages and prompt_messages[-1]["role"] == "user":
             prompt_messages[-1][
                 "content"
-            ] += '\n\n请根据参考资料回复Kawaro的消息。以消息为主，参考资料只是辅助。如果用===分段后，每个段落的末尾是句号"。"可以省略'
+            ] += f'\n\n请根据参考资料回复Kawaro的消息。以消息为主，参考资料只是辅助。如果用===分段后，每个段落的末尾是句号"。"可以省略。你回复的长度应该接近{len(prompt_messages[-1]["content"])}个字，不要太长也不要太短，除非你收到很长的消息（可以回复很长）或者很段的消息（比如：在吗？只需要回复：在，怎么了？或者如果时间很晚的话，可以回复：在，要睡觉了，有什么事快说）。'
+
+            prompt_messages[-1][
+                "content"
+            ] += f'\n\n记得灵活使用“==="进行分段，尽量不要一次输出太长的句子，模拟正常的聊天。'
+
 
         # 调试输出
         for m in prompt_messages:
@@ -173,7 +317,15 @@ class ChatEngine:
             yield segment
 
     # 为了向后兼容，保留原有的单消息接口
-    async def stream_reply_single(self, channel_id: str, latest_query: str):
+    async def stream_reply_single(
+        self,
+        channel_id: str,
+        latest_query: str,
+        channel_info: Optional[Dict] = None,
+        user_info: Optional[Dict] = None,
+    ):
         """向后兼容的单消息接口"""
-        async for segment in self.stream_reply(channel_id, [latest_query]):
+        async for segment in self.stream_reply(
+            channel_id, [latest_query], channel_info, user_info
+        ):
             yield segment
