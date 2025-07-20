@@ -1,3 +1,5 @@
 .env
 __pycache__/
 data/postgres
+.DS_Store
+app/.DS_Store

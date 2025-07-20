@@ -29,7 +29,7 @@ class ChatEngine:
         reference_note = "\n\n".join(context["summary_notes"])
         user_prompt = latest_query
         if reference_note:
-            user_prompt = f"【参考资料】\n{reference_note}\n\n【Kawaro发来的信息】\n{latest_query}\n请根据参考资料回复Kawaro的消息。以消息为主，参考资料只是辅助。"
+            user_prompt = f"【参考资料】\n{reference_note}\n\n【Kawaro发来的信息】\n{latest_query}\n请根据参考资料回复Kawaro的消息。以消息为主，参考资料只是辅助。如果用===分段后，每个段落的末尾是句号“。”可以省略"
         messages.append({"role": "user", "content": user_prompt})
 
         print(user_prompt[:100] + "...")
