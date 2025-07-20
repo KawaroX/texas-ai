@@ -34,6 +34,9 @@ class MattermostWebSocketClient:
         self.channel_info_cache = {}
         self.user_info_cache = {}
 
+        # 频道活动状态跟踪
+        self.channel_activity = {}  # {channel_id: {"last_activity": timestamp}}
+
     async def get_channel_info(self, channel_id):
         if channel_id in self.channel_info_cache:
             return self.channel_info_cache[channel_id]
@@ -131,6 +134,9 @@ class MattermostWebSocketClient:
                 if message.startswith("🤖"):
                     continue
 
+                # 更新频道活动状态
+                self.channel_activity[channel_id] = {"last_activity": time.time()}
+
                 # 获取频道和用户信息
                 channel_info = await self.get_channel_info(channel_id)
                 user_info = await self.get_user_info(user_id)
@@ -147,6 +153,34 @@ class MattermostWebSocketClient:
                 await self._add_to_buffer_and_process(
                     channel_id, message, channel_info, user_info
                 )
+
+            elif event == "user_typing":
+                # 处理用户打字事件
+                typing_data = data["data"]
+                channel_id = typing_data.get("channel_id")
+                user_id = typing_data.get("user_id")
+
+                if channel_id and user_id != self.user_id:
+                    # 更新频道活动状态
+                    self.channel_activity[channel_id] = {"last_activity": time.time()}
+                    logging.debug(f"👀 User typing in channel {channel_id}")
+
+    async def send_typing(self, channel_id: str):
+        """发送打字指示器到指定频道"""
+        headers = {"Authorization": f"Bearer {self.token}"}
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    f"{self.http_base_url}/api/v4/users/me/typing",
+                    json={"channel_id": channel_id},
+                    headers=headers
+                )
+                if response.status_code == 200:
+                    logging.info(f"✅ 发送打字指示器成功，频道 {channel_id}")
+                else:
+                    logging.warning(f"⚠️ 发送打字指示器失败: {response.status_code} - {response.text}")
+            except Exception as e:
+                logging.warning(f"⚠️ 发送打字指示器异常: {e}")
 
     async def _add_to_buffer_and_process(
         self, channel_id: str, message: str, channel_info=None, user_info=None
@@ -170,9 +204,8 @@ class MattermostWebSocketClient:
                     cleaned_segment = segment.strip()
                     if cleaned_segment.endswith((".", "。")):
                         cleaned_segment = cleaned_segment[:-1]
-                    # 先等待，再发送
-                    await asyncio.sleep(len(cleaned_segment) * 0.5)
-                    await self.send_message(channel_id, cleaned_segment)
+                    # 在等待期间持续发送打字指示器
+                    await self._send_message_with_typing(channel_id, cleaned_segment)
             return  # 简单消息处理完毕，直接返回
 
         # 否则，消息进入正常缓冲流程
@@ -192,34 +225,41 @@ class MattermostWebSocketClient:
             self._smart_delay_and_process(channel_id, channel_info, user_info)
         )
 
-    async def _smart_delay_and_process(self, channel_id: str, channel_info=None, user_info=None):
-        """智能延迟处理：2秒超时 OR 信息收集完成"""
+    async def _smart_delay_and_process(
+        self, channel_id: str, channel_info=None, user_info=None
+    ):
+        """智能延迟处理：根据用户活动和超时进行处理"""
+        start_time = time.time()
+
         try:
+            while True:
+                # 获取最新活动时间
+                current_activity_time = self.channel_activity.get(channel_id, {}).get(
+                    "last_activity", start_time
+                )
+
+                # 检查超时条件
+                current_time = time.time()
+                total_elapsed = current_time - start_time
+                activity_elapsed = current_time - current_activity_time
+
+                # 双重超时机制：总时长30s或连续10s无活动
+                if total_elapsed > 30 or activity_elapsed > 10:
+                    logging.info(f"⏳ 频道 {channel_id} 达到超时条件，开始处理消息。")
+                    break
+
+                await asyncio.sleep(1)  # 每秒检查一次
+
             # 从 Redis 获取当前缓冲区中的所有消息
             messages = self.redis_client.lrange(f"channel_buffer:{channel_id}", 0, -1)
             logging.info(f"🤔 开始智能处理，频道 {channel_id}，消息数：{len(messages)}")
 
-            # 同时启动两个任务：信息收集和4秒延迟
-            info_task = asyncio.create_task(
-                self.chat_engine._collect_context_info(channel_id, messages)
+            # 收集上下文信息
+            context_info = await self.chat_engine._collect_context_info(
+                channel_id, messages
             )
-            delay_task = asyncio.create_task(asyncio.sleep(4.0))
-
-            # 等待任一任务完成
-            done, pending = await asyncio.wait(
-                [info_task, delay_task], return_when=asyncio.FIRST_COMPLETED
-            )
-
-            # 取消未完成的任务
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
 
             # 开始生成回复
-            context_info = info_task.result() if info_task.done() else None
             await self._generate_and_send_reply(
                 channel_id, messages, context_info, channel_info, user_info
             )  # 传递从 Redis 获取的消息
@@ -237,7 +277,12 @@ class MattermostWebSocketClient:
                 del self.processing_tasks[channel_id]
 
     async def _generate_and_send_reply(
-        self, channel_id: str, processed_messages: List[str], context_info=None, channel_info=None, user_info=None
+        self,
+        channel_id: str,
+        processed_messages: List[str],
+        context_info=None,
+        channel_info=None,
+        user_info=None,
     ):
         """生成并发送回复"""
         try:
@@ -254,9 +299,8 @@ class MattermostWebSocketClient:
                     cleaned_segment = segment.strip()
                     if cleaned_segment.endswith((".", "。")):
                         cleaned_segment = cleaned_segment[:-1]
-                    # 先等待，再发送
-                    await asyncio.sleep(len(cleaned_segment) * 0.5)
-                    await self.send_message(channel_id, cleaned_segment)
+                    # 在等待期间持续发送打字指示器
+                    await self._send_message_with_typing(channel_id, cleaned_segment)
 
             # 成功发送回复后，清空该频道的 Redis 缓冲区
             self.redis_client.delete(f"channel_buffer:{channel_id}")
@@ -264,6 +308,30 @@ class MattermostWebSocketClient:
 
         except Exception as e:
             logging.error(f"❌ 生成回复出错，频道 {channel_id}: {e}")
+
+    async def _send_message_with_typing(self, channel_id: str, text: str):
+        """在发送消息时持续发送打字指示器"""
+        typing_task = None
+        try:
+            # 启动一个后台任务，每隔一段时间发送一次打字指示器
+            async def continuous_typing():
+                while True:
+                    await self.send_typing(channel_id)
+                    await asyncio.sleep(3)  # Mattermost typing indicator lasts for about 5 seconds
+
+            typing_task = asyncio.create_task(continuous_typing())
+
+            # 等待消息发送完成
+            await asyncio.sleep(len(text) * 0.5)  # 模拟打字等待时间
+            await self.send_message(channel_id, text)
+
+        finally:
+            if typing_task:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
 
     async def send_message(self, channel_id, text):
         # 移除了不必要的 strip('=\n')，因为 AI 服务已经正确处理了分段
