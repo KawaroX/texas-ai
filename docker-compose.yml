@@ -12,10 +12,20 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     networks:
       - texas-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h localhost -U ${POSTGRES_USER} -d ${POSTGRES_DB}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   # Redis Broker
   redis:
@@ -26,6 +36,11 @@ services:
       - "6379:6379"
     networks:
       - texas-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # FastAPI + WebSocket 客户端服务
   bot:
@@ -44,8 +59,10 @@ services:
     command:
       ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - texas-net
 
@@ -63,8 +80,44 @@ services:
     working_dir: /app/tasks
     command: ["celery", "-A", "celery_app", "worker", "--loglevel=info"]
     depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - texas-net
+
+  # Mattermost 服务
+  mattermost:
+    platform: linux/amd64
+    image: mattermost/${MATTERMOST_IMAGE}:${MATTERMOST_IMAGE_TAG}
+    container_name: mattermost
+    restart: ${RESTART_POLICY}
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    read_only: ${MATTERMOST_CONTAINER_READONLY}
+    tmpfs:
+      - /tmp
+    volumes:
+      - ${MATTERMOST_CONFIG_PATH}:/mattermost/config:rw
+      - ${MATTERMOST_DATA_PATH}:/mattermost/data:rw
+      - ${MATTERMOST_LOGS_PATH}:/mattermost/logs:rw
+      - ${MATTERMOST_PLUGINS_PATH}:/mattermost/plugins:rw
+      - ${MATTERMOST_CLIENT_PLUGINS_PATH}:/mattermost/client/plugins:rw
+      - ${MATTERMOST_BLEVE_INDEXES_PATH}:/mattermost/bleve-indexes:rw
+    environment:
+      TZ: ${TZ}
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable&connect_timeout=10
+      MM_BLEVESETTINGS_INDEXDIR: /mattermost/bleve-indexes
+      MM_SERVICESETTINGS_SITEURL: ${MM_SERVICESETTINGS_SITEURL}
+    ports:
+      - "8065:8065"
+      - "${CALLS_PORT}:${CALLS_PORT}/udp"
+      - "${CALLS_PORT}:${CALLS_PORT}/tcp"
+    depends_on:
       - db
-      - redis
     networks:
       - texas-net
 

@@ -41,13 +41,26 @@ class MattermostWebSocketClient:
                 logging.error("❌ Failed to fetch bot user ID")
 
     async def connect(self):
-        await self.fetch_bot_user_id()  # 新增
-        logging.info(f"Connecting to {self.websocket_url}...")
-        self.connection = await websockets.connect(
-            self.websocket_url, extra_headers={"Authorization": f"Bearer {self.token}"}
-        )
-        logging.info("✅ WebSocket connected.")
-        await self.listen()
+        retries = 5
+        delay = 5  # seconds
+        for i in range(retries):
+            try:
+                await self.fetch_bot_user_id()
+                logging.info(f"Connecting to {self.websocket_url}...")
+                self.connection = await websockets.connect(
+                    self.websocket_url, extra_headers={"Authorization": f"Bearer {self.token}"}
+                )
+                logging.info("✅ WebSocket connected.")
+                await self.listen()
+                return
+            except Exception as e:
+                logging.error(f"❌ Connection attempt {i+1}/{retries} failed: {e}")
+                if i < retries - 1:
+                    logging.info(f"Retrying in {delay} seconds...")
+                    await asyncio.sleep(delay)
+                else:
+                    logging.error("❌ All connection attempts failed. Exiting.")
+                    raise
 
     async def listen(self):
         async for message in self.connection:
