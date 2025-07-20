@@ -1,8 +1,8 @@
 from fastapi import FastAPI
-from app.config import settings
+from config import settings
 import asyncio
 
-from app.mattermost_client import MattermostWebSocketClient
+from mattermost_client import MattermostWebSocketClient
 
 app = FastAPI(title=settings.BOT_NAME)
 
@@ -14,4 +14,4 @@ def read_root():
 async def startup_event():
     """启动 WebSocket 客户端"""
     ws_client = MattermostWebSocketClient()
-    asyncio.create_task(ws_client.connect_to_mattermost())
+    asyncio.create_task(ws_client.connect())

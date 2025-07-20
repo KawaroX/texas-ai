@@ -24,3 +24,4 @@ psycopg2-binary==2.9.9  # PostgreSQL 连接驱动
 
 # === 时间处理 ===
 pendulum==3.0.0
+pytz==2024.1

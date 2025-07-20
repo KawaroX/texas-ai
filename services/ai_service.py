@@ -1,4 +1,5 @@
 import os
+import asyncio
 import httpx
 import logging
 
@@ -40,24 +41,24 @@ async def call_openrouter(
         return ""
 
 
-async def call_ai_chat(
-    system_prompt: str, chat_history: list, latest_input: str
-) -> list[str]:
+async def stream_ai_chat(messages: list) -> str:
     """
-    调用 AI 生成对话回复，支持多段（用===分割）。
-    默认使用对话模型。
+    流式调用 AI 生成对话回复。
     """
-    messages = (
-        [{"role": "system", "content": system_prompt}]
-        + chat_history
-        + [{"role": "user", "content": latest_input}]
-    )
+    # 假设 call_openrouter 已经支持流式输出，或者这里进行模拟
+    # 目前 call_openrouter 返回的是完整回复，所以这里需要模拟流式
     full_reply = await call_openrouter(messages)
+    
+    logger.info(f"🤖️ OpenRouter回复: {full_reply}")
 
     if not full_reply.strip():
-        return ["[系统未返回内容]"]
+        yield "[自动回复]正在开车，等会回复"
+        return
 
-    return [seg.strip() for seg in full_reply.split("===") if seg.strip()]
+    # 模拟流式输出，按字符或小段返回
+    for char in full_reply:
+        yield char
+        await asyncio.sleep(0.01)  # 模拟延迟
 
 
 async def call_ai_summary(prompt: str) -> str:
