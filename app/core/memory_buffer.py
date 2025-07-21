@@ -18,19 +18,31 @@ class ChannelMemory:
         self.channel_id = channel_id
 
     def add_message(self, role: str, content: str):
-        # 消息存储为 JSON 字符串，分数是 UTC 时间戳
+        # 获取东八区时间戳
+        tz = pytz.timezone("Asia/Shanghai")
+        now = datetime.datetime.now(tz)
+        timestamp = now.timestamp()
+        iso_time = now.isoformat()
+        
+        # 消息存储为 JSON 字符串，分数是东八区时间戳
         message = {
-            "timestamp": datetime.datetime.now(pytz.timezone("Asia/Shanghai")).timestamp(),
+            "timestamp": timestamp,
             "role": role,
             "content": content,
         }
+        
+        # 1. 存入Redis
         redis_client.zadd(
             f"channel_memory:{self.channel_id}",
-            {json.dumps(message): message["timestamp"]},
+            {json.dumps(message): timestamp},
         )
+        
+        # 2. 同步存入PostgreSQL
+        insert_messages([(self.channel_id, role, content, iso_time)])
 
     def get_recent_messages(self):
-        now_timestamp = datetime.datetime.now(pytz.timezone("Asia/Shanghai")).timestamp()
+        tz = pytz.timezone("Asia/Shanghai")
+        now_timestamp = datetime.datetime.now(tz).timestamp()
         six_hours_ago_timestamp = now_timestamp - MEMORY_RETENTION_SECONDS
 
         # 获取最近6小时内的消息
@@ -41,9 +53,9 @@ class ChannelMemory:
         recent_messages = []
         for msg_json in raw_messages:
             msg = json.loads(msg_json)
-            # 将时间戳转换回 ISO 格式，与旧代码保持一致
+            # 将时间戳转换回 ISO 格式，使用东八区时间
             msg["timestamp"] = datetime.datetime.fromtimestamp(
-                msg["timestamp"]
+                msg["timestamp"], tz=tz
             ).isoformat()
             recent_messages.append(msg)
         return recent_messages
@@ -61,38 +73,6 @@ class ChannelMemory:
 
             formatted.append(f"{time_str}{username}：{msg['content']}")
         return "\n".join(formatted)
-
-    def persist_if_needed(self):
-        now_timestamp = datetime.datetime.now(pytz.timezone("Asia/Shanghai")).timestamp()
-        six_hours_ago_timestamp = now_timestamp - MEMORY_RETENTION_SECONDS
-
-        # 获取超过6小时的消息
-        messages_to_persist_raw = redis_client.zrangebyscore(
-            f"channel_memory:{self.channel_id}", 0, six_hours_ago_timestamp
-        )
-
-        if messages_to_persist_raw:
-            messages_for_db = []
-            for msg_json in messages_to_persist_raw:
-                msg = json.loads(msg_json)
-                # 转换为 insert_messages 期望的格式 (channel_id, role, content, timestamp)
-                messages_for_db.append(
-                    (
-                        self.channel_id,
-                        msg["role"],
-                        msg["content"],
-                        datetime.datetime.fromtimestamp(msg["timestamp"]).isoformat(),
-                    )
-                )
-
-            # 批量插入到 PostgreSQL
-            insert_messages(messages_for_db)
-
-            # 从 Redis 中删除已归档的消息
-            redis_client.zremrangebyscore(
-                f"channel_memory:{self.channel_id}", 0, six_hours_ago_timestamp
-            )
-
 
 def get_channel_memory(channel_id):
     # 直接返回 ChannelMemory 实例，它会操作 Redis

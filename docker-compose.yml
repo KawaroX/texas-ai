@@ -76,7 +76,8 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
-    command: ["celery", "-A", "tasks.celery_app", "worker", "--loglevel=info"]
+    command:
+      ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info"]
     depends_on:
       db:
         condition: service_healthy

@@ -148,7 +148,6 @@ class MattermostWebSocketClient:
 
                 # 存储到内存缓冲区
                 get_channel_memory(channel_id).add_message("user", message)
-                get_channel_memory(channel_id).persist_if_needed()
 
                 # 添加到消息缓冲区并启动智能处理
                 await self._add_to_buffer_and_process(
@@ -190,7 +189,8 @@ class MattermostWebSocketClient:
         current_time = time.time()
 
         # 检查是否是简单消息且缓冲区为空
-        is_simple_message = not self.chat_engine._needs_summary([message])
+        from core.context_merger import _needs_summary
+        is_simple_message = not _needs_summary(message)
         # 检查 Redis List 是否为空
         buffer_is_empty = self.redis_client.llen(f"channel_buffer:{channel_id}") == 0
 
@@ -264,14 +264,9 @@ class MattermostWebSocketClient:
             messages = self.redis_client.lrange(f"channel_buffer:{channel_id}", 0, -1)
             logging.info(f"🤔 开始智能处理，频道 {channel_info['name']}，消息数：{len(messages)}")
 
-            # 收集上下文信息
-            context_info = await self.chat_engine._collect_context_info(
-                channel_id, messages
-            )
-
             # 开始生成回复
             await self._generate_and_send_reply(
-                channel_id, messages, context_info, channel_info, user_info
+                channel_id, messages, None, channel_info, user_info
             )  # 传递从 Redis 获取的消息
 
         except asyncio.CancelledError:
@@ -379,7 +374,6 @@ class MattermostWebSocketClient:
         if response.status_code == 201:
             logging.info(f"✅ Replied with: {text}")
             get_channel_memory(channel_id).add_message("assistant", text)
-            get_channel_memory(channel_id).persist_if_needed()
         else:
             logging.error(
                 f"❌ Failed to send message: {response.status_code} - {response.text}"

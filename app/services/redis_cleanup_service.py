@@ -69,49 +69,18 @@ class RedisCleanupService:
             tz = pytz.timezone("Asia/Shanghai")
             now_timestamp = datetime.datetime.now(tz).timestamp()
             six_hours_ago_timestamp = now_timestamp - self.retention_seconds
-            # 使用东八区时间
-            tz = pytz.timezone("Asia/Shanghai")
-            now_timestamp = datetime.datetime.now(tz).timestamp()
-            six_hours_ago_timestamp = now_timestamp - self.retention_seconds
 
-            # 获取超过6小时的消息
-            messages_to_persist_raw = self.redis_client.zrangebyscore(
+            # 从Redis中删除已归档的消息
+            deleted_count = self.redis_client.zremrangebyscore(
                 f"channel_memory:{channel_id}", 0, six_hours_ago_timestamp
             )
 
-            archived_count = 0
-            deleted_count = 0
-
-            if messages_to_persist_raw:
-                # 准备插入PostgreSQL的数据
-                messages_for_db = []
-                for msg_json in messages_to_persist_raw:
-                    msg = json.loads(msg_json)
-                    messages_for_db.append(
-                        (
-                            channel_id,
-                            msg["role"],
-                            msg["content"],
-                            datetime.datetime.fromtimestamp(
-                                msg["timestamp"]
-                            ).isoformat(),
-                        )
-                    )
-
-                # 批量插入到PostgreSQL
-                insert_messages(messages_for_db)
-                archived_count = len(messages_for_db)
-
-                # 从Redis中删除已归档的消息
-                deleted_count = self.redis_client.zremrangebyscore(
-                    f"channel_memory:{channel_id}", 0, six_hours_ago_timestamp
-                )
-
+            if deleted_count > 0:
                 logging.info(
-                    f"📦 频道 {channel_id}: 归档 {archived_count} 条消息到PostgreSQL, 从Redis删除 {deleted_count} 条"
+                    f"🧹 频道 {channel_id}: 从Redis删除 {deleted_count} 条过期消息"
                 )
 
-            return archived_count, deleted_count
+            return 0, deleted_count
 
         except Exception as e:
             logging.error(f"❌ 清理频道 {channel_id} 消息时出错: {e}")
