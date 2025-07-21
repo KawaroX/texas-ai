@@ -3,6 +3,7 @@ import logging
 import redis
 import json
 import datetime
+import pytz
 from config import settings
 from utils.postgres_service import insert_messages
 
@@ -64,10 +65,16 @@ class RedisCleanupService:
     async def cleanup_channel_messages(self, channel_id: str):
         """清理指定频道的过期消息"""
         try:
-            now_timestamp = datetime.datetime.utcnow().timestamp()
+            # 使用东八区时间
+            tz = pytz.timezone("Asia/Shanghai")
+            now_timestamp = datetime.datetime.now(tz).timestamp()
+            six_hours_ago_timestamp = now_timestamp - self.retention_seconds
+            # 使用东八区时间
+            tz = pytz.timezone("Asia/Shanghai")
+            now_timestamp = datetime.datetime.now(tz).timestamp()
             six_hours_ago_timestamp = now_timestamp - self.retention_seconds
 
-            # 获取超过2小时的消息
+            # 获取超过6小时的消息
             messages_to_persist_raw = self.redis_client.zrangebyscore(
                 f"channel_memory:{channel_id}", 0, six_hours_ago_timestamp
             )

@@ -176,10 +176,10 @@ class MattermostWebSocketClient:
                     json={"channel_id": channel_id},
                     headers=headers
                 )
-                if response.status_code == 200:
-                    logging.info(f"✅ 发送打字指示器成功，频道 {channel_id}")
-                else:
-                    logging.warning(f"⚠️ 发送打字指示器失败: {response.status_code} - {response.text}")
+                # if response.status_code == 200:
+                #     logging.info(f"✅ 发送打字指示器成功，频道 {channel_id}")
+                # else:
+                #     logging.warning(f"⚠️ 发送打字指示器失败: {response.status_code} - {response.text}")
             except Exception as e:
                 logging.warning(f"⚠️ 发送打字指示器异常: {e}")
 
@@ -262,7 +262,7 @@ class MattermostWebSocketClient:
 
             # 从 Redis 获取当前缓冲区中的所有消息
             messages = self.redis_client.lrange(f"channel_buffer:{channel_id}", 0, -1)
-            logging.info(f"🤔 开始智能处理，频道 {channel_id}，消息数：{len(messages)}")
+            logging.info(f"🤔 开始智能处理，频道 {channel_info['name']}，消息数：{len(messages)}")
 
             # 收集上下文信息
             context_info = await self.chat_engine._collect_context_info(

@@ -1,4 +1,5 @@
 import datetime
+import pytz
 import json
 from datetime import timedelta
 import redis
@@ -19,7 +20,7 @@ class ChannelMemory:
     def add_message(self, role: str, content: str):
         # 消息存储为 JSON 字符串，分数是 UTC 时间戳
         message = {
-            "timestamp": datetime.datetime.utcnow().timestamp(),
+            "timestamp": datetime.datetime.now(pytz.timezone("Asia/Shanghai")).timestamp(),
             "role": role,
             "content": content,
         }
@@ -29,10 +30,10 @@ class ChannelMemory:
         )
 
     def get_recent_messages(self):
-        now_timestamp = datetime.datetime.utcnow().timestamp()
+        now_timestamp = datetime.datetime.now(pytz.timezone("Asia/Shanghai")).timestamp()
         six_hours_ago_timestamp = now_timestamp - MEMORY_RETENTION_SECONDS
 
-        # 获取最近2小时内的消息
+        # 获取最近6小时内的消息
         raw_messages = redis_client.zrangebyscore(
             f"channel_memory:{self.channel_id}", six_hours_ago_timestamp, now_timestamp
         )
@@ -54,18 +55,18 @@ class ChannelMemory:
             # 转换时间格式: ISO → [HH:MM:SS]
             dt = datetime.datetime.fromisoformat(msg["timestamp"])
             time_str = dt.strftime("[%H:%M:%S]")
-            
+
             # 映射角色到用户名
             username = "德克萨斯" if msg["role"] == "assistant" else "Kawaro"
-            
+
             formatted.append(f"{time_str}{username}：{msg['content']}")
         return "\n".join(formatted)
 
     def persist_if_needed(self):
-        now_timestamp = datetime.datetime.utcnow().timestamp()
+        now_timestamp = datetime.datetime.now(pytz.timezone("Asia/Shanghai")).timestamp()
         six_hours_ago_timestamp = now_timestamp - MEMORY_RETENTION_SECONDS
 
-        # 获取超过2小时的消息
+        # 获取超过6小时的消息
         messages_to_persist_raw = redis_client.zrangebyscore(
             f"channel_memory:{self.channel_id}", 0, six_hours_ago_timestamp
         )

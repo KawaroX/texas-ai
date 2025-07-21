@@ -5,6 +5,7 @@ data/postgres
 app/.DS_Store
 
 volumes
+backups
 data
 certs
 docker-compose.override.yml

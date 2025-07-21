@@ -2,6 +2,7 @@ import logging
 import asyncio
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
+import pytz
 
 from core.memory_buffer import get_channel_memory, list_channels
 from core.context_merger import merge_context
@@ -103,14 +104,16 @@ class ChatEngine:
         # 计算时间差并生成“谴责”提示
         if all_latest_timestamps:
             latest_overall_message_time = max(all_latest_timestamps)
-            current_utc_time = datetime.utcnow()  # 使用 UTC 时间
-            time_diff = current_utc_time - latest_overall_message_time
+            # 使用东八区时间
+            shanghai_tz = pytz.timezone("Asia/Shanghai")
+            current_time = datetime.now(shanghai_tz)
+            time_diff = current_time - latest_overall_message_time
 
             if time_diff > timedelta(hours=1):
                 # 判断是否在东八区睡眠时间（23:00 - 07:00）
-                # 将 UTC 时间转换为东八区时间进行判断
-                latest_local_time = latest_overall_message_time + timedelta(hours=8)
-                current_local_time = current_utc_time + timedelta(hours=8)
+                # 直接使用东八区时间
+                latest_local_time = latest_overall_message_time
+                current_local_time = current_time
 
                 is_during_sleep_time = False
                 # 检查时间段是否与睡眠时间高度重合
@@ -155,11 +158,11 @@ class ChatEngine:
 
                 # 更精确的判断：计算时间段内有多少小时落在睡眠时间
                 total_sleep_overlap_seconds = 0
-                current_check_time = latest_overall_message_time  # UTC时间
+                current_check_time = latest_overall_message_time
 
-                while current_check_time < current_utc_time:
-                    # 将当前检查时间转换为东八区时间
-                    local_check_time = current_check_time + timedelta(hours=8)
+                while current_check_time < current_time:
+                    # 已经是东八区时间，直接使用
+                    local_check_time = current_check_time
 
                     # 计算到下一个小时边界的时间
                     next_hour_utc = (current_check_time + timedelta(hours=1)).replace(
@@ -208,7 +211,7 @@ class ChatEngine:
             prompt = (
                 f"你是一个 AI 助手，当前用户提出了一个问题：\n"
                 f"{latest_query}\n"
-                f"以下是频道 {channel_id} 中的最近 2 小时对话记录：\n{content}\n\n"
+                f"以下是频道 {channel_id} 中的最近 6 小时对话记录：\n{content}\n\n"
                 f"请你摘录与用户问题相关的句子并做总结，用于辅助回答，不相关的请忽略。"
                 f'如果没有相关的句子，请返回"空"（不需要任何符号，只需要这一个字）。'
                 f"如果有相关的内容，那么返回的格式要求：\n\n总结：（对话记录中与用户相关的信息总结）\n\n相关对话记录：\nrole: (user/assistant二选一)\ncontent: 消息内容"
@@ -242,10 +245,11 @@ class ChatEngine:
 
         # 1. 系统提示词 (根据频道和用户信息动态生成)
         dynamic_system_prompt = self.system_prompt
+        if channel_info["type"] == "D":
+            channel_info["display_name"] = "私聊"
         if channel_info:
             dynamic_system_prompt += (
                 f"\n\n当前频道信息：\n"
-                f"- 频道名称 (系统): {channel_info.get('name', '未知')}\n"
                 f"- 频道显示名称: {channel_info.get('display_name', '未知')}\n"
                 f"- 频道类型: {channel_info.get('type', '未知')}"
                 "\n\n可以根据频道信息进行定制化处理。"
@@ -266,14 +270,14 @@ class ChatEngine:
         # 3. 构建新的消息结构：system + 单条 user 消息
         prompt_messages = [
             {"role": "system", "content": dynamic_system_prompt},
-            {"role": "user", "content": merged_context}
+            {"role": "user", "content": merged_context},
         ]
 
         # 调试输出
         logger.info(f"\n=== 新消息结构 ===")
         for i, m in enumerate(prompt_messages):
             logger.info(f"Message {i+1} - Role: {m['role']}")
-            logger.info(f"Content (前200字符): {m['content'][:200]}...")
+            logger.info(f"Content: {m['content']}")
             logger.info(f"Content length: {len(m['content'])} characters\n")
 
         # 4. 流式调用 AI 模型

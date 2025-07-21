@@ -47,7 +47,7 @@ async def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0
 
 
 async def stream_openrouter(
-    messages, model="tngtech/deepseek-r1t2-chimera:free:free"
+    messages, model="deepseek/deepseek-chat-v3-0324:free"
 ) -> AsyncGenerator[str, None]:
     """
     流式调用OpenRouter API，返回异步生成器。
@@ -149,9 +149,7 @@ async def stream_openrouter(
                 return
 
 
-async def stream_ai_chat(
-    messages: list, model="tngtech/deepseek-r1t2-chimera:free:free"
-):
+async def stream_ai_chat(messages: list, model="deepseek/deepseek-chat-v3-0324:free"):
     """
     流式生成AI回复，按分隔符分段输出。
     分隔符优先为 '==='，其次为换行符。
