@@ -6,6 +6,7 @@ import logging
 import httpx
 import datetime, time
 import redis  # 导入 redis
+import random
 from typing import Dict, List
 from config import settings
 from core.memory_buffer import get_channel_memory
@@ -96,8 +97,8 @@ class MattermostWebSocketClient:
                 logging.error("❌ Failed to fetch bot user ID")
 
     async def connect(self):
-        retries = 5
-        delay = 5  # seconds
+        retries = 3
+        delay = 10
         for i in range(retries):
             try:
                 await self.fetch_bot_user_id()
@@ -212,6 +213,15 @@ class MattermostWebSocketClient:
         # 将消息添加到 Redis List
         self.redis_client.rpush(f"channel_buffer:{channel_id}", message)
 
+        # 将新消息缓存到 Redis，供 context_merger 使用
+        # 假设 user_info 包含 username
+        username = user_info.get('username', '未知用户') if user_info else '未知用户'
+        self.redis_client.setex(
+            f"mattermost_cache:{channel_id}", 
+            300,  # 5分钟有效期
+            f"[{username}]：{message}"
+        )
+
         logging.info(
             f"📝 添加消息到缓冲区，频道 {channel_id} 现有 {self.redis_client.llen(f'channel_buffer:{channel_id}')} 条消息"
         )
@@ -309,6 +319,25 @@ class MattermostWebSocketClient:
         except Exception as e:
             logging.error(f"❌ 生成回复出错，频道 {channel_id}: {e}")
 
+    def _generate_typing_delay(self, text_length: int) -> float:
+        """
+        生成符合正态分布的打字等待时间（秒）
+        - 基于 text_length * 0.2 的正态分布
+        - 添加动态最大等待时间（平均7秒，浮动±1秒）
+        """
+        mean = text_length * 0.2
+        std_dev = mean * 0.2
+
+        # 生成主等待时间
+        delay = random.normalvariate(mean, std_dev)
+
+        # 动态最大等待时间：平均7秒，标准差1秒，限制在6~8之间
+        max_dynamic = random.normalvariate(7.0, 1.0)
+        max_dynamic = max(6.0, min(8.0, max_dynamic))  # 限制最大上限浮动范围
+
+        # 截断：确保在 0.3 到动态上限之间
+        return min(max(0.3, delay), max_dynamic)
+
     async def _send_message_with_typing(self, channel_id: str, text: str):
         """在发送消息时持续发送打字指示器"""
         typing_task = None
@@ -321,8 +350,9 @@ class MattermostWebSocketClient:
 
             typing_task = asyncio.create_task(continuous_typing())
 
-            # 等待消息发送完成
-            await asyncio.sleep(len(text) * 0.5)  # 模拟打字等待时间
+            # 等待消息发送完成，使用正态分布的随机等待时间
+            delay = self._generate_typing_delay(len(text))
+            await asyncio.sleep(delay)
             await self.send_message(channel_id, text)
 
         finally:

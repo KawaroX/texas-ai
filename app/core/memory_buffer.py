@@ -47,6 +47,20 @@ class ChannelMemory:
             recent_messages.append(msg)
         return recent_messages
 
+    def format_recent_messages(self) -> str:
+        messages = self.get_recent_messages()
+        formatted = []
+        for msg in messages:
+            # 转换时间格式: ISO → [HH:MM:SS]
+            dt = datetime.datetime.fromisoformat(msg["timestamp"])
+            time_str = dt.strftime("[%H:%M:%S]")
+            
+            # 映射角色到用户名
+            username = "德克萨斯" if msg["role"] == "assistant" else "Kawaro"
+            
+            formatted.append(f"{time_str}{username}：{msg['content']}")
+        return "\n".join(formatted)
+
     def persist_if_needed(self):
         now_timestamp = datetime.datetime.utcnow().timestamp()
         six_hours_ago_timestamp = now_timestamp - MEMORY_RETENTION_SECONDS

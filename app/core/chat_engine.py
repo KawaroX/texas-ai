@@ -4,6 +4,7 @@ from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 
 from core.memory_buffer import get_channel_memory, list_channels
+from core.context_merger import merge_context
 from services.ai_service import stream_ai_chat, call_ai_summary
 from core.persona import get_texas_system_prompt
 
@@ -234,17 +235,10 @@ class ChatEngine:
         user_info: Optional[Dict] = None,
         context_info: Optional[Dict] = None,
     ):
-        """流式生成回复，支持消息列表和预收集的上下文，并包含频道和用户信息"""
+        """流式生成回复，使用新的消息结构（system + 单条 user 消息）"""
         logger.info(
             f"🧠 流式生成回复 for channel {channel_id}, 消息数: {len(messages)}"
         )
-
-        # 如果没有预收集的上下文，现在收集
-        if context_info is None:
-            context_info = await self._collect_context_info(channel_id, messages)
-
-        # 构建消息列表
-        prompt_messages = []
 
         # 1. 系统提示词 (根据频道和用户信息动态生成)
         dynamic_system_prompt = self.system_prompt
@@ -265,52 +259,22 @@ class ChatEngine:
                 "\n\n如果不是Kawaro的话，你应该表现得更冷漠。你的温柔应该留给Kawaro."
             )
 
-        prompt_messages.append({"role": "system", "content": dynamic_system_prompt})
+        # 2. 使用新的 context_merger 获取整合的单条文本
+        latest_query = " ".join(messages)
+        merged_context = await merge_context(channel_id, latest_query)
 
-        # 2. 本频道上下文
-        prompt_messages.extend(context_info["chat_context"])
-
-        # 3. 构建用户消息（包含参考资料）
-        condemn_note = ""
-        if context_info["summary_notes"] and context_info["summary_notes"][
-            0
-        ].startswith("【参考资料】\n注意：距离Kawaro你上次"):
-            condemn_note = context_info["summary_notes"].pop(0)
-
-        reference_note = "\n\n".join(context_info["summary_notes"])
-
-        if (
-            prompt_messages
-            and prompt_messages[-1]["role"] == "user"
-            and prompt_messages[-1]["content"] == messages[-1]
-        ):
-            prompt_messages.pop()
-
-        if reference_note:
-            prompt_messages.append(
-                {"role": "user", "content": f"【参考资料】\n{reference_note}"}
-            )
-
-        if condemn_note:
-            prompt_messages.append({"role": "user", "content": condemn_note})
-
-        for i, msg in enumerate(messages):
-            prompt_messages.append({"role": "user", "content": msg})
-
-        if prompt_messages and prompt_messages[-1]["role"] == "user":
-            prompt_messages[-1][
-                "content"
-            ] += f'\n\n请根据参考资料回复Kawaro的消息。以消息为主，参考资料只是辅助。如果用===分段后，每个段落的末尾是句号"。"可以省略。你回复的长度应该接近{len(prompt_messages[-1]["content"])}个字，不要太长也不要太短，除非你收到很长的消息（可以回复很长）或者很段的消息（比如：在吗？只需要回复：在，怎么了？或者如果时间很晚的话，可以回复：在，要睡觉了，有什么事快说）。'
-
-            prompt_messages[-1][
-                "content"
-            ] += f'\n\n记得灵活使用“==="进行分段，尽量不要一次输出太长的句子，模拟正常的聊天。'
-
+        # 3. 构建新的消息结构：system + 单条 user 消息
+        prompt_messages = [
+            {"role": "system", "content": dynamic_system_prompt},
+            {"role": "user", "content": merged_context}
+        ]
 
         # 调试输出
-        for m in prompt_messages:
-            logger.info(f"\nRole: {m['role']}")
-            logger.info(f"Message: {m['content']}\n")
+        logger.info(f"\n=== 新消息结构 ===")
+        for i, m in enumerate(prompt_messages):
+            logger.info(f"Message {i+1} - Role: {m['role']}")
+            logger.info(f"Content (前200字符): {m['content'][:200]}...")
+            logger.info(f"Content length: {len(m['content'])} characters\n")
 
         # 4. 流式调用 AI 模型
         async for segment in stream_ai_chat(prompt_messages):

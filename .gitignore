@@ -9,3 +9,6 @@ data
 certs
 docker-compose.override.yml
 docker-compose.override.yaml
+test_message_format.py
+test_simplified.py
+tp.py
