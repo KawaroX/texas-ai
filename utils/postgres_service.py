@@ -1,5 +1,5 @@
 import psycopg2
-from config import settings
+from app.config import settings
 
 # 使用 config.settings 获取数据库连接信息
 conn = psycopg2.connect(

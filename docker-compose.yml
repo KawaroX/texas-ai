@@ -53,9 +53,17 @@ services:
       - "8000:8000"
     volumes:
       - ./:/app
-    working_dir: /app/app
+    working_dir: /app
     command:
-      ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+      ]
     depends_on:
       db:
         condition: service_healthy
@@ -76,8 +84,7 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
-    command:
-      ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info"]
+    command: ["celery", "-A", "tasks.celery_app", "worker", "--loglevel=info"]
     depends_on:
       db:
         condition: service_healthy

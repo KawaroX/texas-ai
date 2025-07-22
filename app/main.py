@@ -1,6 +1,6 @@
 import logging
 from fastapi import FastAPI
-from config import settings
+from app.config import settings
 import asyncio
 
 # 配置日志，包含时间戳、级别、名称和消息
@@ -9,7 +9,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 )
 
-from mattermost_client import MattermostWebSocketClient
+from app.mattermost_client import MattermostWebSocketClient
 from services.redis_cleanup_service import start_redis_cleanup
 
 app = FastAPI(title=settings.BOT_NAME)

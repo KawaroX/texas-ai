@@ -260,7 +260,7 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     分隔符优先为 '==='，其次为换行符。
     """
     # 如���没有指定模型，或者指定的是 DeepSeek V3 模型，则使用 Reply AI 渠道
-    if model is None or model == "deepseek/deepseek-chat-v3-0324:free":
+    if model is None or model == "deepseek-v3-250324":
         logger.info(f"🔄 正在使用 Reply AI 渠道进行 stream_ai_chat(): {YUNWU_AI_MODEL}")
         stream_func = stream_reply_ai
         actual_model = YUNWU_AI_MODEL

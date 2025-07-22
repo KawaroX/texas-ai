@@ -8,7 +8,7 @@ import datetime, time
 import redis  # 导入 redis
 import random
 from typing import Dict, List
-from config import settings
+from app.config import settings
 from core.memory_buffer import get_channel_memory
 from core.chat_engine import ChatEngine
 
@@ -176,7 +176,7 @@ class MattermostWebSocketClient:
                 response = await client.post(
                     f"{self.http_base_url}/api/v4/users/me/typing",
                     json={"channel_id": channel_id},
-                    headers=headers
+                    headers=headers,
                 )
                 # if response.status_code == 200:
                 #     logging.info(f"✅ 发送打字指示器成功，频道 {channel_id}")
@@ -193,6 +193,7 @@ class MattermostWebSocketClient:
 
         # 检查是否是简单消息且缓冲区为空
         from core.context_merger import _needs_summary
+
         is_simple_message = not _needs_summary(message)
         # 检查 Redis List 是否为空
         buffer_is_empty = self.redis_client.llen(f"channel_buffer:{channel_id}") == 0
@@ -218,11 +219,11 @@ class MattermostWebSocketClient:
 
         # 将新消息缓存到 Redis，供 context_merger 使用
         # 假设 user_info 包含 username
-        username = user_info.get('username', '未知用户') if user_info else '未知用户'
+        username = user_info.get("username", "未知用户") if user_info else "未知用户"
         self.redis_client.setex(
-            f"mattermost_cache:{channel_id}", 
+            f"mattermost_cache:{channel_id}",
             300,  # 5分钟有效期
-            f"[{username}]：{message}"
+            f"[{username}]：{message}",
         )
 
         logging.info(
@@ -258,7 +259,9 @@ class MattermostWebSocketClient:
                 activity_elapsed = current_time - current_activity_time
 
                 # 获取最新输入状态时间
-                current_typing_time = self.last_typing_time.get(channel_id, start_time) + 3
+                current_typing_time = (
+                    self.last_typing_time.get(channel_id, start_time) + 3
+                )
 
                 # 计算三种超时值
                 total_elapsed = current_time - start_time
@@ -266,13 +269,18 @@ class MattermostWebSocketClient:
                 typing_elapsed = current_time - current_typing_time
 
                 # 三重超时条件（满足任意即触发）
-                if (total_elapsed > 30 or
-                    activity_elapsed > 8 or
-                    (first_run and typing_elapsed > 2)):  # 新增输入状态检测
+                if (
+                    total_elapsed > 30
+                    or activity_elapsed > 7
+                    or (first_run and typing_elapsed > 2)
+                ):  # 新增输入状态检测
                     trigger_reason = []
-                    if total_elapsed > 30: trigger_reason.append(f"总时长超时(30s){total_elapsed:.2f}")
-                    if activity_elapsed > 7: trigger_reason.append(f"活动中断(7s){activity_elapsed:.2f}")
-                    if typing_elapsed > 4: trigger_reason.append(f"输入停止(4s){typing_elapsed:.2f}")
+                    if total_elapsed > 30:
+                        trigger_reason.append(f"总时长超时(30s){total_elapsed:.2f}")
+                    if activity_elapsed > 7:
+                        trigger_reason.append(f"活动中断(7s){activity_elapsed:.2f}")
+                    if typing_elapsed > 4:
+                        trigger_reason.append(f"输入停止(4s){typing_elapsed:.2f}")
 
                     logging.info(
                         f"⏳ 频道 {channel_id} 触发超时: {', '.join(trigger_reason)}"
@@ -281,11 +289,13 @@ class MattermostWebSocketClient:
                     )
                     break
                 first_run = False
-                await asyncio.sleep(2)  # 每2秒检查一次
+                await asyncio.sleep(1)  # 每1秒检查一次
 
             # 从 Redis 获取当前缓冲区中的所有消息
             messages = self.redis_client.lrange(f"channel_buffer:{channel_id}", 0, -1)
-            logging.info(f"🤔 开始智能处理，频道 {channel_info['name']}，消息数：{len(messages)}")
+            logging.info(
+                f"🤔 开始智能处理，频道 {channel_info['name']}，消息数：{len(messages)}"
+            )
 
             # 开始生成回复
             await self._generate_and_send_reply(
@@ -364,7 +374,9 @@ class MattermostWebSocketClient:
             async def continuous_typing():
                 while True:
                     await self.send_typing(channel_id)
-                    await asyncio.sleep(3)  # Mattermost typing indicator lasts for about 3 seconds
+                    await asyncio.sleep(
+                        3
+                    )  # Mattermost typing indicator lasts for about 3 seconds
 
             typing_task = asyncio.create_task(continuous_typing())
 

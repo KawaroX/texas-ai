@@ -4,7 +4,7 @@ import redis
 import json
 import datetime
 import pytz
-from config import settings
+from app.config import settings
 from utils.postgres_service import insert_messages
 
 logging.basicConfig(level=logging.INFO)

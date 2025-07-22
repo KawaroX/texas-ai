@@ -3,7 +3,7 @@ import pytz
 import json
 from datetime import timedelta
 import redis
-from config import settings
+from app.config import settings
 from utils.postgres_service import insert_messages
 
 # 消息保留时长（秒）

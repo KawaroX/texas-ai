@@ -7,7 +7,7 @@ import pytz
 
 from core.memory_buffer import get_channel_memory, list_channels
 from services.ai_service import call_ai_summary
-from config import settings
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
