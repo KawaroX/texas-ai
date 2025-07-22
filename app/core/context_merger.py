@@ -32,7 +32,9 @@ def _needs_summary(messages_text: str) -> bool:
     return True
 
 
-async def _summarize_channel(channel_id: str, messages: List[Dict], latest_query: str) -> str:
+async def _summarize_channel(
+    channel_id: str, messages: List[Dict], latest_query: str
+) -> str:
     """为单个频道生成摘要"""
     try:
         content = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
@@ -45,7 +47,7 @@ async def _summarize_channel(channel_id: str, messages: List[Dict], latest_query
             f"如果有相关的内容，那么返回的格式要求：\n\n总结：（对话记录中与用户相关的信息总结）\n\n相关对话记录：\nrole: (user/assistant二选一)\ncontent: 消息内容"
         )
         summary = await call_ai_summary(prompt)
-        
+
         # 替换角色名称
         summary = summary.replace("user", "Kawaro").replace("assistant", "德克萨斯")
 
@@ -216,20 +218,22 @@ async def merge_context(
 
     # 4. 组合四部分内容
     parts = []
-    
+
     if history:
         parts.append(f"【历史聊天记录】\n{history}")
-    
+
     if summary_notes:
         parts.append(f"【参考资料】\n" + "\n\n".join(summary_notes))
-    
+
     # if mattermost_cache:
     #     parts.append(f"【新消息缓存】\n{mattermost_cache}")
-    
+
     # 添加引导提示词
-    parts.append(f"请根据上述信息回复Kawaro的消息：{latest_query}")
-    
+    parts.append(
+        f"请根据上述信息回复Kawaro的消息：{latest_query}。可以使用===在你认为需要分条的地方将信息分条。模拟人类可能一条消息发送一句或者半句话的风格。请务必在回复中使用。"
+    )
+
     merged_context = "\n\n".join(parts)
     logger.info(f"✅ Context merged, total length: {len(merged_context)} characters")
-    
+
     return merged_context

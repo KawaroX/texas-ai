@@ -37,6 +37,7 @@ class MattermostWebSocketClient:
 
         # 频道活动状态跟踪
         self.channel_activity = {}  # {channel_id: {"last_activity": timestamp}}
+        self.last_typing_time = {}  # 新增：记录各频道最后输入状态时间
 
     async def get_channel_info(self, channel_id):
         if channel_id in self.channel_info_cache:
@@ -97,7 +98,7 @@ class MattermostWebSocketClient:
                 logging.error("❌ Failed to fetch bot user ID")
 
     async def connect(self):
-        retries = 3
+        retries = 5
         delay = 10
         for i in range(retries):
             try:
@@ -161,9 +162,11 @@ class MattermostWebSocketClient:
                 user_id = typing_data.get("user_id")
 
                 if channel_id and user_id != self.user_id:
-                    # 更新频道活动状态
+                    # 独立记录输入状态时间
+                    self.last_typing_time[channel_id] = time.time()
+                    # 保持原活动状态更新
                     self.channel_activity[channel_id] = {"last_activity": time.time()}
-                    logging.debug(f"👀 User typing in channel {channel_id}")
+                    logging.debug(f"⌨️ 更新频道 {channel_id} 输入状态时间")
 
     async def send_typing(self, channel_id: str):
         """发送打字指示器到指定频道"""
@@ -236,7 +239,7 @@ class MattermostWebSocketClient:
         )
 
     async def _smart_delay_and_process(
-        self, channel_id: str, channel_info=None, user_info=None
+        self, channel_id: str, channel_info=None, user_info=None, first_run=True
     ):
         """智能延迟处理：根据用户活动和超时进行处理"""
         start_time = time.time()
@@ -244,6 +247,7 @@ class MattermostWebSocketClient:
         try:
             while True:
                 # 获取最新活动时间
+                time.sleep(4)
                 current_activity_time = self.channel_activity.get(channel_id, {}).get(
                     "last_activity", start_time
                 )
@@ -253,12 +257,31 @@ class MattermostWebSocketClient:
                 total_elapsed = current_time - start_time
                 activity_elapsed = current_time - current_activity_time
 
-                # 双重超时机制：总时长30s或连续10s无活动
-                if total_elapsed > 30 or activity_elapsed > 10:
-                    logging.info(f"⏳ 频道 {channel_id} 达到超时条件，开始处理消息。")
-                    break
+                # 获取最新输入状态时间
+                current_typing_time = self.last_typing_time.get(channel_id, start_time) + 3
 
-                await asyncio.sleep(1)  # 每秒检查一次
+                # 计算三种超时值
+                total_elapsed = current_time - start_time
+                activity_elapsed = current_time - current_activity_time
+                typing_elapsed = current_time - current_typing_time
+
+                # 三重超时条件（满足任意即触发）
+                if (total_elapsed > 30 or
+                    activity_elapsed > 8 or
+                    (first_run and typing_elapsed > 2)):  # 新增输入状态检测
+                    trigger_reason = []
+                    if total_elapsed > 30: trigger_reason.append(f"总时长超时(30s){total_elapsed:.2f}")
+                    if activity_elapsed > 7: trigger_reason.append(f"活动中断(7s){activity_elapsed:.2f}")
+                    if typing_elapsed > 4: trigger_reason.append(f"输入停止(4s){typing_elapsed:.2f}")
+
+                    logging.info(
+                        f"⏳ 频道 {channel_id} 触发超时: {', '.join(trigger_reason)}"
+                        f"\n上次收到typing时间{current_typing_time:.2f}"
+                        f"\n上次收到activity时间{current_activity_time:.2f}"
+                    )
+                    break
+                first_run = False
+                await asyncio.sleep(2)  # 每2秒检查一次
 
             # 从 Redis 获取当前缓冲区中的所有消息
             messages = self.redis_client.lrange(f"channel_buffer:{channel_id}", 0, -1)
@@ -341,7 +364,7 @@ class MattermostWebSocketClient:
             async def continuous_typing():
                 while True:
                     await self.send_typing(channel_id)
-                    await asyncio.sleep(3)  # Mattermost typing indicator lasts for about 5 seconds
+                    await asyncio.sleep(3)  # Mattermost typing indicator lasts for about 3 seconds
 
             typing_task = asyncio.create_task(continuous_typing())
 
