@@ -12,6 +12,8 @@ class Settings(BaseSettings):
 
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
+    POSTGRES_HOST: str
+    POSTGRES_PORT: str
     POSTGRES_DB: str
 
     REDIS_URL: str

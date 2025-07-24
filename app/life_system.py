@@ -268,22 +268,34 @@ async def collect_interaction_experiences(target_date: date):
 
         # 存储到 Redis
         r = redis.Redis.from_url(os.getenv("REDIS_URL"))
-        redis_key = f"interaction_needed"
+        redis_key = f"interaction_needed:{date_str}"
 
-        # 删除旧数据（如果存在）
-        r.delete(redis_key)
+        # 辅助函数：将 HH:MM 格式的时间字符串转换为当天的 Unix 时间戳
+        def time_to_timestamp(date_obj: date, time_str: str) -> float:
+            dt_str = f"{date_obj.strftime('%Y-%m-%d')} {time_str}"
+            dt_obj = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+            return dt_obj.timestamp()
 
-        # 存储新数据
+        # 存储新数据到 Sorted Set
+        # 使用 end_time 的 Unix 时间戳作为 score
+        # 如果 Sorted Set 中已存在相同的 member，zadd 会更新其 score
+        # 如果每天生成新的 key，则不需要删除旧数据
         for exp in interaction_needed:
-            r.rpush(redis_key, json.dumps(exp, ensure_ascii=False))
+            try:
+                score = time_to_timestamp(target_date, exp["start_time"])
+                r.zadd(redis_key, {json.dumps(exp, ensure_ascii=False): score})
+            except KeyError as ke:
+                logger.error(f"⚠️ 缺少时间字段，无法添加到 Sorted Set: {exp} - {ke}")
+            except Exception as add_e:
+                logger.error(f"❌ 添加到 Redis Sorted Set 失败: {exp} - {add_e}")
 
         # 设置 24 小时过期
         r.expire(redis_key, 86400)
-        logger.info(f"已存储到 Redis 键: {redis_key} (24小时过期)")
+        logger.info(f"已存储到 Redis Sorted Set 键: {redis_key} (24小时过期)")
         return True
 
     except Exception as e:
-        logger.error(f"存储交互微观经历失败: {str(e)}", exc_info=True)
+        logger.error(f"收集交互微观经历失败: {str(e)}", exc_info=True)
         return False
 
 

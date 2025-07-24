@@ -4,6 +4,7 @@ from app.config import settings
 from datetime import datetime, timedelta
 from .daily_tasks import generate_daily_life_task
 from .life_data_tasks import fetch_and_store_life_data_task
+from .interaction_tasks import process_scheduled_interactions
 
 celery_app = Celery(
     "texas_tasks",
@@ -24,9 +25,13 @@ celery_app.conf.update(
             "schedule": crontab(hour=4, minute=0),  # 每天凌晨4点
             "args": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"),
         },
+        "process-scheduled-interactions": {
+            "task": "tasks.interaction_tasks.process_scheduled_interactions",
+            "schedule": 60,  # 每分钟执行一次
+        },
         "fetch-and-store-life-data": {
             "task": "tasks.life_data_tasks.fetch_and_store_life_data_task",
-            "schedule": 60,  # 每5分钟执行一次
+            "schedule": 300,  # 每5分钟执行一次
         },
     },
 )

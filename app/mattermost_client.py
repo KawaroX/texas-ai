@@ -7,7 +7,7 @@ import httpx
 import datetime, time
 import redis  # 导入 redis
 import random
-from typing import Dict, List
+from typing import Dict, List, Optional
 from app.config import settings
 from core.memory_buffer import get_channel_memory
 from core.chat_engine import ChatEngine
@@ -532,19 +532,89 @@ class MattermostWebSocketClient:
             ):
                 del self.processing_tasks[channel_id]
 
-    async def _generate_and_send_reply(
+    async def create_direct_channel(self, target_user_id: str) -> Optional[str]:
+        """
+        创建或获取与指定用户之间的私聊频道。
+        """
+        if self.user_id is None:
+            await self.fetch_bot_user_id()
+            if self.user_id is None:
+                logging.error("❌ 无法获取 BOT user ID，无法创建或获取私聊频道。")
+                return None
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+        async with httpx.AsyncClient() as client:
+            try:
+                # 尝试创建私聊频道
+                create_resp = await client.post(
+                    f"{self.http_base_url}/api/v4/channels/direct",
+                    headers=headers,
+                    json=[self.user_id, target_user_id],
+                )
+
+                if create_resp.status_code == 201:
+                    channel_data = create_resp.json()
+                    logging.info(f"✅ 创建私聊频道成功: {channel_data['id']}")
+                    return channel_data["id"]
+                elif (
+                    create_resp.status_code == 400
+                    and "api.channel.create_direct_channel.direct_channel_exists.app_error"
+                    in create_resp.text
+                ):
+                    # 如果频道已存在，Mattermost 会返回 400 错误，并包含特定错误信息
+                    # 此时需要通过获取频道列表来找到已存在的 DM 频道
+                    logging.info(
+                        f"ℹ️ 与用户 {target_user_id} 的私聊频道已存在，尝试获取。"
+                    )
+                    # 获取所有 DM 频道
+                    all_channels = []
+                    teams = await self.get_teams()  # 需要先获取 teams
+                    for team in teams:
+                        channels = await self.get_channels_for_team(team["id"])
+                        all_channels.extend(channels)
+
+                    for channel in all_channels:
+                        if channel.get("type") == "D":
+                            members = await self.get_channel_members(channel["id"])
+                            member_ids = {m["user_id"] for m in members}
+                            if (
+                                self.user_id in member_ids
+                                and target_user_id in member_ids
+                            ):
+                                logging.info(
+                                    f"✅ 成功获取已存在的私聊频道: {channel['id']}"
+                                )
+                                return channel["id"]
+                    logging.warning(
+                        f"⚠️ 无法找到与用户 {target_user_id} 已存在的私聊频道。"
+                    )
+                    return None
+                else:
+                    logging.warning(
+                        f"⚠️ 创建私聊频道失败: {create_resp.status_code} - {create_resp.text}"
+                    )
+                    return None
+            except Exception as e:
+                logging.error(f"❌ 创建或获取私聊频道时发生异常: {e}")
+                return None
+
+    async def send_ai_generated_message(
         self,
         channel_id: str,
         processed_messages: List[str],
         context_info=None,
         channel_info=None,
         user_info=None,
+        is_active_interaction: bool = False,  # 新增参数，标记是否是主动交互
     ):
-        """生成并发送回复"""
+        """
+        生成并发送 AI 回复。
+        这个方法封装了 AI 思考、流式生成和发送消息的逻辑。
+        """
         try:
-            # processed_messages 已经是当前缓冲区中的消息列表
+            log_prefix = "主动交互" if is_active_interaction else "被动回复"
             logging.info(
-                f"🧠 开始生成回复，频道 {channel_id}，处理消息数：{len(processed_messages)}"
+                f"🧠 开始生成 {log_prefix}，频道 {channel_id}，处理消息数：{len(processed_messages)}"
             )
 
             # 流式生成回复
@@ -555,15 +625,33 @@ class MattermostWebSocketClient:
                     cleaned_segment = segment.strip()
                     if cleaned_segment.endswith((".", "。")):
                         cleaned_segment = cleaned_segment[:-1]
-                    # 在等待期间持续发送打字指示器
                     await self._send_message_with_typing(channel_id, cleaned_segment)
 
-            # 成功发送回复后，清空该频道的 Redis 缓冲区
-            self.redis_client.delete(f"channel_buffer:{channel_id}")
-            logging.info(f"🧹 清空频道 {channel_id} 的消息缓冲区")
+            # 如果是被动回复，清空 Redis 缓冲区
+            if not is_active_interaction:
+                self.redis_client.delete(f"channel_buffer:{channel_id}")
+                logging.info(f"🧹 清空频道 {channel_id} 的消息缓冲区")
 
         except Exception as e:
-            logging.error(f"❌ 生成回复出错，频道 {channel_id}: {e}")
+            logging.error(f"❌ 生成 {log_prefix} 出错，频道 {channel_id}: {e}")
+
+    async def _generate_and_send_reply(  # 旧方法，现在调用 send_ai_generated_message
+        self,
+        channel_id: str,
+        processed_messages: List[str],
+        context_info=None,
+        channel_info=None,
+        user_info=None,
+    ):
+        """生成并发送回复 (旧方法，现在调用 send_ai_generated_message)"""
+        await self.send_ai_generated_message(
+            channel_id=channel_id,
+            processed_messages=processed_messages,
+            context_info=context_info,
+            channel_info=channel_info,
+            user_info=user_info,
+            is_active_interaction=False,  # 标记为被动回复
+        )
 
     def _generate_typing_delay(self, text_length: int) -> float:
         """
@@ -664,28 +752,62 @@ class MattermostWebSocketClient:
         logging.info(f"✅ 找到 'kawaro' 用户 ID: {kawaro_user_id}")
 
         # 3. 创建或获取私聊频道
-        headers = {"Authorization": f"Bearer {self.token}"}
-        async with httpx.AsyncClient() as client:
-            # 创建私聊频道
-            create_resp = await client.post(
-                f"{self.http_base_url}/api/v4/channels/direct",
-                headers=headers,
-                json=[self.user_id, kawaro_user_id],
-            )
-
-            if create_resp.status_code == 201:
-                channel_data = create_resp.json()
-                channel_id = channel_data["id"]
-                logging.info(f"✅ 创建私聊频道成功: {channel_id}")
-            else:
-                logging.warning(
-                    f"⚠️ 创建私聊频道失败: {create_resp.status_code} - {create_resp.text}"
-                )
-                return
+        channel_id = await self.create_direct_channel(kawaro_user_id)
+        if not channel_id:
+            logging.error("❌ 无法获取 'kawaro' 的私聊频道，无法发送消息。")
+            return
 
         # 4. 发送消息
         await self.send_message(channel_id, message)
         logging.info(f"✅ 已向 'kawaro' 发送消息: '{message}'")
+
+    async def get_kawaro_user_and_dm_info(self) -> Optional[dict]:
+        """
+        获取 'kawaro' 用户信息和与其的私聊频道及频道信息
+        返回格式：
+        {
+            "user_id": str,
+            "user_info": dict,
+            "channel_id": str,
+            "channel_info": dict,
+        }
+        """
+        # 确保 BOT user ID 已获取
+        if self.user_id is None:
+            await self.fetch_bot_user_id()
+            if self.user_id is None:
+                logging.error("❌ 无法获取 BOT user ID")
+                return None
+
+        # 从 Redis 获取 'kawaro' 用户 ID 和信息
+        kawaro_user_id = None
+        kawaro_user_info = None
+        users = self.redis_client.hgetall("mattermost:users")
+        for user_id, user_data in users.items():
+            user_info = json.loads(user_data)
+            if user_info.get("username") == "kawaro":
+                kawaro_user_id = user_id
+                kawaro_user_info = user_info
+                break
+
+        if not kawaro_user_id:
+            logging.warning("⚠️ 未找到 'kawaro' 用户")
+            return None
+
+        # 获取与其的私聊频道
+        channel_id = await self.create_direct_channel(kawaro_user_id)
+        if not channel_id:
+            logging.warning("⚠️ 无法获取与 'kawaro' 的私聊频道")
+            return None
+
+        channel_info = await self.get_channel_info(channel_id)
+
+        return {
+            "user_id": kawaro_user_id,
+            "user_info": kawaro_user_info,
+            "channel_id": channel_id,
+            "channel_info": channel_info,
+        }
 
 
 if __name__ == "__main__":
