@@ -423,8 +423,9 @@ class MattermostWebSocketClient:
             ):
                 if segment.strip():
                     cleaned_segment = segment.strip()
-                    if cleaned_segment.endswith((".", "。")):
-                        cleaned_segment = cleaned_segment[:-1]
+                    # 移除去除句号的操作，因为用户反馈这可能导致重复发送
+                    # if cleaned_segment.endswith((".", "。")):
+                    #     cleaned_segment = cleaned_segment[:-1]
                     # 在等待期间持续发送打字指示器
                     await self._send_message_with_typing(channel_id, cleaned_segment)
             return  # 简单消息处理完毕，直接返回
@@ -623,8 +624,8 @@ class MattermostWebSocketClient:
             ):
                 if segment.strip():
                     cleaned_segment = segment.strip()
-                    if cleaned_segment.endswith((".", "。")):
-                        cleaned_segment = cleaned_segment[:-1]
+                    # if cleaned_segment.endswith((".", "。")):
+                    #     cleaned_segment = cleaned_segment[:-1]
                     await self._send_message_with_typing(channel_id, cleaned_segment)
 
             # 如果是被动回复，清空 Redis 缓冲区
@@ -698,8 +699,8 @@ class MattermostWebSocketClient:
                     pass
 
     async def send_message(self, channel_id, text):
-        # 移除了不必要的 strip('=\n')，因为 AI 服务已经正确处理了分段
-        payload = {"channel_id": channel_id, "message": text}
+        clean_text = text.replace("。", " ")
+        payload = {"channel_id": channel_id, "message": clean_text}
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",

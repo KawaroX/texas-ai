@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS daily_schedules (
     is_in_major_event BOOLEAN DEFAULT FALSE,
     major_event_id UUID,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_embedded BOOLEAN DEFAULT FALSE,
+    embedded_at TIMESTAMP WITH TIME ZONE
 );
 
 -- 添加触发器，以便在更新时自动更新 updated_at 字段
@@ -36,6 +38,8 @@ CREATE TABLE IF NOT EXISTS major_events (
     event_type VARCHAR(100),
     status VARCHAR(50) DEFAULT 'planned',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_embedded BOOLEAN DEFAULT FALSE,
+    embedded_at TIMESTAMP WITH TIME ZONE,
     CHECK (end_date >= start_date)
 );
 
@@ -46,7 +50,9 @@ CREATE TABLE IF NOT EXISTS micro_experiences (
     daily_schedule_id UUID NOT NULL REFERENCES daily_schedules(id) ON DELETE CASCADE,
     related_item_id UUID,
     experiences JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_embedded BOOLEAN DEFAULT FALSE,
+    embedded_at TIMESTAMP WITH TIME ZONE
 );
 
 -- 创建GIN索引（提升JSON查询性能）

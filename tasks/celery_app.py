@@ -22,12 +22,11 @@ celery_app.conf.update(
     beat_schedule={
         "generate-daily-life": {
             "task": "tasks.daily_tasks.generate_daily_life_task",
-            "schedule": crontab(hour=4, minute=0),  # 每天凌晨4点
-            "args": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"),
+            "schedule": crontab(hour=20, minute=0),  # 每天凌晨4点
         },
         "process-scheduled-interactions": {
             "task": "tasks.interaction_tasks.process_scheduled_interactions",
-            "schedule": 60,  # 每分钟执行一次
+            "schedule": 300,  # 每5分钟执行一次
         },
         "fetch-and-store-life-data": {
             "task": "tasks.life_data_tasks.fetch_and_store_life_data_task",

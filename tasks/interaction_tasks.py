@@ -24,6 +24,7 @@ def process_scheduled_interactions():
     """
     logger.info("🚀 启动 process_scheduled_interactions Celery 任务...")
     current_timestamp = datetime.now().timestamp()
+    logger.info(f"当前时间戳: {current_timestamp}!!!!!!!!!!!!!!!!!")
 
     # 假设 interaction_needed 的 key 是 interaction_needed:{YYYY-MM-DD}
     today_key = f"interaction_needed:{datetime.now().strftime('%Y-%m-%d')}"
