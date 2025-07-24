@@ -16,7 +16,6 @@ class ChatEngine:
     def __init__(self):
         self.system_prompt = get_texas_system_prompt()
 
-
     async def stream_reply(
         self,
         channel_id: str,
@@ -47,7 +46,13 @@ class ChatEngine:
                 f"- 用户名: {user_info.get('username', '未知')}\n"
                 f"- 全名: {user_info.get('full_name', '未知')}\n"
                 f"- 昵称: {user_info.get('nickname', '未知')}"
-                "\n\n如果不是Kawaro的话，你应该表现得更冷漠。你的温柔应该留给Kawaro."
+            )
+        if user_info.get("username") == "kawaro":
+            dynamic_system_prompt += "\n\nKawaro，这是你最熟悉的人，你应该表现得更温柔，你很喜欢他。虽然是一种克制的喜欢，但是你的心里知道你对他的喜欢超过对世上任何一个人。"
+        else:
+            dynamic_system_prompt += (
+                "\n\n这是一个普通用户，并不是Kawaro，你应该表现得更冷漠。"
+                "尽一切可能少回复，用最少的字和最少的句子。但是也要有礼貌，礼貌地保持很大的社交距离。"
             )
 
         # 2. 使用新的 context_merger 获取整合的单条文本

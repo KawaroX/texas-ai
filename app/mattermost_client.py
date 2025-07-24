@@ -34,10 +34,81 @@ class MattermostWebSocketClient:
         # 缓存
         self.channel_info_cache = {}
         self.user_info_cache = {}
+        self.team_info_cache = {}  # 新增：缓存 Team 信息
 
         # 频道活动状态跟踪
         self.channel_activity = {}  # {channel_id: {"last_activity": timestamp}}
         self.last_typing_time = {}  # 新增：记录各频道最后输入状态时间
+
+    async def get_teams(self):
+        """获取 BOT 加入的 Team 列表"""
+        if self.user_id is None:
+            await self.fetch_bot_user_id()
+            if self.user_id is None:
+                logging.error("❌ BOT user ID 未知，无法获取 Team 列表。")
+                return []
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.http_base_url}/api/v4/users/{self.user_id}/teams",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                teams = resp.json()
+                logging.info(f"✅ 成功获取 {len(teams)} 个 Team。")
+                for team in teams:
+                    self.team_info_cache[team["id"]] = team
+                return teams
+            else:
+                logging.warning(
+                    f"⚠️ 无法获取 Team 列表: {resp.status_code} - {resp.text}"
+                )
+                return []
+
+    async def get_channels_for_team(self, team_id: str):
+        """获取指定 Team 中所有频道（含 DM）"""
+        if self.user_id is None:
+            await self.fetch_bot_user_id()
+            if self.user_id is None:
+                logging.error("❌ BOT user ID 未知，无法获取频道列表。")
+                return []
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.http_base_url}/api/v4/users/{self.user_id}/teams/{team_id}/channels",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                channels = resp.json()
+                logging.info(f"✅ 成功获取 Team {team_id} 的 {len(channels)} 个频道。")
+                for channel in channels:
+                    self.channel_info_cache[channel["id"]] = channel  # 缓存频道信息
+                return channels
+            else:
+                logging.warning(
+                    f"⚠️ 无法获取 Team {team_id} 的频道列表: {resp.status_code} - {resp.text}"
+                )
+                return []
+
+    async def get_channel_members(self, channel_id: str):
+        """获取私聊频道的成员列表"""
+        headers = {"Authorization": f"Bearer {self.token}"}
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self.http_base_url}/api/v4/channels/{channel_id}/members",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                members = resp.json()
+                logging.info(f"✅ 成功获取频道 {channel_id} 的 {len(members)} 个成员。")
+                return members
+            else:
+                logging.warning(
+                    f"⚠️ 无法获取频道 {channel_id} 的成员列表: {resp.status_code} - {resp.text}"
+                )
+                return []
 
     async def get_channel_info(self, channel_id):
         if channel_id in self.channel_info_cache:
@@ -97,6 +168,144 @@ class MattermostWebSocketClient:
             else:
                 logging.error("❌ Failed to fetch bot user ID")
 
+    async def _fetch_and_store_mattermost_data(self):
+        """
+        获取 Mattermost Team、频道和用户信息，并存储到 Redis。
+        对用户名为 'kawaro' 的用户进行特殊标记。
+        """
+        logging.info("🚀 开始获取 Mattermost 基础数据并存储到 Redis...")
+
+        # 1. 获取 BOT 自身信息 (已在 fetch_bot_user_id 中处理)
+        if self.user_id is None:
+            await self.fetch_bot_user_id()
+            if self.user_id is None:
+                logging.error("❌ 无法获取 BOT user ID，跳过数据同步。")
+                return
+
+        # 2. 获取 BOT 加入的 Team 列表并存储
+        teams = await self.get_teams()
+        if teams:
+            team_data_to_store = {
+                team["id"]: json.dumps(team, ensure_ascii=False) for team in teams
+            }
+            self.redis_client.hmset("mattermost:teams", team_data_to_store)
+            logging.info(f"✅ 已将 {len(teams)} 个 Team 信息存储到 Redis。")
+        else:
+            logging.warning("⚠️ 未获取到任何 Team 信息。")
+
+        # 3. 获取所有频道（含 DM）并存储
+        all_channels = []
+        for team in teams:
+            channels = await self.get_channels_for_team(team["id"])
+            all_channels.extend(channels)
+
+        if all_channels:
+            channel_data_to_store = {
+                channel["id"]: json.dumps(channel, ensure_ascii=False)
+                for channel in all_channels
+            }
+            self.redis_client.hmset("mattermost:channels", channel_data_to_store)
+            logging.info(f"✅ 已将 {len(all_channels)} 个频道信息存储到 Redis。")
+        else:
+            logging.warning("⚠️ 未获取到任何频道信息。")
+
+        # 4. 获取所有用户并存储
+        # 这是一个更全面的获取用户列表的方式，不依赖于 DM 频道
+        all_users = []
+        page = 0
+        per_page = 200  # Mattermost API 默认每页100，最大200
+        headers = {"Authorization": f"Bearer {self.token}"}
+        async with httpx.AsyncClient() as client:
+            while True:
+                resp = await client.get(
+                    f"{self.http_base_url}/api/v4/users",
+                    params={"page": page, "per_page": per_page},
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    users_page = resp.json()
+                    if not users_page:
+                        break  # 没有更多用户了
+                    all_users.extend(users_page)
+                    page += 1
+                else:
+                    logging.warning(
+                        f"⚠️ 无法获取所有用户信息: {resp.status_code} - {resp.text}"
+                    )
+                    break
+
+        if all_users:
+            user_data_to_store = {}
+            for user in all_users:
+                user_details = {
+                    "id": user.get("id"),
+                    "username": user.get("username"),
+                    "first_name": user.get("first_name"),
+                    "last_name": user.get("last_name"),
+                    "nickname": user.get("nickname"),
+                    "email": user.get("email"),
+                    "is_bot": user.get("is_bot", False),
+                    "is_kawaro": False,  # 默认不标记
+                }
+                if user_details.get("username") == "kawaro":
+                    user_details["is_kawaro"] = True
+                    logging.info(f"✨ 已标记用户 'kawaro' ({user_details['id']})。")
+
+                user_data_to_store[user["id"]] = json.dumps(
+                    user_details, ensure_ascii=False
+                )
+
+            self.redis_client.hmset("mattermost:users", user_data_to_store)
+            logging.info(f"✅ 已将 {len(all_users)} 个用户信息存储到 Redis。")
+        else:
+            logging.warning("⚠️ 未获取到任何用户信息。")
+
+        # 5. 遍历 DM 频道，更新频道信息以包含对方用户 ID 和 is_special_user 标记
+        # 这一步是为了完善频道信息，特别是 DM 频道，使其包含对方用户ID和特殊标记
+        # 假设 all_channels 已经包含了所有频道，包括 DM 频道
+        dm_channels_from_api = [c for c in all_channels if c.get("type") == "D"]
+        logging.info(f"找到 {len(dm_channels_from_api)} 个 DM 频道。")
+
+        for dm_channel in dm_channels_from_api:
+            dm_channel_id = dm_channel["id"]
+            members = await self.get_channel_members(dm_channel_id)
+
+            other_user_id = None
+            for member in members:
+                if member["user_id"] != self.user_id:
+                    other_user_id = member["user_id"]
+                    break
+
+            if other_user_id:
+                # 从 Redis 中获取对方用户详情，因为已经同步了所有用户
+                other_user_details_str = self.redis_client.hget(
+                    "mattermost:users", other_user_id
+                )
+                if other_user_details_str:
+                    other_user_details = json.loads(other_user_details_str)
+                    dm_channel["other_user_id"] = other_user_id
+                    dm_channel["is_special_user"] = other_user_details.get(
+                        "is_kawaro", False
+                    )
+
+                    # 更新 Redis 中的频道信息
+                    self.redis_client.hset(
+                        "mattermost:channels",
+                        dm_channel_id,
+                        json.dumps(dm_channel, ensure_ascii=False),
+                    )
+                    logging.info(
+                        f"✅ 已更新 DM 频道 {dm_channel_id} 的对方用户ID和特殊标记。"
+                    )
+                else:
+                    logging.warning(
+                        f"⚠️ 无法从 Redis 获取用户 {other_user_id} 的详细信息，DM 频道 {dm_channel_id} 未完全更新。"
+                    )
+            else:
+                logging.warning(f"⚠️ 无法找到 DM 频道 {dm_channel_id} 的对方用户。")
+
+        logging.info("✅ Mattermost 基础数据同步完成。")
+
     async def connect(self):
         retries = 5
         delay = 10
@@ -109,6 +318,13 @@ class MattermostWebSocketClient:
                     extra_headers={"Authorization": f"Bearer {self.token}"},
                 )
                 logging.info("✅ WebSocket connected.")
+
+                # 在连接成功后，获取并存储 Mattermost 基础数据
+                await self._fetch_and_store_mattermost_data()
+
+                # 向 kawaro 发送上线通知
+                # await self.send_dm_to_kawaro()
+
                 await self.listen()
                 return
             except Exception as e:
@@ -413,6 +629,63 @@ class MattermostWebSocketClient:
             logging.error(
                 f"❌ Failed to send message: {response.status_code} - {response.text}"
             )
+
+    async def send_dm_to_kawaro(
+        self, message: str = "德克萨斯已经上线，随时等待你的召唤。"
+    ):
+        """
+        向用户名为 'kawaro' 的用户发送私聊消息
+        步骤:
+        1. 获取 BOT 自身 ID
+        2. 从 Redis 获取 'kawaro' 用户的 ID
+        3. 创建或获取私聊频道
+        4. 发送消息
+        """
+        # 1. 确保 BOT ID 已获取
+        if self.user_id is None:
+            await self.fetch_bot_user_id()
+            if self.user_id is None:
+                logging.error("❌ 无法获取 BOT user ID，无法发送消息")
+                return
+
+        # 2. 从 Redis 获取 'kawaro' 用户 ID
+        kawaro_user_id = None
+        users = self.redis_client.hgetall("mattermost:users")
+        for user_id, user_data in users.items():
+            user_info = json.loads(user_data)
+            if user_info.get("username") == "kawaro":
+                kawaro_user_id = user_id
+                break
+
+        if not kawaro_user_id:
+            logging.warning("⚠️ 未找到 'kawaro' 用户")
+            return
+
+        logging.info(f"✅ 找到 'kawaro' 用户 ID: {kawaro_user_id}")
+
+        # 3. 创建或获取私聊频道
+        headers = {"Authorization": f"Bearer {self.token}"}
+        async with httpx.AsyncClient() as client:
+            # 创建私聊频道
+            create_resp = await client.post(
+                f"{self.http_base_url}/api/v4/channels/direct",
+                headers=headers,
+                json=[self.user_id, kawaro_user_id],
+            )
+
+            if create_resp.status_code == 201:
+                channel_data = create_resp.json()
+                channel_id = channel_data["id"]
+                logging.info(f"✅ 创建私聊频道成功: {channel_id}")
+            else:
+                logging.warning(
+                    f"⚠️ 创建私聊频道失败: {create_resp.status_code} - {create_resp.text}"
+                )
+                return
+
+        # 4. 发送消息
+        await self.send_message(channel_id, message)
+        logging.info(f"✅ 已向 'kawaro' 发送消息: '{message}'")
 
 
 if __name__ == "__main__":

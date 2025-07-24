@@ -1,5 +1,5 @@
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from app.config import settings
 import asyncio
 
@@ -11,12 +11,31 @@ logging.basicConfig(
 
 from app.mattermost_client import MattermostWebSocketClient
 from services.redis_cleanup_service import start_redis_cleanup
+from app.life_system import generate_and_store_daily_life
+from datetime import date
 
 app = FastAPI(title=settings.BOT_NAME)
 
 @app.get("/")
 def read_root():
     return {"message": f"Welcome to {settings.BOT_NAME}!"}
+
+@app.get("/generate-daily-life")
+async def generate_daily_life_endpoint(target_date: str = None):
+    """
+    触发生成指定日期的德克萨斯生活日程。
+    如果未指定日期，则生成今天的日程。
+    """
+    if target_date:
+        try:
+            target_date_obj = date.fromisoformat(target_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="日期格式不正确，请使用 YYYY-MM-DD 格式。")
+    else:
+        target_date_obj = date.today()
+    
+    await generate_and_store_daily_life(target_date_obj)
+    return {"message": f"已触发生成 {target_date_obj.strftime('%Y-%m-%d')} 的每日日程。请查看日志和 'generated_content' 文件夹。"}
 
 @app.on_event("startup")
 async def startup_event():

@@ -34,6 +34,7 @@ services:
       - "6379:6379"
     networks:
       - texas-net
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -84,7 +85,12 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
-    command: ["celery", "-A", "tasks.celery_app", "worker", "--loglevel=info"]
+    command: 
+      - bash
+      - -c
+      - |
+        celery -A tasks.celery_app worker --loglevel=info &
+        celery -A tasks.celery_app beat --loglevel=info
     depends_on:
       db:
         condition: service_healthy
@@ -127,6 +133,32 @@ services:
     networks:
       - texas-net
 
+
+  # PostgreSQL 管理界面
+  adminer:
+    image: adminer:latest
+    container_name: texas-adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    networks:
+      - texas-net
+
+  # Redis Insight 可视化界面
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: texas-redisinsight
+    restart: always
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
+    networks:
+      - texas-net
+
 networks:
   texas-net:
     driver: bridge
+

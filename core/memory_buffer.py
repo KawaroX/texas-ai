@@ -23,20 +23,20 @@ class ChannelMemory:
         now = datetime.datetime.now(tz)
         timestamp = now.timestamp()
         iso_time = now.isoformat()
-        
+
         # 消息存储为 JSON 字符串，分数是东八区时间戳
         message = {
             "timestamp": timestamp,
             "role": role,
             "content": content,
         }
-        
+
         # 1. 存入Redis
         redis_client.zadd(
             f"channel_memory:{self.channel_id}",
-            {json.dumps(message): timestamp},
+            {json.dumps(message, ensure_ascii=False): timestamp},
         )
-        
+
         # 2. 同步存入PostgreSQL
         insert_messages([(self.channel_id, role, content, iso_time)])
 
@@ -68,11 +68,12 @@ class ChannelMemory:
             dt = datetime.datetime.fromisoformat(msg["timestamp"])
             time_str = dt.strftime("[%H:%M:%S]")
 
-            # 映射角色到用户名
-            username = "德克萨斯" if msg["role"] == "assistant" else "Kawaro"
+            # 映射角色到用户名 &&&&&
+            username = "德克萨斯" if msg["role"] == "assistant" else "user"
 
             formatted.append(f"{time_str}{username}：{msg['content']}")
         return "\n".join(formatted)
+
 
 def get_channel_memory(channel_id):
     # 直接返回 ChannelMemory 实例，它会操作 Redis

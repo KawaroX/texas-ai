@@ -6,6 +6,7 @@ app/.DS_Store
 
 volumes
 backups
+generated_content
 data
 certs
 docker-compose.override.yml
@@ -13,3 +14,11 @@ docker-compose.override.yaml
 test_message_format.py
 test_simplified.py
 tp.py
+data/.DS_Store
+app/.DS_Store
+.DS_Store
+docker-compose.yml
+.gitignore
+celerybeat-schedule
+app/mattermost_client_副本.py
+app/mattermost_client_副本2.py
