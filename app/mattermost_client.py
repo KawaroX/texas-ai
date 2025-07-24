@@ -513,6 +513,8 @@ class MattermostWebSocketClient:
                 f"🤔 开始智能处理，频道 {channel_info['name']}，消息数：{len(messages)}"
             )
 
+            await self.send_typing(channel_id)
+
             # 开始生成回复
             await self._generate_and_send_reply(
                 channel_id, messages, None, channel_info, user_info
@@ -590,9 +592,7 @@ class MattermostWebSocketClient:
             async def continuous_typing():
                 while True:
                     await self.send_typing(channel_id)
-                    await asyncio.sleep(
-                        3
-                    )  # Mattermost typing indicator lasts for about 3 seconds
+                    await asyncio.sleep(3)
 
             typing_task = asyncio.create_task(continuous_typing())
 

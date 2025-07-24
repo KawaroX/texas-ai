@@ -6,6 +6,7 @@ import logging
 import uuid
 from typing import Optional
 from datetime import datetime, date
+import redis  # 添加 Redis 支持
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +226,65 @@ async def generate_and_store_daily_life(target_date: date):
         logger.warning("⚠️ 日程中没有可生成微观经历的项目")
 
     logger.info(f"--- {date_str} 每日日程生成与存储完成 ---")
+
+    # 8. 使用专用函数收集需要交互的微观经历
+    logger.info("开始收集需要主动交互的微观经历...")
+    await collect_interaction_experiences(target_date)
+
     return daily_schedule_data
+
+
+async def collect_interaction_experiences(target_date: date):
+    """
+    单独收集需要交互的微观经历并存入Redis
+    """
+    date_str = target_date.strftime("%Y-%m-%d")
+    logger.info(f"--- 开始单独收集 {date_str} 需要主动交互的微观经历 ---")
+
+    try:
+        # 从数据库获取当日日程 ID
+        daily_schedule = get_daily_schedule_by_date(date_str)
+        if not daily_schedule:
+            logger.warning(f"未找到 {date_str} 的日程数据")
+            return False
+
+        schedule_id = daily_schedule["id"]
+
+        # 查询关联的微观经历
+        micro_experiences = get_micro_experiences_by_daily_schedule_id(schedule_id)
+        if not micro_experiences:
+            logger.info("当日没有微观经历数据")
+            return False
+
+        # 筛选需要交互的条目
+        interaction_needed = []
+        for record in micro_experiences:
+            experiences = record.get("experiences", [])
+            for exp in experiences:
+                if exp.get("need_interaction") is True:
+                    interaction_needed.append(exp)
+
+        logger.info(f"找到 {len(interaction_needed)} 条需要交互的微观经历")
+
+        # 存储到 Redis
+        r = redis.Redis.from_url(os.getenv("REDIS_URL"))
+        redis_key = f"interaction_needed"
+
+        # 删除旧数据（如果存在）
+        r.delete(redis_key)
+
+        # 存储新数据
+        for exp in interaction_needed:
+            r.rpush(redis_key, json.dumps(exp, ensure_ascii=False))
+
+        # 设置 24 小时过期
+        r.expire(redis_key, 86400)
+        logger.info(f"已存储到 Redis 键: {redis_key} (24小时过期)")
+        return True
+
+    except Exception as e:
+        logger.error(f"存储交互微观经历失败: {str(e)}", exc_info=True)
+        return False
 
 
 async def generate_and_store_major_event(
@@ -419,13 +478,18 @@ class LifeSystemQuery:
         return get_daily_schedule_by_date(self.date_str)
 
     async def get_schedule_item_at_time(self, target_time: str) -> Optional[dict]:
-        logger.debug(f"get_schedule_item_at_time called with target_time: {target_time}")
+        logger.debug(
+            f"get_schedule_item_at_time called with target_time: {target_time}"
+        )
         daily_schedule = await self.get_daily_schedule_info()
         if not daily_schedule:
             logger.debug("No daily schedule found.")
             return None
-        
-        if not ("schedule_data" in daily_schedule and "schedule_items" in daily_schedule["schedule_data"]):
+
+        if not (
+            "schedule_data" in daily_schedule
+            and "schedule_items" in daily_schedule["schedule_data"]
+        ):
             logger.debug("Daily schedule has no 'schedule_data' or 'schedule_items'.")
             return None
 
@@ -444,17 +508,21 @@ class LifeSystemQuery:
                 continue
 
             try:
-                item_start_time_obj = datetime.strptime(item_start_time_str, "%H:%M").time()
+                item_start_time_obj = datetime.strptime(
+                    item_start_time_str, "%H:%M"
+                ).time()
                 item_end_time_obj = datetime.strptime(item_end_time_str, "%H:%M").time()
             except ValueError:
                 logger.error(f"Invalid time format in schedule item: {item}")
                 continue
-            
-            logger.debug(f"Checking item: {item.get('title')} from {item_start_time_str} to {item_end_time_str}")
+
+            logger.debug(
+                f"Checking item: {item.get('title')} from {item_start_time_str} to {item_end_time_str}"
+            )
             if item_start_time_obj <= target_time_obj < item_end_time_obj:
                 logger.debug(f"Matched schedule item: {item.get('title')}")
                 return item
-        
+
         logger.debug("No matching schedule item found for current time.")
         return None
 
@@ -466,14 +534,18 @@ class LifeSystemQuery:
     async def get_micro_experience_at_time(
         self, schedule_item_id: str, target_time: str
     ) -> Optional[dict]:
-        logger.debug(f"get_micro_experience_at_time called for schedule_item_id: {schedule_item_id}, target_time: {target_time}")
+        logger.debug(
+            f"get_micro_experience_at_time called for schedule_item_id: {schedule_item_id}, target_time: {target_time}"
+        )
         micro_experiences_list = await self.get_micro_experiences_for_schedule_item(
             schedule_item_id
         )
         if not micro_experiences_list:
-            logger.debug(f"No micro experiences found for schedule_item_id: {schedule_item_id}")
+            logger.debug(
+                f"No micro experiences found for schedule_item_id: {schedule_item_id}"
+            )
             return None
-        
+
         try:
             target_time_obj = datetime.strptime(target_time, "%H:%M").time()
         except ValueError:
@@ -483,7 +555,9 @@ class LifeSystemQuery:
         for record in micro_experiences_list:
             experiences_in_record = record.get("experiences", [])
             if not experiences_in_record:
-                logger.debug(f"Micro experience record {record.get('id')} has no 'experiences'.")
+                logger.debug(
+                    f"Micro experience record {record.get('id')} has no 'experiences'."
+                )
                 continue
 
             for exp in experiences_in_record:
@@ -491,21 +565,29 @@ class LifeSystemQuery:
                 exp_end_time_str = exp.get("end_time")
 
                 if not (exp_start_time_str and exp_end_time_str):
-                    logger.warning(f"Micro experience item missing start_time or end_time: {exp}")
+                    logger.warning(
+                        f"Micro experience item missing start_time or end_time: {exp}"
+                    )
                     continue
 
                 try:
-                    exp_start_time_obj = datetime.strptime(exp_start_time_str, "%H:%M").time()
-                    exp_end_time_obj = datetime.strptime(exp_end_time_str, "%H:%M").time()
+                    exp_start_time_obj = datetime.strptime(
+                        exp_start_time_str, "%H:%M"
+                    ).time()
+                    exp_end_time_obj = datetime.strptime(
+                        exp_end_time_str, "%H:%M"
+                    ).time()
                 except ValueError:
                     logger.error(f"Invalid time format in micro experience item: {exp}")
                     continue
-                
-                logger.debug(f"Checking micro experience: {exp.get('content')} from {exp_start_time_str} to {exp_end_time_str}")
+
+                logger.debug(
+                    f"Checking micro experience: {exp.get('content')} from {exp_start_time_str} to {exp_end_time_str}"
+                )
                 if exp_start_time_obj <= target_time_obj < exp_end_time_obj:
                     logger.debug(f"Matched micro experience: {exp.get('content')}")
                     return exp
-        
+
         logger.debug("No matching micro experience found for current time.")
         return None
 

@@ -3,7 +3,7 @@ import asyncio
 from celery import shared_task
 from .daily_tasks import generate_daily_life_task
 from app.life_system import LifeSystemQuery
-from datetime import date, datetime
+from datetime import date
 import logging
 
 logger = logging.getLogger(__name__)

@@ -11,7 +11,7 @@ logging.basicConfig(
 
 from app.mattermost_client import MattermostWebSocketClient
 from services.redis_cleanup_service import start_redis_cleanup
-from app.life_system import generate_and_store_daily_life
+from app.life_system import generate_and_store_daily_life, collect_interaction_experiences
 from datetime import date
 
 app = FastAPI(title=settings.BOT_NAME)
@@ -36,6 +36,27 @@ async def generate_daily_life_endpoint(target_date: str = None):
     
     await generate_and_store_daily_life(target_date_obj)
     return {"message": f"已触发生成 {target_date_obj.strftime('%Y-%m-%d')} 的每日日程。请查看日志和 'generated_content' 文件夹。"}
+
+@app.get("/collect-interactions")
+async def collect_interactions_endpoint(target_date: str = None):
+    """
+    手动收集需要交互的微观经历并存入Redis
+    """
+    if target_date:
+        try:
+            target_date_obj = date.fromisoformat(target_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="日期格式不正确，请使用 YYYY-MM-DD 格式。")
+    else:
+        target_date_obj = date.today()
+    
+    from app.life_system import collect_interaction_experiences
+    success = await collect_interaction_experiences(target_date_obj)
+    
+    if success:
+        return {"message": f"已成功收集 {target_date_obj.strftime('%Y-%m-%d')} 需要交互的微观经历"}
+    else:
+        raise HTTPException(status_code=404, detail=f"未找到 {target_date_obj.strftime('%Y-%m-%d')} 的日程数据或微观经历")
 
 @app.on_event("startup")
 async def startup_event():
