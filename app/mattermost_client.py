@@ -699,7 +699,7 @@ class MattermostWebSocketClient:
                     pass
 
     async def send_message(self, channel_id, text):
-        clean_text = text.replace("。", " ")
+        clean_text = text.replace("。", " ").strip()
         payload = {"channel_id": channel_id, "message": clean_text}
         headers = {
             "Authorization": f"Bearer {self.token}",

@@ -143,12 +143,21 @@ def _get_life_system_context() -> str:
                         )
                         description = f"{item.get('description', '')}"
 
-                        logger.info(
-                            f"开始时间：{start_time}，现在时间：{datetime.now().time()}"
-                        )
                         if isinstance(start_time, str):
-                            start_time = datetime.strptime(start_time, "%H:%M").time()
-                        if start_time < datetime.now().time():
+                            start_time_dt = datetime.combine(
+                                datetime.today(),
+                                datetime.strptime(start_time, "%H:%M").time(),
+                            )
+                        else:
+                            start_time_dt = datetime.combine(
+                                datetime.today(), start_time.time()
+                            )
+
+                        start_ts = int(start_time_dt.timestamp())
+                        now_ts = int(datetime.now().timestamp())
+                        logger.info(f"开始时间戳：{start_ts}，现在时间戳：{now_ts}")
+
+                        if start_ts < now_ts:
                             tags = (
                                 f"🧠情绪：{'、'.join(item.get('emotional_impact_tags', []))}"
                                 if item.get("emotional_impact_tags")
@@ -156,15 +165,20 @@ def _get_life_system_context() -> str:
                             )
                             interaction = (
                                 f"🔄交互潜力：{item.get('interaction_potential', '')}"
+                                if item.get("interaction_potential")
+                                else ""
                             )
-                        priority = f"⏱️优先级：{item.get('priority', '')}"
-                        weather_effect = (
-                            "☁️受天气影响" if item.get("weather_affected") else ""
-                        )
+                            weather_effect = (
+                                "☁️受天气影响" if item.get("weather_affected") else ""
+                            )
+                            non_empty_parts = [part for part in [tags, interaction, weather_effect] if part]
+                            details = " | ".join(non_empty_parts) if non_empty_parts else ""
+                        else:
+                            details = ""
 
                         items.append(
                             f"【{item.get('title')}】{time_range} {location} {companions}\n"
-                            f"{description}\n{tags} | {priority} | {interaction} | {weather_effect}".strip()
+                            f"{description}\n{details}".strip()
                         )
 
                     context_parts.append(header + summary + "\n".join(items))
