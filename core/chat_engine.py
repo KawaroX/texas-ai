@@ -54,16 +54,17 @@ class ChatEngine:
                 "\n\n这是一个普通用户，并不是Kawaro，你应该表现得更冷漠。"
                 "尽一切可能少回复，用最少的字和最少的句子。但是也要有礼貌，礼貌地保持很大的社交距离。"
             )
+        
+        if not context_info:
+            # 2. 使用新的 context_merger 获取整合的单条文本
+            latest_query = " ".join(messages)
+            merged_context = await merge_context(channel_id, latest_query)
 
-        # 2. 使用新的 context_merger 获取整合的单条文本
-        latest_query = " ".join(messages)
-        merged_context = await merge_context(channel_id, latest_query)
-
-        # 3. 构建新的消息结构：system + 单条 user 消息
-        prompt_messages = [
-            {"role": "system", "content": dynamic_system_prompt},
-            {"role": "user", "content": merged_context},
-        ]
+            # 3. 构建新的消息结构：system + 单条 user 消息
+            prompt_messages = [
+                {"role": "system", "content": dynamic_system_prompt},
+                {"role": "user", "content": merged_context},
+            ]
 
         # 调试输出
         logger.info(f"\n=== 新消息结构 ===")

@@ -101,18 +101,16 @@ def _get_life_system_context() -> str:
                             f"【大事件】{start_date}至{end_date} {event_type}\n\n{main_content}"
                         )
                     if daily_summaries:
-                        day = (
-                            int(
-                                today - datetime.strptime(start_date, "%Y-%m-%d").date()
-                            )
-                            + 1
-                        )
+                        day_number = (
+                            today - datetime.strptime(start_date, "%Y-%m-%d").date()
+                        ).days + 1
                         for item in daily_summaries:
-                            if int(item["day"]) <= day:
+                            if int(item["day"]) <= day_number:
                                 context_parts.append(
                                     f"【{item['date']}】Day {item['day']}\n{item}"
                                 )
-            except:
+            except Exception as e:
+                logger.warning(f"⚠️ 大事件数据解析失败: {e}")
                 if life_data["major_event"]:
                     context_parts.append(f"【大事件】{life_data['major_event']}")
 
@@ -123,35 +121,43 @@ def _get_life_system_context() -> str:
         ):
             try:
                 schedule = json.loads(life_data["daily_schedule"])
+                data = schedule.get("schedule_data", {})
                 if schedule and isinstance(schedule, dict):
                     header = f"【今日日程 - {schedule.get('date', '')}】天气：{schedule.get('weather', '')}\n"
-                    summary = f"🔹日程概览：{schedule.get('daily_summary', '')}\n"
+                    summary = f"🔹日程概览：{data.get('daily_summary', '')}\n"
 
                     items = []
-                    for item in schedule.get("schedule_data", {}).get(
-                        "schedule_items", []
-                    ):
-                        time_range = (
-                            f"{item.get('start_time')} - {item.get('end_time')}"
-                        )
+                    for item in data.get("schedule_items", []):
+                        start_time = item.get("start_time")
+                        end_time = item.get("end_time")
+                        time_range = f"{start_time} - {end_time}"
                         location = (
-                            f"📍{item.get('location')}" if item.get("location") else ""
+                            f"📍位于{item.get('location')}"
+                            if item.get("location")
+                            else ""
                         )
                         companions = (
-                            f"👥{'、'.join(item.get('companions', []))}"
+                            f"和{'、'.join(item.get('companions', []))}在一起行动"
                             if item.get("companions")
                             else ""
                         )
                         description = f"{item.get('description', '')}"
-                        tags = (
-                            f"🧠情绪：{'、'.join(item.get('emotional_impact_tags', []))}"
-                            if item.get("emotional_impact_tags")
-                            else ""
+
+                        logger.info(
+                            f"开始时间：{start_time}，现在时间：{datetime.now().time()}"
                         )
+                        if isinstance(start_time, str):
+                            start_time = datetime.strptime(start_time, "%H:%M").time()
+                        if start_time < datetime.now().time():
+                            tags = (
+                                f"🧠情绪：{'、'.join(item.get('emotional_impact_tags', []))}"
+                                if item.get("emotional_impact_tags")
+                                else ""
+                            )
+                            interaction = (
+                                f"🔄交互潜力：{item.get('interaction_potential', '')}"
+                            )
                         priority = f"⏱️优先级：{item.get('priority', '')}"
-                        interaction = (
-                            f"🔄交互潜力：{item.get('interaction_potential', '')}"
-                        )
                         weather_effect = (
                             "☁️受天气影响" if item.get("weather_affected") else ""
                         )
@@ -165,6 +171,12 @@ def _get_life_system_context() -> str:
             except Exception as e:
                 logger.warning(f"⚠️ 日程解析失败: {e}")
 
+        # 3. 过去经历回顾
+        if "summarized_past_micro_experiences_story" in life_data:
+            past = life_data["summarized_past_micro_experiences_story"]
+            if past and past != "没有之前的经历，今天可能才刚刚开始。":
+                context_parts.append(f"【此前你做了这些事情】{past}")
+
         # 2. 当前微观经历
         if "current_micro_experience" in life_data:
             try:
@@ -177,7 +189,7 @@ def _get_life_system_context() -> str:
                     content = exp.get("content", "")
                     emotions = exp.get("emotions", "")
                     context_parts.append(
-                        f"【当前微观经历】{time_range}\n"
+                        f"【你现在正在做的事情】{time_range}\n"
                         f"{content}\n🧠思考：{thoughts}\n🎭情绪：{emotions}"
                     )
             except Exception as e:
@@ -187,18 +199,10 @@ def _get_life_system_context() -> str:
                     and life_data["current_micro_experience"] != "现在没有事件。"
                 ):
                     context_parts.append(
-                        f"【当前微观经历】{life_data['current_micro_experience']}"
+                        f"【你现在正在做的事情】{life_data['current_micro_experience']}"
                     )
 
-        # 3. 过去经历回顾
-        if "summarized_past_micro_experiences_story" in life_data:
-            past = life_data["summarized_past_micro_experiences_story"]
-            if past and past != "没有之前的经历，今天可能才刚刚开始。":
-                context_parts.append(f"【今日经历回顾】{past}")
-
-        return (
-            "【生活系统信息】\n" + "\n\n".join(context_parts) if context_parts else ""
-        )
+        return "\n\n".join(context_parts) if context_parts else ""
 
     except Exception as e:
         logger.warning(f"⚠️ 获取生活系统数据失败: {e}")
@@ -206,7 +210,7 @@ def _get_life_system_context() -> str:
 
 
 async def merge_context(
-    channel_id: str, latest_query: str, now: datetime = None
+    channel_id: str, latest_query: str, now: datetime = None, is_active=False
 ) -> str:
     """
     整合最终上下文，返回单条文本，包含：
@@ -382,9 +386,12 @@ async def merge_context(
     #     parts.append(f"【新消息缓存】\n{mattermost_cache}")
 
     # 添加引导提示词
-    parts.append(
-        f"现在是{now}，请根据上述信息回复消息：{latest_query}。可以使用===在你认为需要分条的地方将信息分条。模拟人类可能一条消息发送一句或者半句话的风格。请务必在回复中使用。"
-    )
+    if is_active:
+        parts.append(
+            f"现在的时间是{now}，根据【你现在正在做的事情】，你的想法是：{latest_query}。你想把这些分享给Kawaro。请写出你发送给Kawaro的消息："
+        )
+    else:
+        parts.append(f"现在的时间是{now}，请根据上述信息回复消息：{latest_query}。")
 
     merged_context = "\n\n".join(parts)
     logger.info(f"✅ Context merged, total length: {len(merged_context)} characters")

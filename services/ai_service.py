@@ -258,9 +258,8 @@ async def stream_reply_ai(messages, model=YUNWU_AI_MODEL) -> AsyncGenerator[str,
 async def stream_ai_chat(messages: list, model: Optional[str] = None):
     """
     流式生成AI回复，按分隔符分段输出。
-    分隔符优先为 '==='，其次为换行符。
     """
-    # 如���没有指定模型，或者指定的是 DeepSeek V3 模型，则使用 Reply AI 渠道
+    # 如果没有指定模型，或者指定的是 DeepSeek V3 模型，则使用 Reply AI 渠道
     if model is None or model == "deepseek-v3-250324":
         logger.info(f"🔄 正在使用 Reply AI 渠道进行 stream_ai_chat(): {YUNWU_AI_MODEL}")
         stream_func = stream_reply_ai
@@ -275,22 +274,22 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     async for chunk in stream_func(messages, model=actual_model):
         buffer += chunk
 
-        # 优先按 '===' 分段
+        # 优先按句号切分（包括中文句号）
         while True:
-            sep_index = buffer.find("===")
-            if sep_index != -1:
-                segment = buffer[:sep_index].strip()
+            period_index = buffer.find("。")
+            if period_index != -1:
+                segment = buffer[:period_index + 1].strip()
                 if segment:
                     yield segment
-                buffer = buffer[sep_index + 3 :]
+                buffer = buffer[period_index + 1:]
                 continue
-            # 其次按换行符分段（可选，通常流式模型直接按===分）
+            # 再尝试按换行符切分
             newline_index = buffer.find("\n")
             if newline_index != -1:
                 segment = buffer[:newline_index].strip()
                 if segment:
                     yield segment
-                buffer = buffer[newline_index + 1 :]
+                buffer = buffer[newline_index + 1:]
                 continue
             break
 
