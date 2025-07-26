@@ -55,16 +55,23 @@ class ChatEngine:
                 "尽一切可能少回复，用最少的字和最少的句子。但是也要有礼貌，礼貌地保持很大的社交距离。"
             )
         
-        if not context_info:
-            # 2. 使用新的 context_merger 获取整合的单条文本
+        # 2. 获取整合的单条文本作为用户消息内容
+        user_message_content = ""
+        if context_info:
+            # 如果提供了 context_info，直接使用它作为用户消息内容
+            user_message_content = context_info.get("content", "")
+            logger.info(f"使用 context_info 作为用户消息内容: {user_message_content[:100]}...")
+        else:
+            # 否则，使用新的 context_merger 获取整合的单条文本
             latest_query = " ".join(messages)
-            merged_context = await merge_context(channel_id, latest_query)
+            user_message_content = await merge_context(channel_id, latest_query)
+            logger.info(f"使用 merge_context 获取用户消息内容: {user_message_content[:100]}...")
 
-            # 3. 构建新的消息结构：system + 单条 user 消息
-            prompt_messages = [
-                {"role": "system", "content": dynamic_system_prompt},
-                {"role": "user", "content": merged_context},
-            ]
+        # 3. 构建新的消息结构：system + 单条 user 消息
+        prompt_messages = [
+            {"role": "system", "content": dynamic_system_prompt},
+            {"role": "user", "content": user_message_content},
+        ]
 
         # 调试输出
         logger.info(f"\n=== 新消息结构 ===")

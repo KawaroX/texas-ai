@@ -2,9 +2,63 @@ import httpx
 from datetime import datetime, timedelta
 from celery import shared_task
 from app.config import settings
+from services.memory_data_collector import MemoryDataCollector
+from services.memory_summarizer import MemorySummarizer
+from services.memory_storage import MemoryStorage
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task
+def generate_daily_memories():
+    """生成每日记忆并存储到Redis"""
+    try:
+        collector = MemoryDataCollector()
+        summarizer = MemorySummarizer()
+        storage = MemoryStorage()
+
+        # 处理三类记忆数据
+        for data_type, collector_method in [
+            ("chat", collector.get_unembedded_chats),
+            ("schedule", collector.get_yesterday_schedule_experiences),
+            ("event", collector.get_major_events),
+        ]:
+            logger.info(f"💡 开始处理 {data_type} 数据")
+            data = collector_method()
+            if data:
+                # 提取ID用于后续标记
+                if data_type == "chat":
+                    ids = [item["id"] for item in data]
+                elif data_type == "schedule":
+                    ids = [item["id"] for item in data]
+                elif data_type == "event":
+                    ids = [item["id"] for item in data]
+
+                memories = summarizer.summarize(data_type, data)
+                # 确保memories是列表形式
+                if not isinstance(memories, list):
+                    memories = [memories]
+                storage.store_memory(memories)
+
+                # 标记数据为已嵌入
+                if data_type == "chat":
+                    collector.mark_chats_embedded(ids)
+                elif data_type == "schedule":
+                    for schedule_id in ids:
+                        collector.mark_schedule_embedded(schedule_id)
+                elif data_type == "event":
+                    for event_id in ids:
+                        collector.mark_event_embedded(event_id)
+                
+                logger.info(f"✅ 成功处理 {data_type} 数据，生成 {len(memories)} 条记忆。")
+
+    except Exception as e:
+        logger.error(f"生成每日记忆失败: {str(e)}")
+        raise
+    
+    logger.info("🎉 每日记忆生成任务完成。")
+
 
 @shared_task
 def generate_daily_life_task():

@@ -278,10 +278,10 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
         while True:
             period_index = buffer.find("。")
             if period_index != -1:
-                segment = buffer[:period_index + 1].strip()
+                segment = buffer[: period_index + 1].strip()
                 if segment:
                     yield segment
-                buffer = buffer[period_index + 1:]
+                buffer = buffer[period_index + 1 :]
                 continue
             # 再尝试按换行符切分
             newline_index = buffer.find("\n")
@@ -289,7 +289,7 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
                 segment = buffer[:newline_index].strip()
                 if segment:
                     yield segment
-                buffer = buffer[newline_index + 1:]
+                buffer = buffer[newline_index + 1 :]
                 continue
             break
 

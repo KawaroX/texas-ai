@@ -68,18 +68,18 @@ async def generate_and_store_daily_life(target_date: date):
     else:
         print("ℹ️ 未检测到已存在的大事件")
 
-    # 如果没有大事件，则根据0.03概率决定是否生成新的大事件
+    # 如果没有大事件，则根据0.028概率决定是否生成新的大事件
     if not is_in_major_event:
         import random
         from collections import Counter
 
-        gen_prob = 1  # 0.03
+        gen_prob = 0.028  # 0.028
         rand_val = random.random()
         logger.info(
             f"🎲 检查是否生成新大事件: 概率={gen_prob*100}%, 随机值={rand_val:.4f}"
         )
 
-        if rand_val < gen_prob:  # 0.03概率生成大事件
+        if rand_val < gen_prob:  # 0.028概率生成大事件
             # 正态分布生成持续天数 (μ=4, σ=2)，范围1-7天
             results = []
             for _ in range(1000):
