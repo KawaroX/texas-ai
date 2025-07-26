@@ -20,7 +20,7 @@ class MemorySummarizer:
             "Content-Type": "application/json",
         }
         self.max_retries = 3  # 最大重试次数
-        self.initial_delay = 20  # 初始延迟秒数
+        self.initial_delay = 5  # 初始延迟秒数
 
         # 初始化Redis客户端
         self.redis_url = os.getenv("REDIS_URL")

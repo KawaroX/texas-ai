@@ -407,7 +407,7 @@ async def merge_context(
                     minutes_diff = int((time_diff.total_seconds() % 3600) // 60)
                     condemn_message = (
                         f"【参考资料】\n"
-                        f"注意：距离Kawaro上次在任何频道（包括当前频道）回复德克萨斯，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。Kawaro的最新消息与上次回复的内容是否有关联？请根据上下文判断是否需要对此进行适当的评论、抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你。"
+                        f"注意：距离Kawaro上次在任何频道（包括当前频道）回复德克萨斯，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。请根据上下文判断是否需要对此进行适当的评论、抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你。"
                     )
                     summary_notes.insert(0, condemn_message)  # 将谴责信息放在最前面
 

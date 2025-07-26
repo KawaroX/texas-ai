@@ -388,6 +388,54 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
         return ""
 
 
+# 新增 OpenAI 协议调用函数
+async def call_openai(messages, model="gpt-4o-mini") -> str:
+    """
+    非流式调用 OpenAI 协议（用于摘要等场景）
+    """
+    SUMMARY_API_KEY = os.getenv("SUMMARY_API_KEY")
+    SUMMARY_API_URL = os.getenv(
+        "SUMMARY_API_URL", "https://api.openai.com/v1/chat/completions"
+    )
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {SUMMARY_API_KEY}",
+    }
+    payload = {
+        "model": model,
+        "messages": messages,
+    }
+
+    async def _call_request():
+        logger.info(f"🔄 正在使用模型进行 call_openai(): {model}")
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                SUMMARY_API_URL,
+                headers=headers,
+                json=payload,
+            )
+            logger.info(f"🌐 状态码: {response.status_code}")
+            logger.info(f"📥 返回内容: {response.text}")
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"]
+
+    try:
+        return await retry_with_backoff(_call_request)
+    except httpx.HTTPStatusError as http_err:
+        status_code = http_err.response.status_code
+        if status_code == 429:
+            logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+            return "⚠️ API调用频率限制，请稍后再试。"
+        else:
+            logger.error(
+                f"❌ OpenAI 调用失败: HTTP错误: {status_code} - {http_err.response.text}"
+            )
+            return f"❌ API调用失败 (错误代码: {status_code})"
+    except Exception as e:
+        logger.error(f"❌ OpenAI 调用失败: 未知错误: {e}")
+        return ""
+
+
 async def call_ai_summary(prompt: str) -> str:
     """
     调用 AI 生成摘要，可用于 context_merger.py。
@@ -400,17 +448,15 @@ async def call_ai_summary(prompt: str) -> str:
 
 
 # if os.getenv("USE_GEMINI") == "true":
-#     STRUCTURED_AI_API_KEY = os.getenv("GEMINI_API_KEY", OPENROUTER_API_KEY)
-#     STRUCTURED_AI_BASE_URL = os.getenv("GEMINI_API_URL", OPENROUTER_API_URL)
-#     STRUCTURED_AI_MODEL = os.getenv(
+#     STRUCTURED_API_KEY = os.getenv("GEMINI_API_KEY", OPENROUTER_API_KEY)
+#     STRUCTURED_API_URL = os.getenv("GEMINI_API_URL", OPENROUTER_API_URL)
+#     STRUCTURED_API_MODEL = os.getenv(
 #         "GEMINI_MODEL", "deepseek/deepseek-r1-0528:free"
 #     )
 # else:
-STRUCTURED_AI_API_KEY = os.getenv(
-    "STRUCTURED_AI_API_KEY", "sk-GRGN9ehFvNX8xDoc1MoAEEyiUQ3VStDkwyn3PWqjdGSTPxlw"
-)
-STRUCTURED_AI_BASE_URL = os.getenv("STRUCTURED_AI_BASE_URL", OPENAI_API_URL)
-STRUCTURED_AI_MODEL = os.getenv("STRUCTURED_AI_MODEL", "claude-sonnet-4-20250514")
+STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
+STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", OPENAI_API_URL)
+STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-flash")
 
 
 async def call_structured_generation(messages: list, max_retries: int = 3) -> dict:
@@ -424,26 +470,26 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
     - 错误时返回{"error": 错误信息}
     """
     headers = {
-        "Authorization": f"Bearer {STRUCTURED_AI_API_KEY}",
+        "Authorization": f"Bearer {STRUCTURED_API_KEY}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": STRUCTURED_AI_MODEL,
+        "model": STRUCTURED_API_MODEL,
         "messages": messages,
         "response_format": {"type": "json_object"},  # 强制JSON输出
     }
 
     async def _call_api():
-        logger.info(f"🔄 结构化生成调用: {STRUCTURED_AI_MODEL}")
+        logger.info(f"🔄 结构化生成调用: {STRUCTURED_API_MODEL}")
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:  # 增加超时到60秒
                 response = await client.post(
-                    STRUCTURED_AI_BASE_URL, headers=headers, json=payload
+                    STRUCTURED_API_URL, headers=headers, json=payload
                 )
                 response.raise_for_status()
                 return response.json()
         except httpx.ReadTimeout:
-            logger.warning(f"⚠️ 结构化生成调用超时 (模型: {STRUCTURED_AI_MODEL})")
+            logger.warning(f"⚠️ 结构化生成调用超时 (模型: {STRUCTURED_API_MODEL})")
             raise  # 重新抛出异常以便重试机制处理
         except Exception as e:
             logger.error(f"❌ 结构化生成调用异常: {type(e).__name__}: {str(e)}")
@@ -753,7 +799,7 @@ async def generate_micro_experiences(
     prompt = f"""你是德克萨斯AI生活系统的微观经历生成模块，负责为明日方舟世界中的德克萨斯生成真实、细腻的生活片段。
 
 ## 角色背景
-德克萨斯是企鹅物流的一名信使，性格冷静、专业，有着丰富的快递配送经验。她住在龙门，主要工作是为企鹅物流执行各种配送任务。她的日常生活围绕工作、休息和与同事（空、能天使、可颂等）的社交活动展开。
+德克萨斯是企鹅物流的一名员工，性格冷静、专业，有着丰富的快递配送经验。她住在龙门，主要工作是为企鹅物流执行各种配送任务。她的日常生活围绕工作、休息和与同事（空、能天使、可颂等）的社交活动展开。
 
 ## 当前情况
 - 当前日期: {current_date}
@@ -773,7 +819,7 @@ async def generate_micro_experiences(
 
     prompt += f"""## 生成要求
 请根据德克萨斯的角色特点和当前情况，将日程项目拆解成多个5-30分钟颗粒度的微观经历项。注意：
-1. 每个经历项应包含具体的时间段（开始和结束时间）
+1. 每个经历项应包含具体的时间段（开始和结束时间）并且所有微观经历连续起来整体上要从头到到尾覆盖整个日程项目
 2. 内容要符合德克萨斯的性格特点（冷静、专业、内敛）
 3. 情绪表达要细腻但不夸张
 4. 思考要符合她的职业背景和经历
@@ -849,6 +895,7 @@ async def summarize_past_micro_experiences(experiences: list) -> str:
 
 你正在生成的文本目的在于完整记录当天生活细节。
 注意语言要连贯自然，让其他人阅读的时候，能理解你的想法，了解你今天为止的全部经历。
+注意详略得当，把你认为印象深刻的内容详细地记录下来。其他的可以简要一些。
 有点类似于日记，或者是你经历这些事情后的回忆过程。
 
 以下是你今天的微观经历数据：
@@ -864,7 +911,7 @@ async def summarize_past_micro_experiences(experiences: list) -> str:
         # response = await call_openrouter(
         #     messages, model="deepseek/deepseek-chat-v3-0324:free"
         # )
-        response = await call_gemini(messages, model="gemini-2.5-flash")
+        response = await call_openai(messages, model="gpt-4o-mini")
         return response
     except Exception as e:
         logger.error(f"❌ summarize_past_micro_experiences: 调用失败: {e}")

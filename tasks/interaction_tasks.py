@@ -162,8 +162,7 @@ async def _process_events_async(
                 print(
                     f"DEBUG: 缺少字段 - interaction_content: {bool(interaction_content)}, experience_id: {bool(experience_id)}, start_time: {bool(start_time_str)}, end_time: {bool(end_time_str)}"
                 )
-                redis_client.zrem(redis_key, event_json_str)  # 移除不完整数据
-                continue
+                continue  # 不删除事件，保留以便后续重试
 
             # 检查是否已交互过
             if redis_client.sismember(interacted_key, experience_id):
@@ -233,7 +232,6 @@ async def _process_events_async(
 
         except json.JSONDecodeError as e:
             logger.error(f"❌ 解析事件 JSON 失败，跳过: {event_json_str} - {e}")
-            redis_client.zrem(redis_key, event_json_str)
         except Exception as e:
             logger.error(f"❌ 处理主动交互事件时发生错误: {event_json_str} - {e}")
             # 考虑是否需要重试机制或将失败事件放入死信队列

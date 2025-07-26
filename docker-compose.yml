@@ -5,6 +5,7 @@ services:
     container_name: texas-postgres
     restart: always
     environment:
+      TZ: ${TZ}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
@@ -93,6 +94,8 @@ services:
       - |
         celery -A tasks.celery_app worker --loglevel=info &
         celery -A tasks.celery_app beat --loglevel=info
+    environment:
+      TZ: ${TZ}
     depends_on:
       db:
         condition: service_healthy

@@ -22,11 +22,11 @@ celery_app.conf.update(
     beat_schedule={
         "generate-daily-life": {
             "task": "tasks.daily_tasks.generate_daily_life_task",
-            "schedule": crontab(hour=20, minute=0),  # 每天20点触发
+            "schedule": crontab(hour=4, minute=0),  # 每天4点触发
         },
         "generate-daily-memories": {
             "task": "tasks.daily_tasks.generate_daily_memories",
-            "schedule": crontab(hour=20, minute=0),  # 每天20点触发
+            "schedule": crontab(hour=4, minute=0),  # 每天4点触发
         },
         "process-scheduled-interactions": {
             "task": "tasks.interaction_tasks.process_scheduled_interactions",
@@ -38,7 +38,7 @@ celery_app.conf.update(
         },
         "clean-generated-content": {
             "task": "tasks.daily_tasks.clean_generated_content",
-            "schedule": crontab(hour=19, minute=0),  # 每天19点触发
+            "schedule": crontab(hour=3, minute=0),  # 每天3点触发
         },
     },
 )
