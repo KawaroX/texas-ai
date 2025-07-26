@@ -4,13 +4,14 @@ import logging
 import json
 import asyncio
 from typing import AsyncGenerator, Optional
+from app.config import Settings
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-YUNWU_AI_KEY = os.getenv("YUNWU_AI_KEY")
-YUNWU_AI_BASE_URL = "https://yunwu.ai/v1/chat/completions"
-YUNWU_AI_MODEL = "claude-3-7-sonnet-20250219"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
+OPENAI_API_MODEL = "claude-3-7-sonnet-20250219"
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ async def stream_openrouter(
     async def _stream_request():
         async with httpx.AsyncClient(timeout=60) as client:
             async with client.stream(
-                "POST", OPENROUTER_BASE_URL, headers=headers, json=payload
+                "POST", OPENROUTER_API_URL, headers=headers, json=payload
             ) as response:
                 response.raise_for_status()
                 async for chunk in response.aiter_lines():
@@ -154,13 +155,15 @@ async def stream_openrouter(
                 return
 
 
-async def stream_reply_ai(messages, model=YUNWU_AI_MODEL) -> AsyncGenerator[str, None]:
+async def stream_reply_ai(
+    messages, model=OPENAI_API_MODEL
+) -> AsyncGenerator[str, None]:
     """
     流式调用 Reply AI API (支持 OpenAI 协议)，返回异步生成器。
     """
     logger.info(f"🔄 正在使用模型进行 stream_reply_ai(): {model}")
     headers = {
-        "Authorization": f"Bearer {YUNWU_AI_KEY}",
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
     payload = {"model": model, "messages": messages, "stream": True}
@@ -168,7 +171,7 @@ async def stream_reply_ai(messages, model=YUNWU_AI_MODEL) -> AsyncGenerator[str,
     async def _stream_request():
         async with httpx.AsyncClient(timeout=60) as client:
             async with client.stream(
-                "POST", YUNWU_AI_BASE_URL, headers=headers, json=payload
+                "POST", OPENAI_API_URL, headers=headers, json=payload
             ) as response:
                 response.raise_for_status()
                 async for chunk in response.aiter_lines():
@@ -261,9 +264,11 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     """
     # 如果没有指定模型，或者指定的是 DeepSeek V3 模型，则使用 Reply AI 渠道
     if model is None or model == "deepseek-v3-250324":
-        logger.info(f"🔄 正在使用 Reply AI 渠道进行 stream_ai_chat(): {YUNWU_AI_MODEL}")
+        logger.info(
+            f"🔄 正在使用 Reply AI 渠道进行 stream_ai_chat(): {OPENAI_API_MODEL}"
+        )
         stream_func = stream_reply_ai
-        actual_model = YUNWU_AI_MODEL
+        actual_model = OPENAI_API_MODEL
     else:
         # 否则，使用 OpenRouter 渠道
         logger.info(f"🔄 正在使用 OpenRouter 渠道进行 stream_ai_chat(): {model}")
@@ -317,7 +322,7 @@ async def call_openrouter(
         logger.info(f"🔄 正在使用模型进行 call_openrouter(): {model}")
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
-                OPENROUTER_BASE_URL, headers=headers, json=payload
+                OPENROUTER_API_URL, headers=headers, json=payload
             )
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]
@@ -343,8 +348,10 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
     """
     非流式调用（用于摘要等场景）
     """
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     headers = {
         "Content-Type": "application/json",
+        "Authorization": f"Bearer {GEMINI_API_KEY}",
     }
     payload = {
         "model": model,
@@ -394,7 +401,7 @@ async def call_ai_summary(prompt: str) -> str:
 
 # if os.getenv("USE_GEMINI") == "true":
 #     STRUCTURED_AI_API_KEY = os.getenv("GEMINI_API_KEY", OPENROUTER_API_KEY)
-#     STRUCTURED_AI_BASE_URL = os.getenv("GEMINI_BASE_URL", OPENROUTER_BASE_URL)
+#     STRUCTURED_AI_BASE_URL = os.getenv("GEMINI_API_URL", OPENROUTER_API_URL)
 #     STRUCTURED_AI_MODEL = os.getenv(
 #         "GEMINI_MODEL", "deepseek/deepseek-r1-0528:free"
 #     )
@@ -402,7 +409,7 @@ async def call_ai_summary(prompt: str) -> str:
 STRUCTURED_AI_API_KEY = os.getenv(
     "STRUCTURED_AI_API_KEY", "sk-GRGN9ehFvNX8xDoc1MoAEEyiUQ3VStDkwyn3PWqjdGSTPxlw"
 )
-STRUCTURED_AI_BASE_URL = os.getenv("STRUCTURED_AI_BASE_URL", YUNWU_AI_BASE_URL)
+STRUCTURED_AI_BASE_URL = os.getenv("STRUCTURED_AI_BASE_URL", OPENAI_API_URL)
 STRUCTURED_AI_MODEL = os.getenv("STRUCTURED_AI_MODEL", "claude-sonnet-4-20250514")
 
 

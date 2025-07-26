@@ -603,9 +603,9 @@ class MattermostWebSocketClient:
         self,
         channel_id: str,
         processed_messages: List[str],
-        context_info=None,
-        channel_info=None,
-        user_info=None,
+        context_info: str=None,
+        channel_info: Dict=None,
+        user_info: Dict=None,
         is_active_interaction: bool = False,  # 新增参数，标记是否是主动交互
     ):
         """

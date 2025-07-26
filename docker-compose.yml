@@ -156,6 +156,12 @@ services:
       - "5540:5540"
     depends_on:
       - redis
+    environment:
+      - RI_ACCEPT_TERMS_AND_CONDITIONS=true
+      - RI_REDIS_HOST=redis
+      - RI_REDIS_PORT=6379
+      - RI_REDIS_ALIAS=LocalRedis
+      - RI_REDIS_DB=0
     networks:
       - texas-net
 

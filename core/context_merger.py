@@ -9,6 +9,7 @@ import pytz
 from core.memory_buffer import get_channel_memory, list_channels
 from services.ai_service import call_ai_summary
 from app.config import settings
+from utils.mem0_service import mem0
 
 logger = logging.getLogger(__name__)
 
@@ -171,8 +172,14 @@ def _get_life_system_context() -> str:
                             weather_effect = (
                                 "☁️受天气影响" if item.get("weather_affected") else ""
                             )
-                            non_empty_parts = [part for part in [tags, interaction, weather_effect] if part]
-                            details = " | ".join(non_empty_parts) if non_empty_parts else ""
+                            non_empty_parts = [
+                                part
+                                for part in [tags, interaction, weather_effect]
+                                if part
+                            ]
+                            details = (
+                                " | ".join(non_empty_parts) if non_empty_parts else ""
+                            )
                         else:
                             details = ""
 
@@ -208,10 +215,7 @@ def _get_life_system_context() -> str:
                     )
             except Exception as e:
                 logger.warning(f"⚠️ 微观经历解析失败: {e}")
-                if (
-                    life_data["current_micro_experience"]
-                    and life_data["current_micro_experience"] != "现在没有事件。"
-                ):
+                if life_data["current_micro_experience"]:
                     context_parts.append(
                         f"【你现在正在做的事情】{life_data['current_micro_experience']}"
                     )
@@ -221,6 +225,31 @@ def _get_life_system_context() -> str:
     except Exception as e:
         logger.warning(f"⚠️ 获取生活系统数据失败: {e}")
         return ""
+
+
+def _get_mem0_relevant(query: str, user_id: str = "kawaro", limit: int = 5) -> list:
+    all_m: Dict = mem0.get_all(user_id="kawaro")
+    all_m = all_m.get(
+        "results",
+        [
+            {
+                "id": "0000",
+                "memory": "什么都没有啊 可恶\n什么都没有啊 可恶\n什么都没有啊 可恶\n什么都没有啊 可恶\n什么都没有啊 可恶\n",
+                "hash": "0000",
+                "created_at": "0000",
+                "updated_at": "0000",
+                "metadata": {"category": "NULL"},
+            }
+        ],
+    )
+    for item in all_m:
+        me = item.get("memory", "")
+        logger.info(f"{me}")
+    results = mem0.search(query=query, user_id=user_id, limit=limit).get("results", [])
+    for item in results:
+        me = item.get("memory", "")
+        logger.info(f"📋 记忆：{me}")
+    return [all_m, results]
 
 
 async def merge_context(
@@ -237,6 +266,20 @@ async def merge_context(
     shanghai_tz = pytz.timezone("Asia/Shanghai")
     now = now or datetime.now(shanghai_tz)
     logger.info(f"🔍 Merging context for channel: {channel_id}")
+
+    logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
+    mem0_result = _get_mem0_relevant(query=latest_query)
+    all_m = mem0_result[0]
+    if all_m:
+        for item in all_m:
+            me = item.get("memory", "")
+            if me:
+                logger.info(f"!!!!!!!!!{me}")
+            else:
+                logger.info("没有me！！！！！！！！！！！！！！！！！！")
+    else:
+        logger.info("什么都没有！！！！！！！！！！！！！！！")
+    mem0_memory = mem0_result[1]
 
     # 1. 格式化历史聊天记录
     history = get_channel_memory(channel_id).format_recent_messages()
@@ -395,6 +438,11 @@ async def merge_context(
 
     if summary_notes:
         parts.append(f"【参考资料】\n" + "\n\n".join(summary_notes))
+
+    if mem0_memory:
+        parts.append("【相关记忆】\n")
+        for item in mem0_memory:
+            parts.append(f"- {item}\n")
 
     # if mattermost_cache:
     #     parts.append(f"【新消息缓存】\n{mattermost_cache}")

@@ -137,11 +137,11 @@ class LifeDataService:
                 else ""
             )
 
-            # logger.info(f"prev: ...{prev_past_micro_experiences[-100:]}")
-            # logger.info(f"curr: ...{current_exp_json[-100:]}")
+            logger.info(f"prev: ...{prev_past_micro_experiences[-100:]}")
+            logger.info(f"curr: ...{current_exp_json[-100:]}")
 
             IS_DIFF = False
-            if prev_past_micro_experiences != current_exp_json:
+            if not current_exp_json or prev_past_micro_experiences != current_exp_json:
                 IS_DIFF = True
                 logger.info("发现差异")
             else:

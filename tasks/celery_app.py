@@ -36,5 +36,9 @@ celery_app.conf.update(
             "task": "tasks.life_data_tasks.fetch_and_store_life_data_task",
             "schedule": 300,  # 每5分钟执行一次
         },
+        "clean-generated-content": {
+            "task": "tasks.daily_tasks.clean_generated_content",
+            "schedule": crontab(hour=19, minute=0),  # 每天19点触发
+        },
     },
 )

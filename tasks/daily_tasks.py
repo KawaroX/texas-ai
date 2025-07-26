@@ -1,4 +1,5 @@
 import httpx
+import time
 from datetime import datetime, timedelta
 from celery import shared_task
 from app.config import settings
@@ -6,8 +7,11 @@ from services.memory_data_collector import MemoryDataCollector
 from services.memory_summarizer import MemorySummarizer
 from services.memory_storage import MemoryStorage
 import logging
+import shutil
+import os
 
 logger = logging.getLogger(__name__)
+
 
 
 @shared_task
@@ -58,6 +62,20 @@ def generate_daily_memories():
         raise
     
     logger.info("🎉 每日记忆生成任务完成。")
+
+@shared_task
+def clean_generated_content():
+    """每天清空generated_content文件夹"""
+    try:
+        dir_path = "generated_content"
+        if os.path.exists(dir_path):
+            shutil.rmtree(dir_path)
+            os.makedirs(dir_path)
+            logger.info(f"✅ 成功清空目录: {dir_path}")
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"清空目录失败: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 
 @shared_task

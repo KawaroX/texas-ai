@@ -22,7 +22,7 @@ class ChatEngine:
         messages: List[str],
         channel_info: Optional[Dict] = None,
         user_info: Optional[Dict] = None,
-        context_info: Optional[Dict] = None,
+        context_info: Optional[str] = None,
     ):
         """流式生成回复，使用新的消息结构（system + 单条 user 消息）"""
         logger.info(
@@ -59,7 +59,7 @@ class ChatEngine:
         user_message_content = ""
         if context_info:
             # 如果提供了 context_info，直接使用它作为用户消息内容
-            user_message_content = context_info.get("content", "")
+            user_message_content = context_info
             logger.info(f"使用 context_info 作为用户消息内容: {user_message_content[:100]}...")
         else:
             # 否则，使用新的 context_merger 获取整合的单条文本
