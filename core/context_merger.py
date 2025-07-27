@@ -229,29 +229,16 @@ def _get_life_system_context() -> str:
         return ""
 
 
-def _get_mem0_relevant(query: str, user_id: str = "kawaro", limit: int = 5) -> list:
-    all_m: Dict = mem0.get_all(user_id="kawaro")
-    all_m = all_m.get(
-        "results",
-        [
-            {
-                "id": "0000",
-                "memory": "什么都没有啊 可恶\n什么都没有啊 可恶\n什么都没有啊 可恶\n什么都没有啊 可恶\n什么都没有啊 可恶\n",
-                "hash": "0000",
-                "created_at": "0000",
-                "updated_at": "0000",
-                "metadata": {"category": "NULL"},
-            }
-        ],
-    )
-    for item in all_m:
-        me = item.get("memory", "")
-        logger.info(f"{me}")
-    results = mem0.search(query=query, user_id=user_id, limit=limit).get("results", [])
+def _get_mem0_relevant(
+    query: str, user_id: str = "kawaro", limit: int = 5, threshold: int = 0.3
+) -> list:
+    results = mem0.search(
+        query=query, user_id=user_id, top_k=limit, threshold=threshold
+    ).get("results", [])
     for item in results:
         me = item.get("memory", "")
         logger.info(f"📋 记忆：{me}")
-    return [all_m, results]
+    return results
 
 
 async def merge_context(
@@ -420,17 +407,46 @@ async def merge_context(
 
     if life_system_context:
         parts.append(life_system_context)
+    else:
+        parts.append("")
+
+    if summary_notes:
+        parts.append(f"【其他渠道聊天参考资料】\n" + "\n\n".join(summary_notes))
+    else:
+        parts.append("")
+
+    # if mattermost_cache:
+    #     parts.append(f"【新消息缓存】\n{mattermost_cache}")
+
+    logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
+    query = "\n".join([latest_query, history if history else ""])
+    mem0_result = _get_mem0_relevant(query, limit=3)
+    mem0_memory = mem0_result
+
+    if mem0_memory:
+        insert_index = max(len(parts) - 1, 0)
+        parts.insert(insert_index, "【相关记忆】\n")
+        for item in reversed(mem0_memory):
+            prefix = ""
+            if item["type"] == "daily_schedule":
+                item_date = datetime.strptime(item["date"], "%Y-%m-%d").date()
+                date_diff = (datetime.today() - item_date).days
+                prefix = f"{item['date']}的日程({date_diff}天前): "
+            elif item["type"] == "major_event":
+                item_date = datetime.strptime(item["start_date"], "%Y-%m-%d").date()
+                date_diff = (datetime.today() - item_date).days
+                prefix = f"{item['start_date']}的大事件({date_diff}天前): "
+            else:
+                prefix = "从以往的聊天记录中获取的记忆："
+            parts.insert(
+                insert_index + 1,
+                f"- {prefix}{item['memory'][7:]}, tags: {','.join(item['tags'])}\n",
+            )
 
     if history:
         parts.append(
             f"【你和kawaro的历史聊天记录】\n{history}\n注意：“kawaro”是对方说的，“德克萨斯”是你发送的消息，不要混淆。注意辨别消息是谁发送的。"
         )
-
-    if summary_notes:
-        parts.append(f"【参考资料】\n" + "\n\n".join(summary_notes))
-
-    # if mattermost_cache:
-    #     parts.append(f"【新消息缓存】\n{mattermost_cache}")
 
     # 添加引导提示词
     if is_active:
@@ -439,27 +455,6 @@ async def merge_context(
         )
     else:
         parts.append(f"现在的时间是{now}，请根据上述信息回复消息：{latest_query}。")
-
-    logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
-    query = "\n\n".join(parts)
-    mem0_result = _get_mem0_relevant(query)
-    all_m = mem0_result[0]
-    if all_m:
-        for item in all_m:
-            me = item.get("memory", "")
-            if me:
-                logger.info(f"!!!!!!!!!{me}")
-            else:
-                logger.info("没有me！！！！！！！！！！！！！！！！！！")
-    else:
-        logger.info("什么都没有！！！！！！！！！！！！！！！")
-    mem0_memory = mem0_result[1]
-
-    if mem0_memory:
-        insert_index = max(len(parts) - 1, 0)
-        parts.insert(insert_index, "【相关记忆】\n")
-        for item in reversed(mem0_memory):
-            parts.insert(insert_index + 1, f"- {item}\n")
 
     merged_context = "\n\n".join(parts)
     logger.info(f"✅ Context merged, total length: {len(merged_context)} characters")

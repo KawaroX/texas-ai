@@ -119,10 +119,13 @@ async def generate_and_store_daily_life(target_date: date):
                 "event_type": "默认类型",
                 "main_objective": "默认目标",
             }
+    if is_in_major_event:
+        logger.info(
+            f"ℹ️ 大事件状态: '存在', 类型: {major_event_context.get('event_type', '无')}"
+        )
+    else:
+        logger.info("ℹ️ 大事件状态: '不存在'")
 
-    logger.info(
-        f"ℹ️ 大事件状态: {'存在' if is_in_major_event else '不存在'}, 类型: {major_event_context.get('event_type', '无')}"
-    )
     # 4. 调用AI生成每日日程
     logger.info("正在调用AI生成每日日程...")
     daily_schedule_data = await generate_daily_schedule(

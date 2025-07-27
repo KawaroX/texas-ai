@@ -13,7 +13,6 @@ import os
 logger = logging.getLogger(__name__)
 
 
-
 @shared_task
 def generate_daily_memories():
     """生成每日记忆并存储到Redis"""
@@ -54,14 +53,17 @@ def generate_daily_memories():
                 elif data_type == "event":
                     for event_id in ids:
                         collector.mark_event_embedded(event_id)
-                
-                logger.info(f"✅ 成功处理 {data_type} 数据，生成 {len(memories)} 条记忆。")
+
+                logger.info(
+                    f"✅ 成功处理 {data_type} 数据，生成 {len(memories)} 条记忆。"
+                )
 
     except Exception as e:
         logger.error(f"生成每日记忆失败: {str(e)}")
         raise
-    
+
     logger.info("🎉 每日记忆生成任务完成。")
+
 
 @shared_task
 def clean_generated_content():
@@ -79,14 +81,15 @@ def clean_generated_content():
 
 
 @shared_task
-def generate_daily_life_task():
+def generate_daily_life_task(date: str | None = None):
     try:
         # 动态生成明天日期（格式为 YYYY-MM-DD）
-        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        if not date:
+            date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")  # 明天
 
-        logger.info(f"📅 正在生成 {tomorrow} 的日程")
+        logger.info(f"📅 正在生成 {date} 的日程")
         response = httpx.get(
-            f"http://bot:8000/generate-daily-life?target_date={tomorrow}",
+            f"http://bot:8000/generate-daily-life?target_date={date}",
             headers={"Authorization": f"Bearer {settings.INTERNAL_API_KEY}"},
         )
         response.raise_for_status()
