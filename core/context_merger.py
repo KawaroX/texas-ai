@@ -99,7 +99,7 @@ def _get_life_system_context() -> str:
 
                     if main_content:
                         context_parts.append(
-                            f"【大事件】{start_date}至{end_date} {event_type}\n\n{main_content}"
+                            f"【你正在经历的大事件】{start_date}至{end_date} {event_type}\n\n{main_content}"
                         )
                     if daily_summaries:
                         day_number = (
@@ -113,7 +113,9 @@ def _get_life_system_context() -> str:
             except Exception as e:
                 logger.warning(f"⚠️ 大事件数据解析失败: {e}")
                 if life_data["major_event"]:
-                    context_parts.append(f"【大事件】{life_data['major_event']}")
+                    context_parts.append(
+                        f"【你正在经历的大事件】{life_data['major_event']}"
+                    )
 
         # 1. 添加日程信息
         if (
@@ -124,7 +126,7 @@ def _get_life_system_context() -> str:
                 schedule = json.loads(life_data["daily_schedule"])
                 data = schedule.get("schedule_data", {})
                 if schedule and isinstance(schedule, dict):
-                    header = f"【今日日程 - {schedule.get('date', '')}】天气：{schedule.get('weather', '')}\n"
+                    header = f"你是德克萨斯，以下是你的今日日程\n【今日日程 - {schedule.get('date', '')}】天气：{schedule.get('weather', '')}\n"
                     summary = f"🔹日程概览：{data.get('daily_summary', '')}\n"
 
                     items = []
@@ -266,20 +268,6 @@ async def merge_context(
     shanghai_tz = pytz.timezone("Asia/Shanghai")
     now = now or datetime.now(shanghai_tz)
     logger.info(f"🔍 Merging context for channel: {channel_id}")
-
-    logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
-    mem0_result = _get_mem0_relevant(query=latest_query)
-    all_m = mem0_result[0]
-    if all_m:
-        for item in all_m:
-            me = item.get("memory", "")
-            if me:
-                logger.info(f"!!!!!!!!!{me}")
-            else:
-                logger.info("没有me！！！！！！！！！！！！！！！！！！")
-    else:
-        logger.info("什么都没有！！！！！！！！！！！！！！！")
-    mem0_memory = mem0_result[1]
 
     # 1. 格式化历史聊天记录
     history = get_channel_memory(channel_id).format_recent_messages()
@@ -434,15 +422,12 @@ async def merge_context(
         parts.append(life_system_context)
 
     if history:
-        parts.append(f"【历史聊天记录】\n{history}")
+        parts.append(
+            f"【你和kawaro的历史聊天记录】\n{history}\n注意：“kawaro”是对方说的，“德克萨斯”是你发送的消息，不要混淆。注意辨别消息是谁发送的。"
+        )
 
     if summary_notes:
         parts.append(f"【参考资料】\n" + "\n\n".join(summary_notes))
-
-    if mem0_memory:
-        parts.append("【相关记忆】\n")
-        for item in mem0_memory:
-            parts.append(f"- {item}\n")
 
     # if mattermost_cache:
     #     parts.append(f"【新消息缓存】\n{mattermost_cache}")
@@ -454,6 +439,27 @@ async def merge_context(
         )
     else:
         parts.append(f"现在的时间是{now}，请根据上述信息回复消息：{latest_query}。")
+
+    logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
+    query = "\n\n".join(parts)
+    mem0_result = _get_mem0_relevant(query)
+    all_m = mem0_result[0]
+    if all_m:
+        for item in all_m:
+            me = item.get("memory", "")
+            if me:
+                logger.info(f"!!!!!!!!!{me}")
+            else:
+                logger.info("没有me！！！！！！！！！！！！！！！！！！")
+    else:
+        logger.info("什么都没有！！！！！！！！！！！！！！！")
+    mem0_memory = mem0_result[1]
+
+    if mem0_memory:
+        insert_index = max(len(parts) - 1, 0)
+        parts.insert(insert_index, "【相关记忆】\n")
+        for item in reversed(mem0_memory):
+            parts.insert(insert_index + 1, f"- {item}\n")
 
     merged_context = "\n\n".join(parts)
     logger.info(f"✅ Context merged, total length: {len(merged_context)} characters")

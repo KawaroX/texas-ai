@@ -48,8 +48,7 @@ services:
     build:
       context: .
       dockerfile: infra/docker/bot.Dockerfile
-      platforms:
-        - linux/amd64
+      platform: linux/amd64
     container_name: texas-bot
     restart: always
     env_file:
@@ -81,8 +80,7 @@ services:
     build:
       context: .
       dockerfile: infra/docker/celery.Dockerfile
-      platforms:
-        - linux/amd64
+      platform: linux/amd64
     container_name: texas-worker
     restart: always
     env_file:
@@ -155,7 +153,6 @@ services:
 
   redisinsight:
     image: redis/redisinsight:latest
-    platform: linux/amd64
     container_name: texas-redisinsight
     restart: always
     ports:

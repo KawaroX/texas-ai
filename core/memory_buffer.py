@@ -69,7 +69,7 @@ class ChannelMemory:
             time_str = dt.strftime("[%H:%M:%S]")
 
             # 映射角色到用户名 &&&&&
-            username = "德克萨斯" if msg["role"] == "assistant" else "user"
+            username = "德克萨斯" if msg["role"] == "assistant" else "kawaro"
 
             formatted.append(f"{time_str}{username}：{msg['content']}")
         return "\n".join(formatted)

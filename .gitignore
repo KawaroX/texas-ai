@@ -22,3 +22,4 @@ docker-compose.yml
 celerybeat-schedule
 app/mattermost_client_副本.py
 app/mattermost_client_副本2.py
+services/memory_summarizer.py

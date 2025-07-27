@@ -205,6 +205,7 @@ async def _process_events_async(
             context = await merge_context(
                 channel_id=kawaro_dm_channel_id,
                 latest_query=interaction_content,
+                is_active=True,
             )
 
             logger.info(f"Context: {context}")

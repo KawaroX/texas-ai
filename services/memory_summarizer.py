@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 class MemorySummarizer:
     def __init__(self):
-        self.api_url = os.getenv("SUMMARY_API_URL")
-        self.api_key = os.getenv("SUMMARY_API_KEY")
+        self.api_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.api_key = os.getenv("OPENROUTER_API_KEY")
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -206,7 +206,7 @@ class MemorySummarizer:
 
         # 修改为标准的 messages 格式
         payload = {
-            "model": "qwen/qwen3-235b-a22b:free",  # 明确指定支持结构化输出的模型
+            "model": "deepseek/deepseek-r1-0528:free",  # 明确指定支持结构化输出的模型
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3,
             "response_format": {
@@ -223,7 +223,7 @@ class MemorySummarizer:
         for attempt in range(self.max_retries):
             try:
                 response = requests.post(
-                    self.api_url, headers=self.headers, json=payload, timeout=30
+                    self.api_url, headers=self.headers, json=payload, timeout=60
                 )
                 response.raise_for_status()  # 检查HTTP错误
 
@@ -243,7 +243,9 @@ class MemorySummarizer:
                     else:
                         raise ValueError("AI响应中未找到'message.content'或'text'字段")
                 else:
-                    raise ValueError("AI响应中未找到'choices'字段或其为空")
+                    raise ValueError(
+                        f"AI响应中未找到'choices'字段或其为空:{api_response_data}"
+                    )
 
                 # 第二次解析：将总结内容字符串解析为JSON对象
                 result = json.loads(result_str)
@@ -267,7 +269,9 @@ class MemorySummarizer:
                     memory["importance"] = importance
 
                 # 缓存API结果（24小时有效期）
-                self.redis_client.setex(cache_key, 86400, json.dumps(memory))
+                self.redis_client.setex(
+                    cache_key, 86400, json.dumps(memory, ensure_ascii=False)
+                )
                 logger.info("[MemorySummarizer] 已缓存结果: %s", cache_key)
                 return memory
 
@@ -299,7 +303,8 @@ class MemorySummarizer:
                         "request_payload": payload,
                     }
                     logger.error(
-                        "API调用详细错误信息: %s", json.dumps(error_detail, indent=2)
+                        "API调用详细错误信息: %s",
+                        json.dumps(error_detail, indent=2, ensure_ascii=False),
                     )
 
                     error_msg = (
@@ -312,17 +317,15 @@ class MemorySummarizer:
                     if hasattr(e, "response") and e.response is not None:
                         try:
                             error_detail = e.response.json()
-                            error_msg += (
-                                f"- API响应: {json.dumps(error_detail, indent=2)}\n"
-                            )
+                            error_msg += f"- API响应: {json.dumps(error_detail, indent=2, ensure_ascii=False)}\n"
                         except:
                             error_msg += f"- 原始响应: {e.response.text[:500]}\n"
 
                     error_msg += (
                         f"- 请求URL: {self.api_url}\n"
                         f"- 请求方法: POST\n"
-                        f"- 请求头: {json.dumps(self.headers, indent=2)}\n"
-                        f"- 请求体: {json.dumps(payload, indent=2)[:1000]}"
+                        f"- 请求头: {json.dumps(self.headers, indent=2, ensure_ascii=False)}\n"
+                        f"- 请求体: {json.dumps(payload, indent=2, ensure_ascii=False)[:1000]}"
                     )
                     raise RuntimeError(error_msg)
             except Exception as e:

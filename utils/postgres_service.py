@@ -229,7 +229,7 @@ def update_major_event(event_id: str, main_content: str = None, daily_summaries:
                 params.append(main_content)
             if daily_summaries is not None:
                 updates.append("daily_summaries = %s")
-                params.append(json.dumps(daily_summaries))
+                params.append(json.dumps(daily_summaries, ensure_ascii=False))
             if event_type is not None:
                 updates.append("event_type = %s")
                 params.append(event_type)

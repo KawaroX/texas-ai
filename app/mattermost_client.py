@@ -620,7 +620,7 @@ class MattermostWebSocketClient:
 
             # 流式生成回复
             async for segment in self.chat_engine.stream_reply(
-                channel_id, processed_messages, channel_info, user_info, context_info
+                channel_id, processed_messages, channel_info, user_info, context_info, is_active_interaction
             ):
                 if segment.strip():
                     cleaned_segment = segment.strip()

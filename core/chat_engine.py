@@ -23,6 +23,7 @@ class ChatEngine:
         channel_info: Optional[Dict] = None,
         user_info: Optional[Dict] = None,
         context_info: Optional[str] = None,
+        is_active_interaction: bool = False,
     ):
         """流式生成回复，使用新的消息结构（system + 单条 user 消息）"""
         logger.info(
@@ -42,30 +43,36 @@ class ChatEngine:
             )
         if user_info:
             dynamic_system_prompt += (
-                f"\n\n当前用户信息：\n"
+                f"\n\n当前用户信息，你可以选择合适的名字称呼对方：\n"
                 f"- 用户名: {user_info.get('username', '未知')}\n"
                 f"- 全名: {user_info.get('full_name', '未知')}\n"
                 f"- 昵称: {user_info.get('nickname', '未知')}"
             )
         if user_info.get("username") == "kawaro":
-            dynamic_system_prompt += "\n\nKawaro，这是你最熟悉的人，你应该表现得更温柔，你很喜欢他。虽然是一种克制的喜欢，但是你的心里知道你对他的喜欢超过对世上任何一个人。"
+            dynamic_system_prompt += "\n\n现在和你交流的user是Kawaro，这是你最熟悉的人，你应该表现得更温柔，你很喜欢他。虽然是一种克制的喜欢，但是你的心里知道你对他的喜欢超过对世上任何一个人。"
         else:
             dynamic_system_prompt += (
                 "\n\n这是一个普通用户，并不是Kawaro，你应该表现得更冷漠。"
                 "尽一切可能少回复，用最少的字和最少的句子。但是也要有礼貌，礼貌地保持很大的社交距离。"
             )
-        
+
         # 2. 获取整合的单条文本作为用户消息内容
         user_message_content = ""
         if context_info:
             # 如果提供了 context_info，直接使用它作为用户消息内容
             user_message_content = context_info
-            logger.info(f"使用 context_info 作为用户消息内容: {user_message_content[:100]}...")
+            logger.info(
+                f"使用 context_info 作为用户消息内容: {user_message_content[:100]}..."
+            )
         else:
             # 否则，使用新的 context_merger 获取整合的单条文本
             latest_query = " ".join(messages)
-            user_message_content = await merge_context(channel_id, latest_query)
-            logger.info(f"使用 merge_context 获取用户消息内容: {user_message_content[:100]}...")
+            user_message_content = await merge_context(
+                channel_id, latest_query, is_active_interaction
+            )
+            logger.info(
+                f"使用 merge_context 获取用户消息内容: {user_message_content[:100]}..."
+            )
 
         # 3. 构建新的消息结构：system + 单条 user 消息
         prompt_messages = [
