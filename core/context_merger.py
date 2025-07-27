@@ -428,19 +428,30 @@ async def merge_context(
         parts.insert(insert_index, "【相关记忆】\n")
         for item in reversed(mem0_memory):
             prefix = ""
-            if item["type"] == "daily_schedule":
-                item_date = datetime.strptime(item["date"], "%Y-%m-%d").date()
-                date_diff = (datetime.today() - item_date).days
-                prefix = f"{item['date']}的日程({date_diff}天前): "
-            elif item["type"] == "major_event":
+            if item["metadata"]["type"] == "daily_schedule":
+                item_date = datetime.strptime(
+                    item["metadata"]["date"], "%Y-%m-%d"
+                ).date()
+                date_diff = (datetime.today().date() - item_date).days
+                prefix = f"{item['metadata']['date']}的日程({date_diff}天前): "
+            elif item["metadata"]["type"] == "major_event":
                 item_date = datetime.strptime(item["start_date"], "%Y-%m-%d").date()
-                date_diff = (datetime.today() - item_date).days
+                date_diff = (datetime.today().date() - item_date).days
                 prefix = f"{item['start_date']}的大事件({date_diff}天前): "
             else:
                 prefix = "从以往的聊天记录中获取的记忆："
+
+            tags = item["metadata"].get("tags", [])
+            if isinstance(tags, str):
+                try:
+                    tags = json.loads(tags)
+                except:
+                    tags = [tags]
+
+            memory_content = item["memory"].replace("请记住这个信息: ", "", 1)
             parts.insert(
                 insert_index + 1,
-                f"- {prefix}{item['memory'][7:]}, tags: {','.join(item['tags'])}\n",
+                f"- {prefix}{memory_content}, tags: {','.join(item['metadata']['tags'])}\n",
             )
 
     if history:

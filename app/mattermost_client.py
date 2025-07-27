@@ -687,8 +687,8 @@ class MattermostWebSocketClient:
 
             # 等待消息发送完成，使用正态分布的随机等待时间
             delay = self._generate_typing_delay(len(text))
-            await asyncio.sleep(delay)
             await self.send_message(channel_id, text)
+            await asyncio.sleep(delay)
 
         finally:
             if typing_task:
