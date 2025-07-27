@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:15
+    image: ccr.ccs.tencentyun.com/kawaro/postgres:15
     platform: linux/amd64
     container_name: texas-postgres
     restart: always
@@ -27,7 +27,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7
+    image: ccr.ccs.tencentyun.com/kawaro/redis:7
     platform: linux/amd64
     container_name: texas-redis
     restart: always
@@ -108,7 +108,7 @@ services:
 
   mattermost:
     platform: linux/amd64
-    image: mattermost/${MATTERMOST_IMAGE}:${MATTERMOST_IMAGE_TAG}
+    image: ccr.ccs.tencentyun.com/kawaro/mattermost:${MATTERMOST_IMAGE_TAG}
     container_name: mattermost
     restart: always
     security_opt:
@@ -140,7 +140,7 @@ services:
       - texas-net
 
   adminer:
-    image: adminer:latest
+    image: ccr.ccs.tencentyun.com/kawaro/adminer:latest
     platform: linux/amd64
     container_name: texas-adminer
     restart: always
@@ -154,7 +154,7 @@ services:
       - admin
 
   redisinsight:
-    image: redis/redisinsight:latest
+    image: ccr.ccs.tencentyun.com/kawaro/redisinsight:latest
     platform: linux/amd64
     container_name: texas-redisinsight
     restart: always
@@ -174,7 +174,7 @@ services:
       - admin
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: ccr.ccs.tencentyun.com/kawaro/qdrant:latest
     platform: linux/amd64
     container_name: texas-qdr
     ports:

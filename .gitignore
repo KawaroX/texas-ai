@@ -2,7 +2,9 @@
 __pycache__/
 data/postgres
 .DS_Store
+data/.DS_Store
 app/.DS_Store
+.DS_Store
 
 volumes
 backups
@@ -14,12 +16,10 @@ docker-compose.override.yaml
 test_message_format.py
 test_simplified.py
 tp.py
-data/.DS_Store
-app/.DS_Store
-.DS_Store
 docker-compose.yml
 .gitignore
 celerybeat-schedule
 app/mattermost_client_副本.py
 app/mattermost_client_副本2.py
 services/memory_summarizer.py
+scripts/prebuild_script.sh
