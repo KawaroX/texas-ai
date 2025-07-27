@@ -233,7 +233,7 @@ def _get_mem0_relevant(
     query: str, user_id: str = "kawaro", limit: int = 5, threshold: int = 0.3
 ) -> list:
     results = mem0.search(
-        query=query, user_id=user_id, top_k=limit, threshold=threshold
+        query=query, user_id=user_id, limit=limit, threshold=threshold
     ).get("results", [])
     for item in results:
         me = item.get("memory", "")
