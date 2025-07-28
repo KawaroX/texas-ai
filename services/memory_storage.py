@@ -98,8 +98,7 @@ class MemoryStorage:
     def _create_conversation_messages(self, content: str) -> list:
         """将单个内容转换为符合规范的对话格式"""
         messages = [
-            {"role": "user", "content": f"请记住这个信息: {content}"},
-            {"role": "assistant", "content": "我已经记住了这个信息，会在需要时参考。"},
+            {"role": "system", "content": f"{content}"},
         ]
         logger.debug(
             "[MemoryStorage] Created conversation messages with content length: %d",
