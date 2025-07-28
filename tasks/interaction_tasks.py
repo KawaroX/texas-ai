@@ -208,7 +208,7 @@ async def _process_events_async(
                 is_active=True,
             )
 
-            logger.info(f"Context: {context}")
+            logger.info(f"Context:\n {context[0][:100]}...")
 
             await ws_client.send_ai_generated_message(
                 channel_id=kawaro_dm_channel_id,

@@ -1,6 +1,6 @@
 import logging
 import asyncio
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta
 import pytz
 
@@ -22,7 +22,7 @@ class ChatEngine:
         messages: List[str],
         channel_info: Optional[Dict] = None,
         user_info: Optional[Dict] = None,
-        context_info: Optional[str] = None,
+        context_info: Optional[Tuple[str, List[str]]] = None,
         is_active_interaction: bool = False,
     ):
         """流式生成回复，使用新的消息结构（system + 单条 user 消息）"""
@@ -32,6 +32,9 @@ class ChatEngine:
 
         # 1. 系统提示词 (根据频道和用户信息动态生成)
         dynamic_system_prompt = self.system_prompt
+
+        dynamic_system_prompt += "\n\n# 背景信息\n\n <BgInfo>"
+
         if channel_info["type"] == "D":
             channel_info["display_name"] = "私聊"
         if channel_info:
@@ -56,29 +59,57 @@ class ChatEngine:
                 "尽一切可能少回复，用最少的字和最少的句子。但是也要有礼貌，礼貌地保持很大的社交距离。"
             )
 
-        # 2. 获取整合的单条文本作为用户消息内容
-        user_message_content = ""
+        # 2. 获取整合的系统提示词和完整消息列表
         if context_info:
-            # 如果提供了 context_info，直接使用它作为用户消息内容
-            user_message_content = context_info
+            # 如果提供了 context_info，说明已经预先调用了 merge_context
+            logger.info("使用预提供的 context_info")
+
+            if isinstance(context_info, tuple) and len(context_info) == 2:
+                # 如果 context_info 是 merge_context 返回的元组格式
+                bg_info, context_messages = context_info
+            elif isinstance(context_info, dict):
+                # 如果 context_info 是字典格式
+                bg_info = context_info.get("system_prompt", "")
+                context_messages = context_info.get("messages", [])
+            else:
+                # 兼容旧格式：context_info 是单一字符串
+                logger.warning("context_info 使用旧格式，建议更新调用方式")
+                bg_info = ""  # 无法从旧格式中提取背景信息
+                # 将旧格式转换为消息格式
+                context_messages = [{"role": "user", "content": context_info}]
+
             logger.info(
-                f"使用 context_info 作为用户消息内容: {user_message_content[:100]}..."
-            )
-        else:
-            # 否则，使用新的 context_merger 获取整合的单条文本
-            latest_query = " ".join(messages)
-            user_message_content = await merge_context(
-                channel_id, latest_query, is_active_interaction
-            )
-            logger.info(
-                f"使用 merge_context 获取用户消息内容: {user_message_content[:100]}..."
+                f"使用 context_info - 背景信息长度: {len(bg_info)}, 消息数量: {len(context_messages)}"
             )
 
-        # 3. 构建新的消息结构：system + 单条 user 消息
+        else:
+            # 否则，使用新的 merge_context 获取整合的系统提示词和消息
+            latest_query = " ".join(messages)
+            bg_info, context_messages = await merge_context(
+                channel_id, latest_query, is_active=is_active_interaction
+            )
+
+            logger.info(
+                f"使用 merge_context - 背景信息长度: {len(bg_info)}, 消息数量: {len(context_messages)}"
+            )
+
+        # 3. 替换 dynamic_system_prompt 中的 <BgInfo> 占位符
+        if "<BgInfo>" in dynamic_system_prompt:
+            final_system_prompt = dynamic_system_prompt.replace("<BgInfo>", bg_info)
+            logger.info("已替换 dynamic_system_prompt 中的 <BgInfo> 占位符")
+        else:
+            # 如果没有占位符，直接追加背景信息
+            final_system_prompt = f"{dynamic_system_prompt}\n\n{bg_info}"
+            logger.info("dynamic_system_prompt 中无 <BgInfo> 占位符，直接追加背景信息")
+
+        # 4. 构建新的消息结构：system + 完整的对话历史
         prompt_messages = [
-            {"role": "system", "content": dynamic_system_prompt},
-            {"role": "user", "content": user_message_content},
-        ]
+            {"role": "system", "content": final_system_prompt}
+        ] + context_messages
+
+        logger.info(
+            f"构建完成 - 系统提示词长度: {len(final_system_prompt)}, 消息数量: {len(context_messages)}"
+        )
 
         # 调试输出
         logger.info(f"\n=== 新消息结构 ===")

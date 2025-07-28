@@ -166,7 +166,13 @@ async def stream_reply_ai(
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
-    payload = {"model": model, "messages": messages, "stream": True}
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        "frequency_penalty": 0.2,
+        "top_p": 0.4,
+    }
 
     async def _stream_request():
         async with httpx.AsyncClient(timeout=60) as client:

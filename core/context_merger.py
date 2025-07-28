@@ -3,7 +3,7 @@ import redis
 import asyncio
 import json
 from datetime import datetime, timedelta
-from typing import List, Dict
+from typing import List, Dict, Tuple
 import pytz
 
 from core.memory_buffer import get_channel_memory, list_channels
@@ -241,24 +241,174 @@ def _get_mem0_relevant(
     return results
 
 
+def _format_time_diff(seconds: int) -> str:
+    """格式化时间差为可读格式"""
+    if seconds == 0:
+        return "0s"
+
+    if seconds < 60:
+        return f"{seconds}s"
+    elif seconds < 3600:
+        minutes = seconds // 60
+        remaining_seconds = seconds % 60
+        if remaining_seconds == 0:
+            return f"{minutes}m"
+        else:
+            return f"{minutes}m {remaining_seconds}s"
+    else:
+        hours = seconds // 3600
+        remaining_minutes = (seconds % 3600) // 60
+        if remaining_minutes == 0:
+            return f"{hours}h"
+        else:
+            return f"{hours}h {remaining_minutes}m"
+
+
+def _process_chat_messages(raw_messages: List[Dict]) -> List[Dict]:
+    """
+    处理聊天消息，按角色分组，同一角色的连续消息合并到一个元素中
+    每个时间块（2分钟间隔）作为独立的段落
+
+    Args:
+        raw_messages: 原始消息列表，每个消息包含 timestamp, role, content
+
+    Returns:
+        处理后的消息列表，格式为标准的 user/assistant 消息
+    """
+    if not raw_messages:
+        return []
+
+    processed_messages = []
+    current_person = None
+    time_blocks = []  # 存储当前角色的所有时间块
+    current_time_block = None
+
+    for msg in raw_messages:
+        # 解析时间戳
+        msg_time = datetime.fromisoformat(msg["timestamp"])
+        msg_timestamp = int(msg_time.timestamp())
+
+        # 映射角色
+        role = "user" if msg["role"] == "user" else "assistant"
+
+        # 检查是否需要切换角色
+        if current_person is None or current_person["role"] != role:
+            # 完成当前角色的消息
+            if current_person is not None:
+                if current_time_block is not None:
+                    time_blocks.append(current_time_block)
+                processed_messages.append(
+                    _finalize_person_messages(
+                        current_person["role"], time_blocks, processed_messages
+                    )
+                )
+
+            # 开始新角色
+            current_person = {"role": role}
+            time_blocks = []
+            current_time_block = None
+
+        # 检查是否需要开始新的时间块
+        should_start_new_time_block = (
+            current_time_block is None
+            or (msg_timestamp - current_time_block["last_timestamp"]) > 120  # 2分钟
+        )
+
+        if should_start_new_time_block:
+            # 完成当前时间块
+            if current_time_block is not None:
+                time_blocks.append(current_time_block)
+
+            # 开始新时间块
+            current_time_block = {
+                "contents": [msg["content"]],
+                "first_timestamp": msg_timestamp,
+                "last_timestamp": msg_timestamp,
+                "formatted_time": msg_time.strftime("%H:%M:%S"),
+            }
+        else:
+            # 添加到当前时间块
+            current_time_block["contents"].append(msg["content"])
+            current_time_block["last_timestamp"] = msg_timestamp
+
+    # 完成最后的角色和时间块
+    if current_person is not None:
+        if current_time_block is not None:
+            time_blocks.append(current_time_block)
+        processed_messages.append(
+            _finalize_person_messages(
+                current_person["role"], time_blocks, processed_messages
+            )
+        )
+
+    return processed_messages
+
+
+def _finalize_person_messages(
+    role: str, time_blocks: List[Dict], existing_messages: List[Dict]
+) -> Dict:
+    """完成某个角色所有时间块的格式化"""
+    if not time_blocks:
+        return None
+
+    speaker = "Kawaro" if role == "user" else "德克萨斯"
+    content_parts = []
+    first_timestamp = time_blocks[0]["first_timestamp"]
+
+    # 计算与上一个角色消息的时间差
+    time_diff_seconds = 0
+    if existing_messages:
+        last_msg_timestamp = existing_messages[-1]["metadata"]["timestamp"]
+        time_diff_seconds = first_timestamp - last_msg_timestamp
+
+    for i, block in enumerate(time_blocks):
+        # 第一个时间块使用与上一角色的时间差，后续时间块计算与前一时间块的差
+        if i == 0:
+            block_time_diff = time_diff_seconds
+        else:
+            prev_block_timestamp = time_blocks[i - 1]["last_timestamp"]
+            block_time_diff = block["first_timestamp"] - prev_block_timestamp
+
+        time_diff_str = _format_time_diff(block_time_diff)
+        time_prefix = f"(after {time_diff_str}) [{block['formatted_time']}] {speaker}:"
+
+        # 合并时间块内的消息
+        block_content = "\n".join(block["contents"])
+        content_parts.append(f"{time_prefix}\n{block_content}")
+
+    return {
+        "role": role,
+        "content": "\n\n".join(content_parts),
+        "metadata": {
+            "timestamp": first_timestamp,
+            "time_diff_seconds": time_diff_seconds,
+            "speaker": speaker,
+            "time_blocks_count": len(time_blocks),
+        },
+    }
+
+
 async def merge_context(
     channel_id: str, latest_query: str, now: datetime = None, is_active=False
-) -> str:
+) -> Tuple[str, List[Dict]]:
     """
-    整合最终上下文，返回单条文本，包含：
-    1. 生活系统信息
-    2. 格式化的历史聊天记录（6小时内）
-    3. 参考资料（其他频道摘要）
-    4. Mattermost 消息缓存
-    5. 引导提示词
+    整合最终上下文，返回 (system_prompt, messages) 元组
+
+    Returns:
+        Tuple[str, List[Dict]]: (system_prompt, messages_list)
+        - system_prompt: 包含生活系统信息、参考资料、记忆等的系统提示词
+        - messages_list: 标准格式的对话消息列表，最后一条是用户的当前查询
     """
     shanghai_tz = pytz.timezone("Asia/Shanghai")
     now = now or datetime.now(shanghai_tz)
     logger.info(f"🔍 Merging context for channel: {channel_id}")
 
-    # 1. 格式化历史聊天记录
-    history = get_channel_memory(channel_id).format_recent_messages()
-    logger.info(f"🧠 Found formatted history: {len(history)} characters")
+    # 1. 获取并处理聊天记录
+    raw_messages = get_channel_memory(channel_id).get_recent_messages()
+    processed_messages = _process_chat_messages(raw_messages)
+    logger.info(
+        f"🧠 Processed {len(processed_messages)} message blocks from {len(raw_messages)} raw messages"
+    )
 
     # 2. 获取参考资料（其他频道摘要）- 判断是否需要摘要
     summary_notes = []
@@ -268,10 +418,9 @@ async def merge_context(
         all_latest_timestamps = []
 
         # 获取当前频道最新消息的时间戳
-        current_channel_messages = get_channel_memory(channel_id).get_recent_messages()
-        if current_channel_messages:
+        if raw_messages:
             latest_current_message_time = datetime.fromisoformat(
-                current_channel_messages[-1]["timestamp"]
+                raw_messages[-1]["timestamp"]
             )
             all_latest_timestamps.append(latest_current_message_time)
 
@@ -390,42 +539,28 @@ async def merge_context(
     else:
         logger.info("📝 消息较简单，跳过跨频道摘要")
 
-    # # 3. 获取 Mattermost 消息缓存
-    # cache_key = f"channel_buffer:{channel_id}"
-    # cached_messages = redis_client.lrange(cache_key, 0, -1)
-    # mattermost_cache = ""
-    # if cached_messages:
-    #     mattermost_cache = f"刚收到的新消息：\n" + "\n".join(cached_messages)
-    #     logger.info(f"📝 Found {len(cached_messages)} cached messages")
-
-    # 5. 获取生活系统信息
+    # 3. 获取生活系统信息
     life_system_context = _get_life_system_context()
     logger.info(f"🏠 Life system context: {len(life_system_context)} characters")
 
-    # 6. 组合所有部分
-    parts = []
-
-    if life_system_context:
-        parts.append(life_system_context)
-    else:
-        parts.append("")
-
-    if summary_notes:
-        parts.append(f"【其他渠道聊天参考资料】\n" + "\n\n".join(summary_notes))
-    else:
-        parts.append("")
-
-    # if mattermost_cache:
-    #     parts.append(f"【新消息缓存】\n{mattermost_cache}")
-
+    # 4. 获取记忆信息
     logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
-    query = "\n".join([latest_query, history if history else ""])
+    history_text = "\n".join([msg["content"] for msg in processed_messages])
+    query = "\n".join([latest_query, history_text if history_text else ""])
     mem0_result = _get_mem0_relevant(query, limit=3)
     mem0_memory = mem0_result
 
+    # 5. 构建system prompt
+    system_parts = []
+
+    if life_system_context:
+        system_parts.append(life_system_context)
+
+    if summary_notes:
+        system_parts.append(f"【其他渠道聊天参考资料】\n" + "\n\n".join(summary_notes))
+
     if mem0_memory:
-        insert_index = max(len(parts) - 1, 0)
-        parts.insert(insert_index, "【相关记忆】\n")
+        system_parts.append("【相关记忆】")
         for item in reversed(mem0_memory):
             prefix = ""
             if item["metadata"]["type"] == "daily_schedule":
@@ -449,25 +584,54 @@ async def merge_context(
                     tags = [tags]
 
             memory_content = item["memory"].replace("请记住这个信息: ", "", 1)
-            parts.insert(
-                insert_index + 1,
-                f"- {prefix}{memory_content}, tags: {','.join(item['metadata']['tags'])}\n",
-            )
+            system_parts.append(f"- {prefix}{memory_content}")
 
-    if history:
-        parts.append(
-            f"【你和kawaro的历史聊天记录】\n{history}\n注意：“kawaro”是对方说的，“德克萨斯”是你发送的消息，不要混淆。注意辨别消息是谁发送的。"
-        )
+    system_prompt = "\n\n".join(system_parts)
 
-    # 添加引导提示词
+    # 6. 构建messages列表
+    messages = processed_messages.copy()
+
+    # 添加当前用户查询
+    current_timestamp = int(now.timestamp())
+    time_diff_seconds = 0
+    if messages:
+        last_msg_timestamp = messages[-1]["metadata"]["timestamp"]
+        time_diff_seconds = current_timestamp - last_msg_timestamp
+
+    time_diff_str = _format_time_diff(time_diff_seconds)
+    current_time_str = now.strftime("%H:%M:%S")
+
     if is_active:
-        parts.append(
-            f"现在的时间是{now}，根据【你现在正在做的事情】，你的想法是：{latest_query}。你想把这些分享给Kawaro。请写出你发送给Kawaro的消息："
+        # 主动模式：AI想要分享内容
+        user_query_content = (
+            f"(after {time_diff_str}) [{current_time_str}] 德克萨斯内心:\n"
+            f"根据【你现在正在做的事情】，我的想法是：{latest_query}。我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：\n"
         )
     else:
-        parts.append(f"现在的时间是{now}，请根据上述信息回复消息：{latest_query}。")
+        # 被动模式：用户发送了消息
+        user_query_content = (
+            f"(after {time_diff_str}) [{current_time_str}] Kawaro:\n{latest_query}"
+            # "在回复时，请直接生成消息内容，不需要包含时间差“(after 时间差)”、时间戳“[HH:MM:SS]”或发言人标识“德克萨斯”，"
+            # "系统会自动添加这些信息，你只需要输出需要发送的消息即可。"
+            "你们要像正常交流一样。注意每段聊天的时间差，这对于你应该如何回复有重大参考意义，要有对时间的感知力。"
+            "避免发送完全重复的消息，你要做的是主动思考并回复，而不是模仿之前的内容回复。"
+            "切记要主动思考，你就是德克萨斯。"
+        )
+    messages.append({"role": "user", "content": user_query_content})
 
-    merged_context = "\n\n".join(parts)
-    logger.info(f"✅ Context merged, total length: {len(merged_context)} characters")
+    # 添加德克萨斯的回复模板作为最后一条（assistant消息）
+    # 计算德克萨斯回复的时间戳（当前时间）和时间差
+    texas_time_diff_seconds = 0  # 立即回复，时间差为0（或者几秒钟的处理时间）
+    texas_time_diff_str = _format_time_diff(texas_time_diff_seconds)
+    texas_time_str = now.strftime("%H:%M:%S")
 
-    return merged_context
+    # 构建德克萨斯的回复模板
+    texas_reply_template = f"(after {texas_time_diff_str}) [{texas_time_str}] 德克萨斯:"
+
+    messages.append({"role": "assistant", "content": texas_reply_template})
+
+    logger.info(
+        f"✅ Context merged - System prompt: {len(system_prompt)} chars, Messages: {len(messages)} items"
+    )
+
+    return system_prompt, messages

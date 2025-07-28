@@ -7,7 +7,7 @@ import httpx
 import datetime, time
 import redis  # 导入 redis
 import random
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from app.config import settings
 from core.memory_buffer import get_channel_memory
 from core.chat_engine import ChatEngine
@@ -603,9 +603,9 @@ class MattermostWebSocketClient:
         self,
         channel_id: str,
         processed_messages: List[str],
-        context_info: str=None,
-        channel_info: Dict=None,
-        user_info: Dict=None,
+        context_info: Tuple[str, List[str]] = None,
+        channel_info: Dict = None,
+        user_info: Dict = None,
         is_active_interaction: bool = False,  # 新增参数，标记是否是主动交互
     ):
         """

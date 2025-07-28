@@ -140,7 +140,7 @@ services:
       - texas-net
 
   adminer:
-    image: ccr.ccs.tencentyun.com/kawaro/adminer:latest
+    image: docker.1ms.run/library/adminer:latest
     platform: linux/amd64
     container_name: texas-adminer
     restart: always
@@ -154,7 +154,7 @@ services:
       - admin
 
   redisinsight:
-    image: ccr.ccs.tencentyun.com/kawaro/redisinsight:latest
+    image: docker.1ms.run/redislabs/redisinsight:latest
     platform: linux/amd64
     container_name: texas-redisinsight
     restart: always
