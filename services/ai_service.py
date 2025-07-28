@@ -170,8 +170,8 @@ async def stream_reply_ai(
         "model": model,
         "messages": messages,
         "stream": True,
-        "frequency_penalty": 0.2,
-        "top_p": 0.4,
+        "frequency_penalty": 0.3,
+        "temperature": 0.7,
     }
 
     async def _stream_request():

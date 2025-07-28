@@ -108,7 +108,7 @@ services:
 
   mattermost:
     platform: linux/amd64
-    image: ccr.ccs.tencentyun.com/kawaro/mattermost:${MATTERMOST_IMAGE_TAG}
+    image: ccr.ccs.tencentyun.com/kawaro/${MATTERMOST_IMAGE}:latest
     container_name: mattermost
     restart: always
     security_opt:
@@ -174,7 +174,7 @@ services:
       - admin
 
   qdrant:
-    image: ccr.ccs.tencentyun.com/kawaro/qdrant:latest
+    image: docker.1ms.run/qdrant/qdrant:latest
     platform: linux/amd64
     container_name: texas-qdr
     ports:

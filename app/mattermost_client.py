@@ -667,8 +667,8 @@ class MattermostWebSocketClient:
         delay = random.normalvariate(mean, std_dev)
 
         # 动态最大等待时间：平均7秒，标准差1秒，限制在6~8之间
-        max_dynamic = random.normalvariate(7.0, 1.0)
-        max_dynamic = max(6.0, min(8.0, max_dynamic))  # 限制最大上限浮动范围
+        max_dynamic = random.normalvariate(5.0, 1.0)
+        max_dynamic = max(4.0, min(6.0, max_dynamic))  # 限制最大上限浮动范围
 
         # 截断：确保在 0.3 到动态上限之间
         return min(max(0.3, delay), max_dynamic)
@@ -687,8 +687,8 @@ class MattermostWebSocketClient:
 
             # 等待消息发送完成，使用正态分布的随机等待时间
             delay = self._generate_typing_delay(len(text))
-            await self.send_message(channel_id, text)
             await asyncio.sleep(delay)
+            await self.send_message(channel_id, text)
 
         finally:
             if typing_task:
