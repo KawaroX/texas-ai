@@ -11,7 +11,7 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
-OPENAI_API_MODEL = "claude-3-7-sonnet-20250219"
+OPENAI_API_MODEL = "gemini-2.5-flash"
 
 logger = logging.getLogger(__name__)
 
@@ -166,13 +166,23 @@ async def stream_reply_ai(
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": True,
-        "frequency_penalty": 0.3,
-        "temperature": 0.7,
-    }
+    if model == "gemini-2.5-flash":
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+            "frequency_penalty": 0.3,
+            "temperature": 0.7,
+            "reasoning_effort": "medium",
+        }
+    else:
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+            "frequency_penalty": 0.3,
+            "temperature": 0.7,
+        }
 
     async def _stream_request():
         async with httpx.AsyncClient(timeout=60) as client:
@@ -838,6 +848,7 @@ async def generate_micro_experiences(
 如果德克萨斯认为这件事值得分享给用户，则设置为ture，交互内容是德克萨斯对这件事想要和用户分享的经历和感受。
 而不是指对德克萨斯日程中的伙伴，而是和她只能通过网络进行交流，但是是关系最好的朋友的主动交互。即判断此时德克萨斯是否会想要将当前的经历发送给该好友。
 注意，如果是与早上起床相关的日程，则必须在某一个合适的item中设置need_interaction为true，交互内容是德克萨斯对早上起床的感受和道早安。
+主动交互为true大概要占据40%左右，不要过低，但不要超过一半。
 
 请严格按照以下JSON格式输出，不要包含任何其他文本：
 {{
