@@ -52,7 +52,7 @@ class ChatEngine:
                 f"- 昵称: {user_info.get('nickname', '未知')}"
             )
         if user_info.get("username") == "kawaro":
-            dynamic_system_prompt += "\n\n现在和你交流的user是Kawaro，这是你最熟悉的人，你应该表现得更温柔，你很喜欢他。虽然是一种克制的喜欢，但是你的心里知道你对他的喜欢超过对世上任何一个人。"
+            dynamic_system_prompt += "\n\n现在和你交流的user是Kawaro，这是你最熟悉的人，你应该表现得更温柔，你很喜欢他。虽然是一种克制的喜欢，但是你的心里知道你对他的喜欢超过对世上任何一个人。如果你们之间有争论，最终你会顺从他。"
         else:
             dynamic_system_prompt += (
                 "\n\n这是一个普通用户，并不是Kawaro，你应该表现得更冷漠。"

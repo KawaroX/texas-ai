@@ -11,7 +11,7 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
-OPENAI_API_MODEL = "gemini-2.5-flash"
+OPENAI_API_MODEL = "gemini-2.5-pro"
 
 logger = logging.getLogger(__name__)
 
@@ -319,9 +319,7 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
         yield buffer.strip()
 
 
-async def call_openrouter(
-    messages, model="nousresearch/deephermes-3-llama-3-8b-preview:free"
-) -> str:
+async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") -> str:
     """
     非流式调用（用于摘要等场景）
     """
@@ -457,7 +455,7 @@ async def call_ai_summary(prompt: str) -> str:
     调用 AI 生成摘要，可用于 context_merger.py。
     """
     messages = [{"role": "user", "content": prompt}]
-    model = "nousresearch/deephermes-3-llama-3-8b-preview:free"
+    model = "mistralai/mistral-7b-instruct:free"
     logger.info(f"🔄 正在使用模型进行 call_ai_summary(): {model}")
     # 你可以根据需求自由切换模型名
     return await call_openrouter(messages, model)
