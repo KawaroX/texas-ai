@@ -603,7 +603,6 @@ def get_weather_info(date: str, location: str = "") -> str:
     import hashlib
     import random
     import httpx
-    import logging
     import os
 
     # 默认location列表
@@ -631,22 +630,35 @@ def get_weather_info(date: str, location: str = "") -> str:
     ]
     if not location:
         location = random.choice(default_locations)
+        logger.info(f"使用随机位置ID: {location} 查询 {date} 天气")
 
     try:
-        url = os.getenv("HEFENG_API_HOST") + "/v7/weather/7d"
+        logger.info(f"开始获取 {date} 在 {location} 的天气信息...")
+        url = (
+            "https://"
+            + os.getenv("HEFENG_API_HOST", "have_no_api_host")
+            + "/v7/weather/7d"
+        )
         params = {
             "location": location,
             "key": os.getenv("HEFENG_API_KEY"),
             "lang": "zh",
         }
+        logger.debug(f"天气API请求参数: {params}")
+
         response = httpx.get(url, params=params, timeout=10)
         response.raise_for_status()
+
         data = response.json()
+        logger.debug(f"天气API响应: {data}")
+
         if data.get("code") != "200":
-            raise ValueError(f"API error code: {data.get('code')}")
+            error_msg = f"API错误代码: {data.get('code')}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
         for day in data.get("daily", []):
             if day.get("fxDate") == date:
-                # 拼接字段
                 result = (
                     f"白天{day.get('textDay')}，夜晚{day.get('textNight')}。"
                     f"气温{day.get('tempMin')}°C~{day.get('tempMax')}°C，"
@@ -654,9 +666,15 @@ def get_weather_info(date: str, location: str = "") -> str:
                     f"夜晚风：{day.get('windDirNight')} {day.get('windScaleNight')}级，"
                     f"湿度：{day.get('humidity')}%，"
                     f"降水：{day.get('precip')}mm，"
-                    f"紫外线指数：{day.get('uvIndex')}。"
+                    f"紫外线指数：{day.get('uvIndex')}，"
+                    f"月相：{day.get('moonPhase')}，"
+                    f"日出：{day.get('sunrise')}，日落：{day.get('sunset')}，"
+                    f"月升：{day.get('moonrise')}，月落：{day.get('moonset')}。"
                 )
+                logger.info(f"成功获取 {date} 天气: {result[:50]}...")
                 return result
+
+        logger.warning(f"未找到 {date} 的天气数据，使用最后一天数据替代")
         day = data["daily"][-1]
         result = (
             f"白天{day.get('textDay')}，夜晚{day.get('textNight')}。"
@@ -665,20 +683,33 @@ def get_weather_info(date: str, location: str = "") -> str:
             f"夜晚风：{day.get('windDirNight')} {day.get('windScaleNight')}级，"
             f"湿度：{day.get('humidity')}%，"
             f"降水：{day.get('precip')}mm，"
-            f"紫外线指数：{day.get('uvIndex')}。"
+            f"紫外线指数：{day.get('uvIndex')}，"
+            f"月相：{day.get('moonPhase')}，"
+            f"日出：{day.get('sunrise')}，日落：{day.get('sunset')}，"
+            f"月升：{day.get('moonrise')}，月落：{day.get('moonset')}。"
         )
+        logger.info(f"使用最后一天数据作为 {date} 天气: {result[:50]}...")
         return result
+    except httpx.HTTPError as e:
+        logger.error(f"HTTP请求失败: {e}")
+    except httpx.Timeout:
+        logger.error("天气API请求超时")
+    except ValueError as e:
+        logger.error(f"API返回数据错误: {e}")
     except Exception as e:
-        logging.warning(f"⚠️ 获取天气失败: {e}")
+        logger.error(f"获取天气异常: {str(e)}", exc_info=True)
 
     # 回退：使用伪随机天气
     seed = int(hashlib.md5(f"{date}-{location}".encode()).hexdigest()[:8], 16)
     random.seed(seed)
+    logger.warning(f"⚠️ 回退到伪随机天气 (种子: {seed})")
 
     weather_options = ["晴天", "阴天", "雨天", "雪天", "雾天"]
     weather_weights = [0.4, 0.25, 0.2, 0.05, 0.1]
 
-    return random.choices(weather_options, weights=weather_weights)[0]
+    result = random.choices(weather_options, weights=weather_weights)[0]
+    logger.info(f"生成伪随机天气: {result}")
+    return result
 
 
 async def generate_daily_schedule(
