@@ -92,8 +92,8 @@ async def generate_and_store_daily_life(target_date: date):
             logger.info(f"📅 生成大事件持续天数: {duration_days}天 (正态分布 μ=4, σ=2)")
 
             # 随机选择事件类型
-            event_types = ["出差任务", "特殊快递", "培训学习", "个人事务"]
-            weights = [0.4, 0.3, 0.15, 0.15]  # 事件类型概率权重
+            event_types = ["出差任务", "特殊快递", "培训学习", "个人事务", "生病"]
+            weights = [0.4, 0.3, 0.15, 0.1, 0.05]  # 事件类型概率权重
             event_type = random.choices(event_types, weights=weights)[0]
             logger.info(f"📌 选择事件类型: {event_type} (权重: {weights})")
 
@@ -120,6 +120,7 @@ async def generate_and_store_daily_life(target_date: date):
                 "main_objective": "默认目标",
             }
     if is_in_major_event:
+        weather += "以上为随机天气情况，仅供参考，以大事件情况为准。"
         logger.info(
             f"ℹ️ 大事件状态: '存在', 类型: {major_event_context.get('event_type', '无')}"
         )
@@ -313,13 +314,44 @@ async def generate_and_store_major_event(
     duration_days = (end_date - start_date).days + 1
     logger.info(f"--- 正在生成大事件 ({start_date_str} 至 {end_date_str}) ---")
 
-    # 1. 模拟天气预报 (实际应获取真实天气)
+    # 1. 获取真实天气
+    import random
+
+    WORLD_CITIES = [
+        (40.71, -74.01),
+        (51.51, -0.13),
+        (48.86, 2.35),
+        (52.52, 13.41),
+        (35.68, 139.76),
+        (37.57, 126.98),
+        (13.75, 100.50),
+        (1.35, 103.82),
+        (-33.87, 151.21),
+        (55.75, 37.62),
+        (30.05, 31.25),
+        (-1.29, 36.82),
+        (-23.55, -46.63),
+        (-34.61, -58.38),
+        (43.65, -79.38),
+        (19.43, -99.13),
+        (41.01, 28.97),
+        (25.27, 55.30),
+        (19.07, 72.88),
+        (-36.85, 174.76),
+    ]
+
+    # 统一选择一个地点（纬度, 经度），并转为字符串
+    lat, lon = random.choice(WORLD_CITIES)
+    selected_location = f"{lat:.2f},{lon:.2f}"
+    logger.info(f"🌍 本次大事件天气模拟地点: {selected_location}")
+
     weather_forecast = {}
     for i in range(duration_days):
         current_date = start_date + timedelta(days=i)
         weather_forecast[current_date.strftime("%Y-%m-%d")] = get_weather_info(
-            current_date.strftime("%Y-%m-%d")
+            current_date.strftime("%Y-%m-%d"), location=selected_location
         )
+
     logger.info(f"模拟天气预报: {weather_forecast}")
 
     # 2. 调用AI生成大事件

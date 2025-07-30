@@ -24,3 +24,4 @@ app/mattermost_client_副本2.py
 services/memory_summarizer.py
 scripts/prebuild_script.sh
 scripts/scp_update_script.sh
+dev.yml

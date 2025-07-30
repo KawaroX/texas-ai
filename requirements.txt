@@ -28,3 +28,6 @@ pytz==2024.1
 
 # === Mem0.AI ===
 mem0ai
+
+# === RAG ===
+jieba==0.42.1

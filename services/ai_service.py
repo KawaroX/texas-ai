@@ -589,31 +589,94 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
     return {"error": "达到最大重试次数"}
 
 
-def get_weather_info(date: str, location: str = "龙门") -> str:
+def get_weather_info(date: str, location: str = "") -> str:
     """
-    获取指定日期和地点的天气信息
+    获取指定日期和地点的天气信息（接入和风天气API，失败时退回伪随机生成）
 
     Args:
         date: 日期字符串 (YYYY-MM-DD)
-        location: 位置（默认为龙门）
+        location: 位置（仅用于种子）
 
     Returns:
-        str: 天气状态 ("晴天"|"阴天"|"雨天"|"雪天"|"雾天"|"风暴")
-
-    Note:
-        当前为模拟实现，之后可替换为真实天气API调用
-        保持接口不变，只需修改函数内部实现
+        str: 综合天气描述
     """
-    # 模拟实现 - 基于日期生成伪随机天气
     import hashlib
     import random
+    import httpx
+    import logging
+    import os
 
-    # 使用日期作为种子，确保同一天总是返回相同天气
+    # 默认location列表
+    default_locations = [
+        "101320101",
+        "101320103",
+        "14606",
+        "1B6D3",
+        "1D255",
+        "1DC87",
+        "275A5",
+        "28FE1",
+        "2BBD1",
+        "2BC09",
+        "39CD9",
+        "407DA",
+        "4622E",
+        "55E7E",
+        "8A9CA",
+        "8E1C5",
+        "9173",
+        "D5EC3",
+        "DD9B5",
+        "E87DC",
+    ]
+    if not location:
+        location = random.choice(default_locations)
+
+    try:
+        url = os.getenv("HEFENG_API_HOST") + "/v7/weather/7d"
+        params = {
+            "location": location,
+            "key": os.getenv("HEFENG_API_KEY"),
+            "lang": "zh",
+        }
+        response = httpx.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("code") != "200":
+            raise ValueError(f"API error code: {data.get('code')}")
+        for day in data.get("daily", []):
+            if day.get("fxDate") == date:
+                # 拼接字段
+                result = (
+                    f"白天{day.get('textDay')}，夜晚{day.get('textNight')}。"
+                    f"气温{day.get('tempMin')}°C~{day.get('tempMax')}°C，"
+                    f"白天风：{day.get('windDirDay')} {day.get('windScaleDay')}级，"
+                    f"夜晚风：{day.get('windDirNight')} {day.get('windScaleNight')}级，"
+                    f"湿度：{day.get('humidity')}%，"
+                    f"降水：{day.get('precip')}mm，"
+                    f"紫外线指数：{day.get('uvIndex')}。"
+                )
+                return result
+        day = data["daily"][-1]
+        result = (
+            f"白天{day.get('textDay')}，夜晚{day.get('textNight')}。"
+            f"气温{day.get('tempMin')}°C~{day.get('tempMax')}°C，"
+            f"白天风：{day.get('windDirDay')} {day.get('windScaleDay')}级，"
+            f"夜晚风：{day.get('windDirNight')} {day.get('windScaleNight')}级，"
+            f"湿度：{day.get('humidity')}%，"
+            f"降水：{day.get('precip')}mm，"
+            f"紫外线指数：{day.get('uvIndex')}。"
+        )
+        return result
+    except Exception as e:
+        logging.warning(f"⚠️ 获取天气失败: {e}")
+
+    # 回退：使用伪随机天气
     seed = int(hashlib.md5(f"{date}-{location}".encode()).hexdigest()[:8], 16)
     random.seed(seed)
 
     weather_options = ["晴天", "阴天", "雨天", "雪天", "雾天"]
-    weather_weights = [0.4, 0.25, 0.2, 0.1, 0.05]  # 晴天概率最高
+    weather_weights = [0.4, 0.25, 0.2, 0.05, 0.1]
 
     return random.choices(weather_options, weights=weather_weights)[0]
 

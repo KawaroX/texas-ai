@@ -420,17 +420,27 @@ async def merge_context(
         # 确保至少包含当前频道的消息时间（如果有）
         if raw_messages:
             # 查找当前频道中最后一条assistant消息（德克萨斯发送的）
-            assistant_messages = [msg for msg in raw_messages if msg["role"] == "assistant"]
+            assistant_messages = [
+                msg for msg in raw_messages if msg["role"] == "assistant"
+            ]
             if assistant_messages:
                 # 获取最后一条assistant消息的时间戳
                 latest_assistant_msg = assistant_messages[-1]
-                latest_current_message_time = datetime.fromisoformat(latest_assistant_msg["timestamp"])
-                logger.info(f"📝 当前频道最后一条assistant消息: {latest_assistant_msg['content']} | 时间: {latest_current_message_time}")
+                latest_current_message_time = datetime.fromisoformat(
+                    latest_assistant_msg["timestamp"]
+                )
+                logger.info(
+                    f"📝 当前频道最后一条assistant消息: {latest_assistant_msg['content']} | 时间: {latest_current_message_time}"
+                )
             else:
                 # 如果没有assistant消息，使用最后一条消息
-                latest_current_message_time = datetime.fromisoformat(raw_messages[-1]["timestamp"])
-                logger.info(f"📝 当前频道无assistant消息，使用最后一条消息: {raw_messages[-1]['content']} | 时间: {latest_current_message_time}")
-            
+                latest_current_message_time = datetime.fromisoformat(
+                    raw_messages[-1]["timestamp"]
+                )
+                logger.info(
+                    f"📝 当前频道无assistant消息，使用最后一条消息: {raw_messages[-1]['content']} | 时间: {latest_current_message_time}"
+                )
+
             all_latest_timestamps.append(latest_current_message_time)
 
         # 获取其他频道的消息时间
@@ -442,12 +452,20 @@ async def merge_context(
             # 查找其他频道中最后一条assistant消息
             assistant_messages = [msg for msg in messages if msg["role"] == "assistant"]
             if assistant_messages:
-                latest_other_message_time = datetime.fromisoformat(assistant_messages[-1]["timestamp"])
-                logger.info(f"📝 频道 {other_channel} 最后一条assistant消息: {assistant_messages[-1]['content']} | 时间: {latest_other_message_time}")
+                latest_other_message_time = datetime.fromisoformat(
+                    assistant_messages[-1]["timestamp"]
+                )
+                logger.info(
+                    f"📝 频道 {other_channel} 最后一条assistant消息: {assistant_messages[-1]['content']} | 时间: {latest_other_message_time}"
+                )
             else:
-                latest_other_message_time = datetime.fromisoformat(messages[-1]["timestamp"])
-                logger.info(f"📝 频道 {other_channel} 无assistant消息，使用最后一条消息: {messages[-1]['content']} | 时间: {latest_other_message_time}")
-            
+                latest_other_message_time = datetime.fromisoformat(
+                    messages[-1]["timestamp"]
+                )
+                logger.info(
+                    f"📝 频道 {other_channel} 无assistant消息，使用最后一条消息: {messages[-1]['content']} | 时间: {latest_other_message_time}"
+                )
+
             all_latest_timestamps.append(latest_other_message_time)
 
             # 为每个频道创建异步摘要任务
@@ -475,13 +493,15 @@ async def merge_context(
             latest_overall_message_time = max(all_latest_timestamps)
             current_time = datetime.now(shanghai_tz)
             time_diff = current_time - latest_overall_message_time
-            
+
             if len(all_latest_timestamps) == 1:
                 logger.info(f"⏱️ 仅使用当前频道消息进行时间差判断")
             else:
                 logger.info(f"⏱️ 使用所有频道最新消息进行时间差判断")
-                
-            logger.info(f"⏱️ 最后消息时间={latest_overall_message_time} 当前时间={current_time} 时间差={time_diff}")
+
+            logger.info(
+                f"⏱️ 最后消息时间={latest_overall_message_time} 当前时间={current_time} 时间差={time_diff}"
+            )
 
             if time_diff > timedelta(hours=1):
                 # 判断是否在东八区睡眠时间（23:00 - 07:00）
@@ -514,36 +534,38 @@ async def merge_context(
                 ):
                     # 粗略判断，如果时间差超过8小时，且跨越了整个睡眠时间段
                     is_during_sleep_time = True
-                
-                logger.info(f"🌙 睡眠时间检查: 最后消息小时={latest_local_time.hour} 当前小时={current_local_time.hour}")
-                logger.info(f"初始睡眠判断: is_during_sleep_time={is_during_sleep_time}")
-                logger.info(f"⏳ 时间跨度检查: 开始<{SLEEP_START_HOUR}时? {latest_local_time.hour < SLEEP_START_HOUR} 结束>={SLEEP_END_HOUR}时? {current_local_time.hour >= SLEEP_END_HOUR} 时间差>8h? {time_diff > timedelta(hours=8)}")
 
-                # 更精确的判断：计算时间段内有多少小时落在睡眠时间
+                logger.info(
+                    f"🌙 睡眠时间检查: 最后消息小时={latest_local_time.hour} 当前小时={current_local_time.hour}"
+                )
+                logger.info(
+                    f"初始睡眠判断: is_during_sleep_time={is_during_sleep_time}"
+                )
+                logger.info(
+                    f"⏳ 时间跨度检查: 开始<{SLEEP_START_HOUR}时? {latest_local_time.hour < SLEEP_START_HOUR} 结束>={SLEEP_END_HOUR}时? {current_local_time.hour >= SLEEP_END_HOUR} 时间差>8h? {time_diff > timedelta(hours=8)}"
+                )
+
+                # 精确计算睡眠时间重叠
                 total_sleep_overlap_seconds = 0
                 current_check_time = latest_overall_message_time
-                logger.debug(f"💤 开始计算睡眠重叠时间")
+                logger.debug(f"💤 精确计算睡眠时间重叠")
 
                 while current_check_time < current_time:
                     # 初始化当前小时的重叠秒数
                     overlap_seconds_in_this_hour = 0
-                    
-                    # 已经是东八区时间，直接使用
-                    local_check_time = current_check_time
-                    logger.debug(f"🕒 检查时间点: {local_check_time} | 是否睡眠时段? {is_in_sleep_range(local_check_time.hour)}")
 
-                    # 计算到下一个小时边界的时间
+                    # 获取当前小时的东八区时间
+                    local_check_time = current_check_time
+
+                    # 计算到下一个整点的时间
                     next_hour = (current_check_time + timedelta(hours=1)).replace(
                         minute=0, second=0, microsecond=0
                     )
 
-                    # 确保不超过 current_time
+                    # 确定当前时间段的结束点
                     end_of_interval = min(next_hour, current_time)
-                    
-                    # 记录当前小时检查详情
-                    logger.debug(f"🕒 检查时间点: {local_check_time} | 是否睡眠时段? {is_in_sleep_range(local_check_time.hour)} | 重叠秒数: {overlap_seconds_in_this_hour}")
 
-                    # 如果当前小时在睡眠时间段内
+                    # 如果当前小时在睡眠时间段内(23:00-07:00)
                     if is_in_sleep_range(local_check_time.hour):
                         # 计算当前小时内，从 current_check_time 到 end_of_interval 的秒数
                         overlap_seconds_in_this_hour = (
@@ -553,12 +575,14 @@ async def merge_context(
                     total_sleep_overlap_seconds += overlap_seconds_in_this_hour
                     current_check_time = end_of_interval  # 移动到下一个检查点
 
-                # 如果睡眠时间重合超过4小时，认为是睡眠时间
-                logger.info(f"💤 总睡眠重叠: {total_sleep_overlap_seconds}秒 (要求≥{timedelta(hours=4).total_seconds()}秒)")
-                if total_sleep_overlap_seconds >= timedelta(hours=4).total_seconds():
-                    is_during_sleep_time = True
+                # 当睡眠时间重叠超过4小时时，视为睡眠时段
+                is_during_sleep_time = (
+                    total_sleep_overlap_seconds >= timedelta(hours=4).total_seconds()
+                )
+                logger.info(
+                    f"💤 睡眠重叠时间: {total_sleep_overlap_seconds}秒 | 是否睡眠时段: {is_during_sleep_time}"
+                )
 
-                logger.info(f"🔔 谴责触发: 睡眠时段? {is_during_sleep_time} | 最终判定: {'不触发' if is_during_sleep_time else '触发'}")
                 if not is_during_sleep_time:
                     hours_diff = int(time_diff.total_seconds() // 3600)
                     minutes_diff = int((time_diff.total_seconds() % 3600) // 60)
@@ -574,7 +598,7 @@ async def merge_context(
             logger.info("ℹ️ 仅当前频道有消息，但未找到其他频道消息")
         elif not all_latest_timestamps and not raw_messages:
             logger.info("ℹ️ 未找到任何频道消息，跳过时间差判断")
-            
+
         logger.info(f"✅ 成功获取 {len(summary_notes)} 个频道摘要 (包括潜在的谴责提示)")
     else:
         logger.info("📝 消息较简单，跳过跨频道摘要")
@@ -584,11 +608,20 @@ async def merge_context(
     logger.info(f"🏠 Life system context: {len(life_system_context)} characters")
 
     # 4. 获取记忆信息
-    logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
-    history_text = "\n".join([msg["content"] for msg in processed_messages])
-    query = "\n".join([latest_query, history_text if history_text else ""])
-    mem0_result = _get_mem0_relevant(query, limit=3)
-    mem0_memory = mem0_result
+    from core.rag_decision_system import RAGDecisionMaker
+
+    rag_decision = RAGDecisionMaker(user_id=channel_id, cache_ttl=3600)
+
+    _needs_rag = rag_decision.should_search(latest_query)
+
+    if _needs_rag:
+        logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
+        history_text = "\n".join([msg["content"] for msg in processed_messages])
+        query = "\n".join([latest_query, history_text if history_text else ""])
+        mem0_result = _get_mem0_relevant(query, limit=3)
+        mem0_memory = mem0_result
+    else:
+        mem0_memory = []
 
     # 5. 构建system prompt
     system_parts = []
@@ -652,7 +685,7 @@ async def merge_context(
         messages.pop()
         user_query_content = (
             f"(after {time_diff_str}) [{current_time_str}] Kawaro:\n{latest_query}"
-            "在回复时，请直接生成消息内容，不需要包含时间差“(after 时间差)”、时间戳“[HH:MM:SS]”或发言人标识“德克萨斯”，"
+            "\n\n[系统提示]\n在回复时，请直接生成消息内容，不需要包含时间差“(after 时间差)”、时间戳“[HH:MM:SS]”或发言人标识“德克萨斯”，"
             "系统会自动添加这些信息，你只需要输出需要发送的消息即可。"
             "\n\n你们要像正常交流一样。注意每段聊天的时间差，这对于你应该如何回复有重大参考意义，要有对时间的感知力。"
             "除非你们在讨论某一个话题，否则请避免发送重复的消息或者相似的消息，你要做的是主动思考并回复，而不是模仿之前的内容回复。"
