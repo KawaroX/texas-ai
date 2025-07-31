@@ -321,34 +321,43 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     async for chunk in stream_func(messages, model=actual_model):
         buffer += chunk
 
-        # 定义所有分段符
-        # 匹配中文省略号、句号、感叹号、问号，或两个以上连续的英文句点，或换行符
-        segments = re.split(r"(?<=[…。！？])|\.{2,}|…{2,}|\n", buffer)
-
-        new_buffer = ""
-        for i, segment in enumerate(segments):
-            if not segment:
+        # 优先按句号、问号、感叹号切分（包括中文标点）
+        while True:
+            # 查找句号、问号、感叹号的位置
+            period_index = buffer.find("。")
+            question_index = buffer.find("？")
+            exclamation_index = buffer.find("！")
+            
+            # 找到最近的标点符号位置
+            indices = [i for i in [period_index, question_index, exclamation_index] if i != -1]
+            if indices:
+                earliest_index = min(indices)
+                segment = buffer[: earliest_index + 1].strip()
+                # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
+                segment = re.sub(
+                    r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+                    "",
+                    segment,
+                ).strip()
+                if segment:
+                    yield segment
+                buffer = buffer[earliest_index + 1 :]
                 continue
-
-            # 检查是否是最后一个分段，如果是，则可能是不完整的分段，保留在buffer中
-            if (
-                i == len(segments) - 1
-                and not re.search(r"[…。！？]|\.{2,}\s*$", segment)
-                and not segment.endswith("\n")
-            ):
-                new_buffer = segment
-                break
-
-            # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
-            processed_segment = re.sub(
-                r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
-                "",
-                segment,
-            ).strip()
-
-            if processed_segment:
-                yield processed_segment
-        buffer = new_buffer
+            # 再尝试按换行符切分
+            newline_index = buffer.find("\n")
+            if newline_index != -1:
+                segment = buffer[:newline_index].strip()
+                # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
+                segment = re.sub(
+                    r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+                    "",
+                    segment,
+                ).strip()
+                if segment:
+                    yield segment
+                buffer = buffer[newline_index + 1 :]
+                continue
+            break
 
     # 最终剩余内容
     if buffer.strip():
