@@ -12,7 +12,7 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
-OPENAI_API_MODEL = "gemini-2.5-flash"
+OPENAI_API_MODEL = "gemini-2.5-pro"
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,10 @@ async def stream_reply_ai(
             "messages": messages,
             "stream": True,
             "frequency_penalty": 0.3,
-            "temperature": 0.7,
+            "temperature": 0.8,
+            "presence_penalty": 0.3,
+            "top_p": 0.95,
+            "max_tokens": 1536,
             "extra_body": {
                 "google": {
                     "thinking_config": {
@@ -189,7 +192,10 @@ async def stream_reply_ai(
             "messages": messages,
             "stream": True,
             "frequency_penalty": 0.3,
-            "temperature": 0.7,
+            "temperature": 0.8,
+            "presence_penalty": 0.3,
+            "top_p": 0.95,
+            "max_tokens": 1536,
         }
 
     async def _stream_request():
@@ -309,7 +315,11 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
             if period_index != -1:
                 segment = buffer[: period_index + 1].strip()
                 # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
-                segment = re.sub(r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*", "", segment).strip()
+                segment = re.sub(
+                    r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+                    "",
+                    segment,
+                ).strip()
                 if segment:
                     yield segment
                 buffer = buffer[period_index + 1 :]
@@ -319,7 +329,11 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
             if newline_index != -1:
                 segment = buffer[:newline_index].strip()
                 # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
-                segment = re.sub(r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*", "", segment).strip()
+                segment = re.sub(
+                    r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+                    "",
+                    segment,
+                ).strip()
                 if segment:
                     yield segment
                 buffer = buffer[newline_index + 1 :]
@@ -329,7 +343,11 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     # 最终剩余内容
     if buffer.strip():
         # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
-        final_segment = re.sub(r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*", "", buffer).strip()
+        final_segment = re.sub(
+            r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+            "",
+            buffer,
+        ).strip()
         if final_segment:
             yield final_segment
 
