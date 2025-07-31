@@ -3,6 +3,7 @@ import httpx
 import logging
 import json
 import asyncio
+import re # Add this import
 from typing import AsyncGenerator, Optional
 from app.config import Settings
 
@@ -307,6 +308,8 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
             period_index = buffer.find("。")
             if period_index != -1:
                 segment = buffer[: period_index + 1].strip()
+                # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
+                segment = re.sub(r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*", "", segment).strip()
                 if segment:
                     yield segment
                 buffer = buffer[period_index + 1 :]
@@ -315,6 +318,8 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
             newline_index = buffer.find("\n")
             if newline_index != -1:
                 segment = buffer[:newline_index].strip()
+                # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
+                segment = re.sub(r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*", "", segment).strip()
                 if segment:
                     yield segment
                 buffer = buffer[newline_index + 1 :]
@@ -323,7 +328,10 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
 
     # 最终剩余内容
     if buffer.strip():
-        yield buffer.strip()
+        # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
+        final_segment = re.sub(r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*", "", buffer).strip()
+        if final_segment:
+            yield final_segment
 
 
 async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") -> str:
@@ -947,7 +955,7 @@ async def generate_micro_experiences(
 如果德克萨斯认为这件事值得分享给用户，则设置为ture，交互内容是德克萨斯对这件事想要和用户分享的经历和感受。
 而不是指对德克萨斯日程中的伙伴，而是和她只能通过网络进行交流，但是是关系最好的朋友的主动交互。即判断此时德克萨斯是否会想要将当前的经历发送给该好友。
 注意，如果是与早上起床相关的日程，则必须在某一个合适的item中设置need_interaction为true，交互内容是德克萨斯对早上起床的感受和道早安。
-主动交互为true大概要占据40%左右，不要过低，但不要超过一半。
+主动交互为true大概要占据30%左右，不要过低，至少需要有一个，但不要超过一半。
 
 请严格按照以下JSON格式输出，不要包含任何其他文本：
 {{

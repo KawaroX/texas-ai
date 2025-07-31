@@ -163,7 +163,9 @@ class RAGDecisionMaker:
             context_data = self.redis_client.get(self._context_key)
             if context_data:
                 context_dict = json.loads(context_data.decode("utf-8"))
-                logger.info(f"[RAG DECISION] Successfully loaded context from Redis: {context_dict}")
+                logger.info(
+                    f"[RAG DECISION] Successfully loaded context from Redis: {context_dict}"
+                )
                 return SimpleContext.from_dict(context_dict)
             else:
                 logger.info("[RAG DECISION] No context found in Redis, using default")
@@ -178,7 +180,9 @@ class RAGDecisionMaker:
         try:
             context_data = json.dumps(self._context.to_dict())
             self.redis_client.setex(self._context_key, self.cache_ttl, context_data)
-            logger.debug(f"[RAG DECISION] Context saved to Redis: {self._context.to_dict()}")
+            logger.debug(
+                f"[RAG DECISION] Context saved to Redis: {self._context.to_dict()}"
+            )
         except (redis.RedisError, json.JSONDecodeError) as e:
             logger.error(f"[RAG DECISION] Failed to save context to Redis: {e}")
 
@@ -301,7 +305,7 @@ class RAGDecisionMaker:
             pattern_score = min(pattern_score, 0.25)
             total_score += pattern_score
             pattern_scores[pattern_type] = pattern_score
-        
+
         logger.debug(f"  - Pattern scores: {pattern_scores}")
 
         # 3. 个性化分析
@@ -342,7 +346,9 @@ class RAGDecisionMaker:
         """生成记忆突发因子"""
         # 只有当基础分数不是太低或太高时才添加随机性
         if base_score < 0.1 or base_score > 0.8:
-            logger.debug("[RAG DECISION] Memory spark skipped (base_score out of range)")
+            logger.debug(
+                "[RAG DECISION] Memory spark skipped (base_score out of range)"
+            )
             return 0.0
 
         # 使用正态分布生成随机因子，偏向正值
@@ -360,13 +366,15 @@ class RAGDecisionMaker:
 
         prev_accumulated = self._context.accumulated_score
         prev_time = self._context.last_update_time
-        
+
         # 计算时间衰减
         if prev_time > 0:
             time_diff = (current_time - prev_time) / 60  # 分钟
             if time_diff > self.time_decay_minutes:
                 self._context.accumulated_score = 0.0
-                logger.debug(f"[RAG DECISION] Accumulation reset due to time decay ({time_diff:.1f}min > {self.time_decay_minutes}min)")
+                logger.debug(
+                    f"[RAG DECISION] Accumulation reset due to time decay ({time_diff:.1f}min > {self.time_decay_minutes}min)"
+                )
             else:
                 # 线性衰减
                 decay_factor = 1.0 - (time_diff / self.time_decay_minutes)

@@ -5,7 +5,6 @@ import pytz
 def get_texas_system_prompt() -> str:
     """
     德克萨斯 AI 的角色设定系统提示词。
-    使用 === 分段符作为多条消息分割标记。
     """
     shanghai_tz = pytz.timezone("Asia/Shanghai")
     current_time_shanghai = datetime.now(pytz.utc).astimezone(shanghai_tz)

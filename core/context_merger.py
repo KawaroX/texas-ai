@@ -403,6 +403,8 @@ async def merge_context(
     now = now or datetime.now(shanghai_tz)
     logger.info(f"🔍 Merging context for channel: {channel_id}")
 
+    _condemn_message = ""  # 初始化谴责消息变量
+
     # 1. 获取并处理聊天记录
     raw_messages = get_channel_memory(channel_id).get_recent_messages()
     processed_messages = _process_chat_messages(raw_messages)
@@ -419,29 +421,37 @@ async def merge_context(
 
         # 确保至少包含当前频道的消息时间（如果有）
         if raw_messages:
-            # 查找当前频道中最后一条assistant消息（德克萨斯发送的）
-            assistant_messages = [
-                msg for msg in raw_messages if msg["role"] == "assistant"
-            ]
-            if assistant_messages:
-                # 获取最后一条assistant消息的时间戳
-                latest_assistant_msg = assistant_messages[-1]
-                latest_current_message_time = datetime.fromisoformat(
-                    latest_assistant_msg["timestamp"]
-                )
-                logger.info(
-                    f"📝 当前频道最后一条assistant消息: {latest_assistant_msg['content']} | 时间: {latest_current_message_time}"
-                )
-            else:
-                # 如果没有assistant消息，使用最后一条消息
+            # 查找当前频道中最后一条assistant消息，并在此之前找到最近的一条user消息
+            latest_current_message_time = None
+            last_assistant_idx = -1
+            for i in range(len(raw_messages) - 1, -1, -1):
+                if raw_messages[i]["role"] == "assistant":
+                    last_assistant_idx = i
+                    break
+
+            if last_assistant_idx != -1:
+                # 从最后一条assistant消息往前找最近的user消息
+                for i in range(last_assistant_idx - 1, -1, -1):
+                    if raw_messages[i]["role"] == "user":
+                        latest_current_message_time = datetime.fromisoformat(
+                            raw_messages[i]["timestamp"]
+                        )
+                        logger.info(
+                            f"📝 当前频道最后一条assistant消息之前的user消息: {raw_messages[i]['content']} | 时间: {latest_current_message_time}"
+                        )
+                        break
+
+            if latest_current_message_time is None and raw_messages:
+                # 如果没有找到符合条件的user消息，或者没有assistant消息，则使用最后一条消息的时间
                 latest_current_message_time = datetime.fromisoformat(
                     raw_messages[-1]["timestamp"]
                 )
                 logger.info(
-                    f"📝 当前频道无assistant消息，使用最后一条消息: {raw_messages[-1]['content']} | 时间: {latest_current_message_time}"
+                    f"📝 当前频道未找到符合条件的user消息，使用最后一条消息: {raw_messages[-1]['content']} | 时间: {latest_current_message_time}"
                 )
 
-            all_latest_timestamps.append(latest_current_message_time)
+            if latest_current_message_time:
+                all_latest_timestamps.append(latest_current_message_time)
 
         # 获取其他频道的消息时间
         for other_channel in other_channels:
@@ -449,24 +459,35 @@ async def merge_context(
             if not messages:
                 continue
 
-            # 查找其他频道中最后一条assistant消息
-            assistant_messages = [msg for msg in messages if msg["role"] == "assistant"]
-            if assistant_messages:
-                latest_other_message_time = datetime.fromisoformat(
-                    assistant_messages[-1]["timestamp"]
-                )
-                logger.info(
-                    f"📝 频道 {other_channel} 最后一条assistant消息: {assistant_messages[-1]['content']} | 时间: {latest_other_message_time}"
-                )
-            else:
+            # 查找其他频道中最后一条assistant消息，并在此之前找到最近的一条user消息
+            latest_other_message_time = None
+            last_assistant_idx_other = -1
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i]["role"] == "assistant":
+                    last_assistant_idx_other = i
+                    break
+
+            if last_assistant_idx_other != -1:
+                for i in range(last_assistant_idx_other - 1, -1, -1):
+                    if messages[i]["role"] == "user":
+                        latest_other_message_time = datetime.fromisoformat(
+                            messages[i]["timestamp"]
+                        )
+                        logger.info(
+                            f"📝 频道 {other_channel} 最后一条assistant消息之前的user消息: {messages[i]['content']} | 时间: {latest_other_message_time}"
+                        )
+                        break
+
+            if latest_other_message_time is None and messages:
                 latest_other_message_time = datetime.fromisoformat(
                     messages[-1]["timestamp"]
                 )
                 logger.info(
-                    f"📝 频道 {other_channel} 无assistant消息，使用最后一条消息: {messages[-1]['content']} | 时间: {latest_other_message_time}"
+                    f"📝 频道 {other_channel} 未找到符合条件的user消息，使用最后一条消息: {messages[-1]['content']} | 时间: {latest_other_message_time}"
                 )
 
-            all_latest_timestamps.append(latest_other_message_time)
+            if latest_other_message_time:
+                all_latest_timestamps.append(latest_other_message_time)
 
             # 为每个频道创建异步摘要任务
             task = asyncio.create_task(
@@ -586,12 +607,11 @@ async def merge_context(
                 if not is_during_sleep_time:
                     hours_diff = int(time_diff.total_seconds() // 3600)
                     minutes_diff = int((time_diff.total_seconds() % 3600) // 60)
-                    condemn_message = (
+                    _condemn_message = (  # 将谴责信息赋值给 _condemn_message
                         f"【参考资料】\n"
                         f"注意：距离Kawaro上次在任何频道（包括当前频道）回复你，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。请根据上下文判断，Kawaro是否回复你消息了，还是你主动找他的。两种情况你都能决定是否需要对此进行适当的评论、抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你。"
                     )
-                    summary_notes.insert(0, condemn_message)  # 将谴责信息放在最前面
-                    logger.info(f"✉️ 已添加谴责提示: {condemn_message}")
+                    logger.info(f"✉️ 已添加谴责提示: {_condemn_message}")
 
         if not all_latest_timestamps and raw_messages:
             # 特殊情况：有当前频道消息但没有其他频道消息
@@ -674,22 +694,22 @@ async def merge_context(
     time_diff_str = _format_time_diff(time_diff_seconds)
     current_time_str = now.strftime("%H:%M:%S")
 
+    # 如果存在谴责消息，则添加到用户查询内容的前面
+    condemn_prefix = f"{_condemn_message}\n\n" if _condemn_message else ""
+
     if is_active:
         # 主动模式：AI想要分享内容
         user_query_content = (
+            f"{condemn_prefix}"  # 添加谴责消息
             f"(after {time_diff_str}) [{current_time_str}] 德克萨斯内心:\n"
-            f"（如果Kawaro太久（超过一小时有）给你发送消息，可以抱怨一下）根据【你现在正在做的事情】，我的想法是：{latest_query}。我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：\n"
+            f"根据【你现在正在做的事情】，我的想法是：{latest_query}。我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：\n"
         )
     else:
         # 被动模式：用户发送了消息
         messages.pop()
         user_query_content = (
+            f"{condemn_prefix}"  # 添加谴责消息
             f"(after {time_diff_str}) [{current_time_str}] Kawaro:\n{latest_query}"
-            "\n\n[系统提示]\n在回复时，请直接生成消息内容，不需要包含时间差“(after 时间差)”、时间戳“[HH:MM:SS]”或发言人标识“德克萨斯”，"
-            "系统会自动添加这些信息，你只需要输出需要发送的消息即可。"
-            "\n\n你们要像正常交流一样。注意每段聊天的时间差，这对于你应该如何回复有重大参考意义，要有对时间的感知力。"
-            "除非你们在讨论某一个话题，否则请避免发送重复的消息或者相似的消息，你要做的是主动思考并回复，而不是模仿之前的内容回复。"
-            "切记要主动思考，你就是德克萨斯。"
         )
 
     messages.append({"role": "user", "content": user_query_content})
@@ -701,7 +721,14 @@ async def merge_context(
     texas_time_str = now.strftime("%H:%M:%S")
 
     # 构建德克萨斯的回复模板
-    texas_reply_template = f"(after {texas_time_diff_str}) [{texas_time_str}] 德克萨斯:"
+    texas_reply_template = (
+        "[系统提示]\n在回复时，请直接生成消息内容，不需要包含时间差“(after 时间差)”、时间戳“[HH:MM:SS]”或发言人标识“德克萨斯”，"
+        "系统会自动添加这些信息，你只需要输出需要发送的消息即可。"
+        "\n\n你们要像正常交流一样。注意每段聊天的时间差，这对于你应该如何回复有重大参考意义，要有对时间的感知力。"
+        "除非你们在讨论某一个话题，否则请避免发送重复的消息或者相似的消息，你要做的是主动思考并回复，而不是模仿之前的内容回复。"
+        "切记要主动思考，你就是德克萨斯。\n\n"
+        f"(after {texas_time_diff_str}) [{texas_time_str}] 德克萨斯:"
+    )
 
     messages.append({"role": "assistant", "content": texas_reply_template})
 
