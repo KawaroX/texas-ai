@@ -11,7 +11,7 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
-OPENAI_API_MODEL = "gemini-2.5-pro"
+OPENAI_API_MODEL = "gemini-2.5-flash"
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,14 @@ async def stream_reply_ai(
             "stream": True,
             "frequency_penalty": 0.3,
             "temperature": 0.7,
-            "reasoning_effort": "medium",
+            "extra_body": {
+                "google": {
+                    "thinking_config": {
+                        "thinking_budget": 3072,
+                        "include_thoughts": False,
+                    }
+                }
+            },
         }
     else:
         payload = {
