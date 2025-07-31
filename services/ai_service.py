@@ -3,7 +3,7 @@ import httpx
 import logging
 import json
 import asyncio
-import re # Add this import
+import re  # Add this import
 from typing import AsyncGenerator, Optional
 from app.config import Settings
 
@@ -173,14 +173,14 @@ async def stream_reply_ai(
             "messages": messages,
             "stream": True,
             "frequency_penalty": 0.3,
-            "temperature": 0.8,
+            "temperature": 0.75,
             "presence_penalty": 0.3,
             "top_p": 0.95,
             "max_tokens": 1536,
             "extra_body": {
                 "google": {
                     "thinking_config": {
-                        "thinking_budget": 3072,
+                        "thinking_budget": 4096,
                         "include_thoughts": False,
                     }
                 }
@@ -192,7 +192,7 @@ async def stream_reply_ai(
             "messages": messages,
             "stream": True,
             "frequency_penalty": 0.3,
-            "temperature": 0.8,
+            "temperature": 0.75,
             "presence_penalty": 0.3,
             "top_p": 0.95,
             "max_tokens": 1536,
@@ -316,7 +316,7 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
                 segment = buffer[: period_index + 1].strip()
                 # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
                 segment = re.sub(
-                    r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+                    r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
                     "",
                     segment,
                 ).strip()
@@ -330,7 +330,7 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
                 segment = buffer[:newline_index].strip()
                 # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
                 segment = re.sub(
-                    r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+                    r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
                     "",
                     segment,
                 ).strip()
@@ -344,7 +344,7 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     if buffer.strip():
         # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
         final_segment = re.sub(
-            r"^\(after (\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+            r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
             "",
             buffer,
         ).strip()

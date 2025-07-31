@@ -66,7 +66,7 @@ class MemoryStorage:
                 logger.debug("[MemoryStorage] Skipping None value for key: %s", key)
 
         logger.info(
-            "[MemoryStorage] Metadata prepared: %d fields after cleanup",
+            "[MemoryStorage] Metadata prepared: %d fields 距离上一条消息过去了：cleanup",
             len(cleaned_metadata),
         )
         return cleaned_metadata

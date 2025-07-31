@@ -370,7 +370,7 @@ def _finalize_person_messages(
             block_time_diff = block["first_timestamp"] - prev_block_timestamp
 
         time_diff_str = _format_time_diff(block_time_diff)
-        time_prefix = f"(after {time_diff_str}) [{block['formatted_time']}] {speaker}:"
+        time_prefix = f"(距离上一条消息过去了：{time_diff_str}) [{block['formatted_time']}] {speaker}:"
 
         # 合并时间块内的消息
         block_content = "\n".join(block["contents"])
@@ -680,6 +680,19 @@ async def merge_context(
             system_parts.append(f"- {prefix}{memory_content}")
 
     system_prompt = "\n\n".join(system_parts)
+    notice_text = (
+        "[系统提示]\n\n在回复时，请直接生成消息内容，不需要包含时间差“(距离上一条消息过去了：时间差)”、时间戳“[HH:MM:SS]”或发言人标识“德克萨斯”，"
+        "系统会自动添加这些信息，你只需要输出需要发送的消息即可。\n\n"
+        "你现在正在一个DM对话中，和对方要像正常的私信交流一样。\n"
+        "注意每段聊天的时间差“(距离上一条消息过去了：时间差)”，这表示这条消息距离上一条消息过去了多久，"
+        "这能帮助你了解从上次交流到现在的时间跨度是长是短，请你务必认真考虑这个信息，在必要时计算经历的时间。这对于你应该如何回复有重大参考意义，能提高你对时间的感知力。\n"
+        "例如对方正在做某件事情。如果你通过计算after时间差，发现已经过去很久，那可以询问是否已经完成。"
+        "如果并没有过去太久，可以询问现在的状态如何，是否开始，进行到哪一步了，或者不询问，"
+        "等到之后的对话里，时间足够长以后再询问是否完成。\n\n"
+        "除非你们在讨论某一个话题，否则请避免发送重复的消息或者相似的消息，你要做的是主动思考并回复，而不是模仿之前的内容回复。"
+        "切记要主动思考，你就是德克萨斯。\n\n"
+    )
+    system_prompt += "\n\n" + notice_text
 
     # 6. 构建messages列表
     messages = processed_messages.copy()
@@ -701,7 +714,7 @@ async def merge_context(
         # 主动模式：AI想要分享内容
         user_query_content = (
             f"{condemn_prefix}"  # 添加谴责消息
-            f"(after {time_diff_str}) [{current_time_str}] 德克萨斯内心:\n"
+            f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] 德克萨斯内心:\n"
             f"根据【你现在正在做的事情】，我的想法是：{latest_query}。我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：\n"
         )
     else:
@@ -709,7 +722,7 @@ async def merge_context(
         messages.pop()
         user_query_content = (
             f"{condemn_prefix}"  # 添加谴责消息
-            f"(after {time_diff_str}) [{current_time_str}] Kawaro:\n{latest_query}"
+            f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] Kawaro:\n{latest_query}"
         )
 
     messages.append({"role": "user", "content": user_query_content})
@@ -722,17 +735,7 @@ async def merge_context(
 
     # 构建德克萨斯的回复模板
     texas_reply_template = (
-        "[系统提示]\n在回复时，请直接生成消息内容，不需要包含时间差“(after 时间差)”、时间戳“[HH:MM:SS]”或发言人标识“德克萨斯”，"
-        "系统会自动添加这些信息，你只需要输出需要发送的消息即可。\n\n"
-        "你现在正在一个DM对话中，和对方要像正常的私信交流一样。\n"
-        "注意每段聊天的时间差，这对于你应该如何回复有重大参考意义，要有对时间的感知力。\n"
-        "考虑上下文正在交流的话题过去了多长时间，这个时间是否长或者短？例如对方正在做某件事情。"
-        "如果话题已经过去很久，那可以询问是否已经完成。"
-        "如果并没有过去太久，可以询问现在的状态如何，是否开始，进行到哪一步了，或者不询问，"
-        "等到之后的对话里，时间足够长以后再询问是否完成。\n\n"
-        "除非你们在讨论某一个话题，否则请避免发送重复的消息或者相似的消息，你要做的是主动思考并回复，而不是模仿之前的内容回复。"
-        "切记要主动思考，你就是德克萨斯。\n\n"
-        f"(after {texas_time_diff_str}) [{texas_time_str}] 德克萨斯:"
+        f"(距离上一条消息过去了：{texas_time_diff_str}) [{texas_time_str}] 德克萨斯:"
     )
 
     messages.append({"role": "assistant", "content": texas_reply_template})
