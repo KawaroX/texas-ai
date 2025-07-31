@@ -10,9 +10,15 @@ from app.config import Settings
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY2 = os.getenv("GEMINI_API_KEY2", "")
+GEMINI_API_URL = os.getenv(
+    "GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta/models"
+)
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
-OPENAI_API_MODEL = "gemini-2.5-pro"
+OPENAI_API_MODEL = "gemini-2.5-flash"  # 默认模型改为 gemini-2.5-flash
 
 logger = logging.getLogger(__name__)
 
@@ -132,13 +138,13 @@ async def stream_openrouter(
                 try:
                     error_content = await http_err.response.aread()
                     error_text = (
-                        error_content.decode("utf-8") if error_content else "未知错误"
+                        error_content.decode("utf-8") if error_content else "无响应内容"
                     )
-                except Exception:
-                    error_text = "无法读取错误详情"
+                except Exception as read_err:
+                    error_text = f"无法读取错误详情: {read_err}"
 
                 logger.error(
-                    f"❌ OpenRouter流式调用失败: HTTP错误: {status_code} - {error_text}"
+                    f"❌ OpenRouter流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
                 )
                 yield f"❌ API调用失败 (错误代码: {status_code})"
                 return
@@ -264,13 +270,13 @@ async def stream_reply_ai(
                 try:
                     error_content = await http_err.response.aread()
                     error_text = (
-                        error_content.decode("utf-8") if error_content else "未知错误"
+                        error_content.decode("utf-8") if error_content else "无响应内容"
                     )
-                except Exception:
-                    error_text = "无法读取错误详情"
+                except Exception as read_err:
+                    error_text = f"无法读取错误详情: {read_err}"
 
                 logger.error(
-                    f"❌ Reply AI流式调用失败: HTTP错误: {status_code} - {error_text}"
+                    f"❌ Reply AI流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
                 )
                 yield f"❌ API调用失败 (错误代码: {status_code})"
                 return
@@ -299,6 +305,12 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
         )
         stream_func = stream_reply_ai
         actual_model = OPENAI_API_MODEL
+    elif model == "gemini-api":
+        logger.info(f"🔄 正在使用 Gemini API 渠道进行 stream_ai_chat(): {model}")
+        stream_func = stream_reply_ai_by_gemini
+        actual_model = (
+            "gemini-2.5-pro"  # 当使用 gemini-api 时，使用 gemini-2.5-pro 模型
+        )
     else:
         # 否则，使用 OpenRouter 渠道
         logger.info(f"🔄 正在使用 OpenRouter 渠道进行 stream_ai_chat(): {model}")
@@ -391,32 +403,206 @@ async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") 
         return ""
 
 
-async def call_gemini(messages, model="gemini-2.5-flash") -> str:
+async def stream_reply_ai_by_gemini(
+    messages, model=OPENAI_API_MODEL
+) -> AsyncGenerator[str, None]:
     """
-    非流式调用（用于摘要等场景）
+    流式调用 Gemini API (支持 OpenAI 协议)，返回异步生成器。
     """
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    logger.info(f"🔄 正在使用模型进行 stream_reply_ai_by_gemini(): {model}")
+
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {GEMINI_API_KEY}",
     }
+    if GEMINI_API_KEY2:
+        logger.info("使用 GEMINI_API_KEY2")
+        headers["x-goog-api-key"] = f"{GEMINI_API_KEY},{GEMINI_API_KEY2}"
+    else:
+        headers["x-goog-api-key"] = GEMINI_API_KEY
+
+    # 将 OpenAI 协议的 messages 转换为 Gemini 协议的 contents
+    gemini_contents = []
+    for msg in messages:
+        if msg["role"] == "user":
+            gemini_contents.append(
+                {"role": "user", "parts": [{"text": msg["content"]}]}
+            )
+        elif msg["role"] == "assistant":
+            gemini_contents.append(
+                {"role": "model", "parts": [{"text": msg["content"]}]}
+            )
+        # 其他角色（如 system）在 Gemini API 中可能需要特殊处理或忽略
+    logger.debug(f"转换后的 Gemini contents: {gemini_contents}")
+
     payload = {
-        "model": model,
-        "messages": messages,
+        "contents": gemini_contents,
+        "generationConfig": {
+            "temperature": 0.75,
+            "topP": 0.95,
+            "maxOutputTokens": 1536,
+            "responseMimeType": "text/plain",
+            "thinkingConfig": {
+                "thinkingBudget": 8192,
+                "includeThoughts": False,
+            },
+        },
+    }
+    logger.debug(f"发送给 Gemini API 的 payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+
+    async def _stream_request():
+        full_url = f"{GEMINI_API_URL}/{model}:generateContent?alt=sse"
+        logger.info(f"🚀 开始向 Gemini API 发送请求: {full_url}")
+        async with httpx.AsyncClient(timeout=60) as client:
+            # Gemini API 的模型名称在 URL 中
+            async with client.stream(
+                "POST", full_url, headers=headers, json=payload
+            ) as response:
+                logger.info(f"🌐 Gemini API 响应状态码: {response.status_code}")
+                response.raise_for_status() # 检查HTTP状态码，非2xx会抛出异常
+                async for chunk in response.aiter_lines():
+                    logger.debug(f"接收到原始 chunk: '{chunk}'")
+                    chunk = chunk.strip()
+                    if chunk == "":
+                        continue  # 跳过空行
+                    if chunk.startswith("data:"):
+                        data_part = chunk[5:].strip()
+                        if data_part == "[DONE]":
+                            logger.debug("接收到流结束标记 [DONE]")
+                            continue
+                        try:
+                            data = json.loads(data_part)
+                            logger.debug(f"解析后的数据: {json.dumps(data, ensure_ascii=False)}")
+                            if "candidates" in data and data["candidates"]:
+                                # Gemini API 的响应结构不同
+                                for part in data["candidates"][0]["content"]["parts"]:
+                                    if "text" in part:
+                                        yield part["text"]
+                                        logger.debug(f"生成器 yielding: '{part['text']}'")
+                            else:
+                                logger.warning(f"⚠️ Gemini API 响应中缺少 'candidates' 或为空: {data_part}")
+                        except json.JSONDecodeError as json_err:
+                            logger.error(
+                                f"❌ Gemini流式调用失败: JSON解析错误: {json_err}. 原始数据: '{chunk}'"
+                            )
+                            continue
+                    elif chunk.startswith("event:"):
+                        logger.debug(f"跳过事件行: {chunk}")
+                        continue
+                    else:
+                        # 跳过未知行，不再记录warning
+                        logger.debug(f"跳过未知行: '{chunk}'")
+                        continue
+        logger.info("✅ Gemini API 流式请求完成")
+
+    # 对于流式请求，我们直接处理重试逻辑，不使用 retry_with_backoff
+    max_retries = 3
+    base_delay = 1.0
+
+    for attempt in range(max_retries):
+        logger.info(f"尝试调用 Gemini API (第 {attempt + 1}/{max_retries} 次)")
+        try:
+            async for chunk in _stream_request():
+                yield chunk
+            logger.info("✅ Gemini API 调用成功并完成")
+            return  # 成功完成，退出重试循环
+        except httpx.HTTPStatusError as http_err:
+            status_code = http_err.response.status_code
+            logger.error(f"❌ Gemini流式调用遇到 HTTP 错误: {status_code}")
+            if status_code == 429:
+                logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt)
+                    logger.warning(
+                        f"⚠️ 遇到429错误，等待 {delay} 秒后重试 (第 {attempt + 1}/{max_retries} 次)..."
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    logger.error(
+                        "❌ Gemini流式调用失败: API调用频率限制 (429 Too Many Requests)，达到最大重试次数。"
+                    )
+                    yield "⚠️ API调用频率限制，请稍后再试。"
+                    return
+            else:
+                try:
+                    error_content = await http_err.response.aread()
+                    error_text = (
+                        error_content.decode("utf-8") if error_content else "无响应内容"
+                    )
+                except Exception as read_err:
+                    error_text = f"无法读取错误详情: {read_err}"
+
+                logger.error(
+                    f"❌ Gemini流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
+                )
+                yield f"❌ API调用失败 (错误代码: {status_code})"
+                return
+        except Exception as e:
+            logger.error(f"❌ Gemini流式调用遇到未知错误: {type(e).__name__}: {e}")
+            if attempt < max_retries - 1:
+                delay = base_delay * (2**attempt)
+                logger.warning(
+                    f"⚠️ 遇到未知错误，等待 {delay} 秒后重试 (第 {attempt + 1}/{max_retries} 次): {e}"
+                )
+                await asyncio.sleep(delay)
+                continue
+            else:
+                logger.error(f"❌ Gemini流式调用失败: 未知错误，达到最大重试次数: {e}")
+                yield ""
+                return
+
+
+async def call_gemini(messages, model="gemini-2.5-flash") -> str:
+    """
+    非流式调用 Gemini API（用于摘要等场景）
+    """
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if GEMINI_API_KEY2:
+        headers["x-goog-api-key"] = f"{GEMINI_API_KEY},{GEMINI_API_KEY2}"
+    else:
+        headers["x-goog-api-key"] = GEMINI_API_KEY
+
+    gemini_contents = []
+    for msg in messages:
+        if msg["role"] == "user":
+            gemini_contents.append(
+                {"role": "user", "parts": [{"text": msg["content"]}]}
+            )
+        elif msg["role"] == "assistant":
+            gemini_contents.append(
+                {"role": "model", "parts": [{"text": msg["content"]}]}
+            )
+
+    payload = {
+        "contents": gemini_contents,
+        "generationConfig": {
+            "temperature": 0.75,
+            "topP": 0.95,
+            "maxOutputTokens": 1536,
+            "responseMimeType": "text/plain",
+            "thinkingConfig": {
+                "thinkingBudget": 8192,
+                "includeThoughts": False,
+            },
+        },
     }
 
     async def _call_request():
         logger.info(f"🔄 正在使用模型进行 call_gemini(): {model}")
         async with httpx.AsyncClient(timeout=60) as client:
+            full_url = f"{GEMINI_API_URL}/{model}:generateContent"
             response = await client.post(
-                "https://n8n-xfyamddg.ap-northeast-1.clawcloudrun.com/webhook/gemini",
+                full_url,
                 headers=headers,
                 json=payload,
             )
             logger.info(f"🌐 状态码: {response.status_code}")
             logger.info(f"📥 返回内容: {response.text}")
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+            # Gemini API 的响应结构不同
+            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
 
     try:
         return await retry_with_backoff(_call_request)
@@ -426,8 +612,16 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
             logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
             return "⚠️ API调用频率限制，请稍后再试。"
         else:
+            try:
+                error_content = await http_err.response.aread()
+                error_text = (
+                    error_content.decode("utf-8") if error_content else "无响应内容"
+                )
+            except Exception as read_err:
+                error_text = f"无法读取错误详情: {read_err}"
+
             logger.error(
-                f"❌ Gemini 调用失败: HTTP错误: {status_code} - {http_err.response.text}"
+                f"❌ Gemini 调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
             )
             return f"❌ API调用失败 (错误代码: {status_code})"
     except Exception as e:
@@ -474,8 +668,16 @@ async def call_openai(messages, model="gpt-4o-mini") -> str:
             logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
             return "⚠️ API调用频率限制，请稍后再试。"
         else:
+            try:
+                error_content = await http_err.response.aread()
+                error_text = (
+                    error_content.decode("utf-8") if error_content else "无响应内容"
+                )
+            except Exception as read_err:
+                error_text = f"无法读取错误详情: {read_err}"
+
             logger.error(
-                f"❌ OpenAI 调用失败: HTTP错误: {status_code} - {http_err.response.text}"
+                f"❌ OpenAI 调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
             )
             return f"❌ API调用失败 (错误代码: {status_code})"
     except Exception as e:

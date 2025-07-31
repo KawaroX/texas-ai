@@ -119,7 +119,7 @@ class ChatEngine:
             logger.info(f"Content length: {len(m['content'])} characters\n")
 
         # 4. 流式调用 AI 模型
-        async for segment in stream_ai_chat(prompt_messages):
+        async for segment in stream_ai_chat(prompt_messages, "gemini-api"): # &&&&&&
             yield segment
 
     # 为了向后兼容，保留原有的单消息接口
