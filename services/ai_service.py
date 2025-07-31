@@ -321,36 +321,34 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     async for chunk in stream_func(messages, model=actual_model):
         buffer += chunk
 
-        # 优先按句号切分（包括中文句号）
-        while True:
-            period_index = buffer.find("。")
-            if period_index != -1:
-                segment = buffer[: period_index + 1].strip()
-                # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
-                segment = re.sub(
-                    r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
-                    "",
-                    segment,
-                ).strip()
-                if segment:
-                    yield segment
-                buffer = buffer[period_index + 1 :]
+        # 定义所有分段符
+        # 匹配中文省略号、句号、感叹号、问号，或两个以上连续的英文句点，或换行符
+        segments = re.split(r"(?<=[…。！？])|\.{2,}|…{2,}|\n", buffer)
+
+        new_buffer = ""
+        for i, segment in enumerate(segments):
+            if not segment:
                 continue
-            # 再尝试按换行符切分
-            newline_index = buffer.find("\n")
-            if newline_index != -1:
-                segment = buffer[:newline_index].strip()
-                # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
-                segment = re.sub(
-                    r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
-                    "",
-                    segment,
-                ).strip()
-                if segment:
-                    yield segment
-                buffer = buffer[newline_index + 1 :]
-                continue
-            break
+
+            # 检查是否是最后一个分段，如果是，则可能是不完整的分段，保留在buffer中
+            if (
+                i == len(segments) - 1
+                and not re.search(r"[…。！？]|\.{2,}\s*$", segment)
+                and not segment.endswith("\n")
+            ):
+                new_buffer = segment
+                break
+
+            # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
+            processed_segment = re.sub(
+                r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+                "",
+                segment,
+            ).strip()
+
+            if processed_segment:
+                yield processed_segment
+        buffer = new_buffer
 
     # 最终剩余内容
     if buffer.strip():
@@ -447,7 +445,9 @@ async def stream_reply_ai_by_gemini(
             },
         },
     }
-    logger.debug(f"发送给 Gemini API 的 payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+    logger.debug(
+        f"发送给 Gemini API 的 payload: {json.dumps(payload, indent=2, ensure_ascii=False)}"
+    )
 
     async def _stream_request():
         full_url = f"{GEMINI_API_URL}/{model}:generateContent?alt=sse"
@@ -458,7 +458,7 @@ async def stream_reply_ai_by_gemini(
                 "POST", full_url, headers=headers, json=payload
             ) as response:
                 logger.info(f"🌐 Gemini API 响应状态码: {response.status_code}")
-                response.raise_for_status() # 检查HTTP状态码，非2xx会抛出异常
+                response.raise_for_status()  # 检查HTTP状态码，非2xx会抛出异常
                 async for chunk in response.aiter_lines():
                     logger.debug(f"接收到原始 chunk: '{chunk}'")
                     chunk = chunk.strip()
@@ -471,15 +471,21 @@ async def stream_reply_ai_by_gemini(
                             continue
                         try:
                             data = json.loads(data_part)
-                            logger.debug(f"解析后的数据: {json.dumps(data, ensure_ascii=False)}")
+                            logger.debug(
+                                f"解析后的数据: {json.dumps(data, ensure_ascii=False)}"
+                            )
                             if "candidates" in data and data["candidates"]:
                                 # Gemini API 的响应结构不同
                                 for part in data["candidates"][0]["content"]["parts"]:
                                     if "text" in part:
                                         yield part["text"]
-                                        logger.debug(f"生成器 yielding: '{part['text']}'")
+                                        logger.debug(
+                                            f"生成器 yielding: '{part['text']}'"
+                                        )
                             else:
-                                logger.warning(f"⚠️ Gemini API 响应中缺少 'candidates' 或为空: {data_part}")
+                                logger.warning(
+                                    f"⚠️ Gemini API 响应中缺少 'candidates' 或为空: {data_part}"
+                                )
                         except json.JSONDecodeError as json_err:
                             logger.error(
                                 f"❌ Gemini流式调用失败: JSON解析错误: {json_err}. 原始数据: '{chunk}'"

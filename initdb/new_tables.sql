@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS daily_schedules (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     date DATE NOT NULL UNIQUE,
     schedule_data JSONB NOT NULL,
-    weather VARCHAR(50),
+    weather VARCHAR(255),
     is_in_major_event BOOLEAN DEFAULT FALSE,
     major_event_id UUID,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
