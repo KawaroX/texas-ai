@@ -3,7 +3,7 @@ services:
     depends_on:
       - mattermost
     container_name: nginx_mattermost
-    image: nginx:${NGINX_IMAGE_TAG}
+    image: docker.1ms.run/library/nginx
     restart: ${RESTART_POLICY}
     security_opt:
       - no-new-privileges:true
