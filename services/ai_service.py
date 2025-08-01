@@ -327,9 +327,11 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
             period_index = buffer.find("。")
             question_index = buffer.find("？")
             exclamation_index = buffer.find("！")
-            
+
             # 找到最近的标点符号位置
-            indices = [i for i in [period_index, question_index, exclamation_index] if i != -1]
+            indices = [
+                i for i in [period_index, question_index, exclamation_index] if i != -1
+            ]
             if indices:
                 earliest_index = min(indices)
                 segment = buffer[: earliest_index + 1].strip()

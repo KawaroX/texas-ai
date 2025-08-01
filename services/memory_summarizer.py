@@ -1,26 +1,35 @@
 import os
-import requests
+import httpx
 import json
-import time  # 导入time模块用于延迟
+import time
 from datetime import datetime
 import pytz
 from typing import Dict, List
 import logging
-import redis  # 添加Redis支持
+import redis
 
 logger = logging.getLogger(__name__)
 
 
 class MemorySummarizer:
     def __init__(self):
-        self.api_url = "https://openrouter.ai/api/v1/chat/completions"
-        self.api_key = os.getenv("OPENROUTER_API_KEY")
+        self.gemini_api_url = os.getenv(
+            "GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta/models"
+        )
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not self.gemini_api_key:
+            raise RuntimeError("环境变量GEMINI_API_KEY未设置")
+        self.gemini_api_key2 = os.getenv("GEMINI_API_KEY2", "")
+        if not self.gemini_api_key2:
+            raise RuntimeError("环境变量GEMINI_API_KEY2未设置")
+        self.model_id = "gemini-2.5-pro"
+        self.api_url = f"{self.gemini_api_url}/{self.model_id}:generateContent"
         self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
+            "x-goog-api-key": f"{self.gemini_api_key},{self.gemini_api_key2}",
         }
-        self.max_retries = 3  # 最大重试次数
-        self.initial_delay = 5  # 初始延迟秒数
+        self.max_retries = 3
+        self.initial_delay = 5
 
         # 初始化Redis客户端
         self.redis_url = os.getenv("REDIS_URL")
@@ -29,7 +38,8 @@ class MemorySummarizer:
         self.redis_client = redis.Redis.from_url(self.redis_url)
 
         logger.info(
-            "[MemorySummarizer] Initialized with API URL: %s and Redis", self.api_url
+            "[MemorySummarizer] Initialized with Gemini API URL: %s and Redis",
+            self.api_url,
         )
 
     def summarize(self, data_type: str, data: List[Dict]) -> Dict:
@@ -155,7 +165,7 @@ class MemorySummarizer:
             len(prompt),
             source_count,
         )
-        # 定义JSON Schema模板
+        # Define JSON Schema template
         base_schema = {
             "type": "object",
             "properties": {
@@ -165,13 +175,12 @@ class MemorySummarizer:
                 "tags": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["summary", "details", "importance", "tags"],
-            "additionalProperties": False,
         }
 
-        # 根据数据类型调整schema
+        # Adjust schema based on data type
         if is_array:
-            # 聊天记录需要返回数组
-            base_schema = {
+            # Chat history requires an array response
+            schema = {
                 "type": "array",
                 "items": {
                     "type": "object",
@@ -191,64 +200,51 @@ class MemorySummarizer:
                         "tags",
                         "participants",
                     ],
-                    "additionalProperties": False,
                 },
             }
         else:
-            # 其他类型保持对象结构
-            if "chat" in prompt:
-                base_schema["properties"]["participants"] = {
-                    "type": "array",
-                    "items": {"type": "string"},
-                }
-            elif "event" in prompt:
-                base_schema["properties"]["importance"]["const"] = 1.0
+            # Other types maintain the object structure
+            schema = base_schema
+            if "event" in prompt:
+                schema["properties"]["importance"] = {"type": "number", "const": 1.0}
 
-        # 修改为标准的 messages 格式
         payload = {
-            "model": "deepseek/deepseek-r1-0528:free",  # 明确指定支持结构化输出的模型
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.3,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "memory_summary",
-                    "strict": True,
-                    "schema": base_schema,
-                },
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.7,
+                "responseMimeType": "application/json",
+                "responseSchema": schema,
             },
         }
-        time.sleep(60)
 
         for attempt in range(self.max_retries):
             try:
-                response = requests.post(
-                    self.api_url, headers=self.headers, json=payload, timeout=60
-                )
-                response.raise_for_status()  # 检查HTTP错误
+                with httpx.Client(timeout=60.0) as client:
+                    response = client.post(
+                        self.api_url,
+                        headers=self.headers,
+                        json=payload,
+                    )
+                    response.raise_for_status()
 
-                # 第一次解析：获取AI模型的原始响应
                 api_response_data = response.json()
 
-                # 检查并提取实际的总结内容，通常在 'message' -> 'content' 或 'text' 中
                 if (
-                    "choices" in api_response_data
-                    and len(api_response_data["choices"]) > 0
+                    "candidates" in api_response_data
+                    and api_response_data["candidates"]
                 ):
-                    choice = api_response_data["choices"][0]
-                    if "message" in choice and "content" in choice["message"]:
-                        result_str = choice["message"]["content"]
-                    elif "text" in choice:  # 兼容旧版或某些模型直接返回text
-                        result_str = choice["text"]
+                    content_part = api_response_data["candidates"][0]["content"][
+                        "parts"
+                    ][0]
+                    if "text" in content_part:
+                        # Gemini with JSON schema mode returns the JSON as a string in 'text'
+                        result = json.loads(content_part["text"])
                     else:
-                        raise ValueError("AI响应中未找到'message.content'或'text'字段")
+                        raise ValueError("AI响应中未找到'text'字段")
                 else:
                     raise ValueError(
-                        f"AI响应中未找到'choices'字段或其为空:{api_response_data}"
+                        f"AI响应中未找到'candidates'字段或其为空: {api_response_data}"
                     )
-
-                # 第二次解析：将总结内容字符串解析为JSON对象
-                result = json.loads(result_str)
 
                 logger.info(
                     "[MemorySummarizer] API call successful. Parsed content keys: %s",
@@ -275,7 +271,7 @@ class MemorySummarizer:
                 logger.info("[MemorySummarizer] 已缓存结果: %s", cache_key)
                 return memory
 
-            except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
+            except (httpx.RequestError, json.JSONDecodeError, ValueError) as e:
                 logger.warning(
                     "[MemorySummarizer] API call failed (attempt %d/%d): %s",
                     attempt + 1,
