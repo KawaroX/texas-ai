@@ -130,10 +130,6 @@ services:
       MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable&connect_timeout=10
       MM_BLEVESETTINGS_INDEXDIR: /mattermost/bleve-indexes
       MM_SERVICESETTINGS_SITEURL: ${MM_SERVICESETTINGS_SITEURL}
-    ports:
-      - "8065:8065"
-      - "${CALLS_PORT}:${CALLS_PORT}/udp"
-      - "${CALLS_PORT}:${CALLS_PORT}/tcp"
     depends_on:
       - db
     networks:
