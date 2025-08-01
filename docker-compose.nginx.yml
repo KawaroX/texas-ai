@@ -3,6 +3,8 @@ services:
     depends_on:
       - mattermost
     container_name: nginx_mattermost
+    networks:
+      - texas-net
     image: docker.1ms.run/library/nginx
     restart: ${RESTART_POLICY}
     security_opt:
@@ -15,10 +17,10 @@ services:
       - /var/log/nginx
     volumes:
       - ${NGINX_CONFIG_PATH}:/etc/nginx/conf.d:ro
-      - ${NGINX_DHPARAMS_FILE}:/dhparams4096.pem
-      - ${CERT_PATH}:/cert.pem:ro
-      - ${KEY_PATH}:/key.pem:ro
-      - shared-webroot:/usr/share/nginx/html
+      - ${NGINX_DHPARAMS_FILE}:/etc/nginx/dhparams4096.pem:ro
+      - ${CERT_PATH}:/etc/nginx/certs/cert.pem:ro
+      - ${KEY_PATH}:/etc/nginx/certs/key.pem:ro
+      - shared-webroot:/usr/share/nginx/html:ro
     environment:
       # timezone inside container
       - TZ
@@ -37,5 +39,5 @@ volumes:
 
 # This network name is being used for Let's Encrypt certificate renewal
 networks:
-  default:
-    name: texas-net
+  texas-net:
+    external: true
