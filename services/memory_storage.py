@@ -98,7 +98,7 @@ class MemoryStorage:
     def _create_conversation_messages(self, content: str) -> list:
         """将单个内容转换为符合规范的对话格式"""
         messages = [
-            {"role": "system", "content": f"{content}"},
+            {"role": "user", "content": f"{content}"},
         ]
         logger.debug(
             "[MemoryStorage] Created conversation messages with content length: %d",
@@ -236,11 +236,17 @@ class MemoryStorage:
                             # 确保content是字符串
                             content_str = self._ensure_string(item_content)
 
-                            # 合并基础元数据和当前总结项的详细元数据
-                            item_metadata = {**base_mem0_metadata}
-                            for k, v in item.items():
-                                if k not in ["summary", "details"]:  # 避免重复
-                                    item_metadata[k] = self._ensure_string(v)
+                        # 合并基础元数据和当前总结项的详细元数据
+                        item_metadata = {**base_mem0_metadata}
+                        for k, v in item.items():
+                            if k not in ["summary", "details"]:  # 避免重复
+                                item_metadata[k] = self._ensure_string(v)
+
+                        # 如果item中有category字段，确保它也被包含在metadata中
+                        if "category" in item:
+                            item_metadata["category"] = self._ensure_string(
+                                item["category"]
+                            )
 
                             logger.debug(
                                 "[MemoryStorage] Item metadata before cleanup: %d fields",
@@ -257,7 +263,18 @@ class MemoryStorage:
                             logger.info(
                                 "[MemoryStorage] Submitting list item %d to Mem0", j + 1
                             )
+                            logger.debug(
+                                "[MemoryStorage] Messages to be sent to Mem0: %s",
+                                messages,
+                            )
+                            logger.debug(
+                                "[MemoryStorage] Metadata to be sent to Mem0: %s",
+                                clean_metadata,
+                            )
                             try:
+                                logger.info(
+                                    f"[MemoryStorage] \n\n\n!!!!!!!!!!!!!!\nMessages: {messages}\nMetadata: {clean_metadata.keys()}\n\n\n"
+                                )
                                 result = mem0.add(
                                     messages=messages,
                                     metadata=clean_metadata,
@@ -270,11 +287,37 @@ class MemoryStorage:
                                     j + 1,
                                     str(result)[:200] if result else "None",
                                 )
+                                logger.debug(
+                                    "[MemoryStorage] Full result from Mem0: %s", result
+                                )
+
+                                # 验证记忆是否真的存储成功
+                                try:
+                                    search_result = mem0.search(
+                                        query=(
+                                            item_content[:50]
+                                            if len(item_content) > 50
+                                            else item_content
+                                        ),
+                                        user_id="kawaro",
+                                    )
+                                    logger.debug(
+                                        "[MemoryStorage] Search result for verification: %s",
+                                        search_result,
+                                    )
+                                except Exception as search_error:
+                                    logger.warning(
+                                        "[MemoryStorage] Failed to search for verification: %s",
+                                        str(search_error),
+                                    )
                             except Exception as mem0_error:
                                 logger.error(
                                     "[MemoryStorage] Failed to add list item %d to Mem0: %s",
                                     j + 1,
                                     str(mem0_error),
+                                )
+                                logger.error(
+                                    "[MemoryStorage] Full traceback: ", exc_info=True
                                 )
                                 raise
                         else:
@@ -310,6 +353,12 @@ class MemoryStorage:
                             if k not in ["summary", "details"]:  # 避免重复
                                 item_metadata[k] = self._ensure_string(v)
 
+                        # 如果ai_summary_content中有category字段，确保它也被包含在metadata中
+                        if "category" in ai_summary_content:
+                            item_metadata["category"] = self._ensure_string(
+                                ai_summary_content["category"]
+                            )
+
                         logger.debug(
                             "[MemoryStorage] Dict metadata before cleanup: %d fields",
                             len(item_metadata),
@@ -323,6 +372,13 @@ class MemoryStorage:
 
                         # 提交到Mem0
                         logger.info("[MemoryStorage] Submitting dict content to Mem0")
+                        logger.debug(
+                            "[MemoryStorage] Messages to be sent to Mem0: %s", messages
+                        )
+                        logger.debug(
+                            "[MemoryStorage] Metadata to be sent to Mem0: %s",
+                            clean_metadata,
+                        )
                         try:
                             result = mem0.add(
                                 messages=messages,
@@ -335,10 +391,36 @@ class MemoryStorage:
                                 "[MemoryStorage] Successfully added dict content to Mem0. Result: %s",
                                 str(result)[:200] if result else "None",
                             )
+                            logger.debug(
+                                "[MemoryStorage] Full result from Mem0: %s", result
+                            )
+
+                            # 验证记忆是否真的存储成功
+                            try:
+                                search_result = mem0.search(
+                                    query=(
+                                        item_content[:50]
+                                        if len(item_content) > 50
+                                        else item_content
+                                    ),
+                                    user_id="kawaro",
+                                )
+                                logger.debug(
+                                    "[MemoryStorage] Search result for verification: %s",
+                                    search_result,
+                                )
+                            except Exception as search_error:
+                                logger.warning(
+                                    "[MemoryStorage] Failed to search for verification: %s",
+                                    str(search_error),
+                                )
                         except Exception as mem0_error:
                             logger.error(
                                 "[MemoryStorage] Failed to add dict content to Mem0: %s",
                                 str(mem0_error),
+                            )
+                            logger.error(
+                                "[MemoryStorage] Full traceback: ", exc_info=True
                             )
                             raise
                     else:
@@ -373,6 +455,13 @@ class MemoryStorage:
 
                         # 提交到Mem0
                         logger.info("[MemoryStorage] Submitting raw content to Mem0")
+                        logger.debug(
+                            "[MemoryStorage] Messages to be sent to Mem0: %s", messages
+                        )
+                        logger.debug(
+                            "[MemoryStorage] Metadata to be sent to Mem0: %s",
+                            clean_metadata,
+                        )
                         try:
                             result = mem0.add(
                                 messages=messages,
@@ -385,10 +474,36 @@ class MemoryStorage:
                                 "[MemoryStorage] Successfully added raw content to Mem0. Result: %s",
                                 str(result)[:200] if result else "None",
                             )
+                            logger.debug(
+                                "[MemoryStorage] Full result from Mem0: %s", result
+                            )
+
+                            # 验证记忆是否真的存储成功
+                            try:
+                                search_result = mem0.search(
+                                    query=(
+                                        content_str[:50]
+                                        if len(content_str) > 50
+                                        else content_str
+                                    ),
+                                    user_id="kawaro",
+                                )
+                                logger.debug(
+                                    "[MemoryStorage] Search result for verification: %s",
+                                    search_result,
+                                )
+                            except Exception as search_error:
+                                logger.warning(
+                                    "[MemoryStorage] Failed to search for verification: %s",
+                                    str(search_error),
+                                )
                         except Exception as mem0_error:
                             logger.error(
                                 "[MemoryStorage] Failed to add raw content to Mem0: %s",
                                 str(mem0_error),
+                            )
+                            logger.error(
+                                "[MemoryStorage] Full traceback: ", exc_info=True
                             )
                             raise
                     else:

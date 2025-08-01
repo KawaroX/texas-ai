@@ -30,6 +30,10 @@ celery_app.conf.update(
             "task": "tasks.daily_tasks.generate_daily_memories",
             "schedule": crontab(hour=4, minute=0),  # 每天4点触发
         },
+        "generate-chat-memories": {
+            "task": "tasks.daily_tasks.generate_chat_memories",
+            "schedule": timedelta(hours=3),  # 每3小时执行一次
+        },
         "process-scheduled-interactions": {
             "task": "tasks.interaction_tasks.process_scheduled_interactions",
             "schedule": 300,  # 每5分钟执行一次

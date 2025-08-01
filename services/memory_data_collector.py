@@ -9,24 +9,39 @@ class MemoryDataCollector:
         # 不再需要实例化PostgresService，直接调用pg_service中的函数
         pass
 
-    def get_unembedded_chats(self) -> List[Dict]:
+    def get_unembedded_chats(self, start_time: datetime = None, end_time: datetime = None) -> List[Dict]:
         """获取未嵌入的聊天记录"""
         conn = pg_service.get_db_connection()
         try:
             with conn.cursor() as cur:
+                # 构建基础查询
                 query = """
-                    SELECT id, channel_id, content, created_at 
+                    SELECT id, channel_id, content, created_at, role
                     FROM messages 
                     WHERE is_embedded = FALSE
-                    ORDER BY created_at
                 """
-                cur.execute(query)
+                
+                # 如果提供了时间范围，添加时间条件
+                params = []
+                if start_time:
+                    query += " AND created_at >= %s"
+                    params.append(start_time)
+                if end_time:
+                    query += " AND created_at < %s"
+                    params.append(end_time)
+                
+                query += " ORDER BY created_at"
+                
+                cur.execute(query, params)
                 columns = [desc[0] for desc in cur.description]
                 results = []
                 for row in cur.fetchall():
                     item = dict(zip(columns, row))
                     if 'created_at' in item and isinstance(item['created_at'], datetime):
                         item['created_at'] = item['created_at'].isoformat()
+                    # 如果没有role字段，设置默认值为user
+                    if 'role' not in item or item['role'] is None:
+                        item['role'] = 'user'
                     results.append(item)
                 return results
         finally:

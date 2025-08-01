@@ -1,35 +1,28 @@
 import os
-import httpx
+import requests
 import json
-import time
+import time  # 导入time模块用于延迟
 from datetime import datetime
 import pytz
 from typing import Dict, List
 import logging
-import redis
+import redis  # 添加Redis支持
 
 logger = logging.getLogger(__name__)
 
 
 class MemorySummarizer:
     def __init__(self):
-        self.gemini_api_url = os.getenv(
-            "GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta/models"
+        self.api_url = os.getenv(
+            "STRUCTURED_API_URL", "https://yunwu.ai/v1/chat/completions"
         )
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        if not self.gemini_api_key:
-            raise RuntimeError("环境变量GEMINI_API_KEY未设置")
-        self.gemini_api_key2 = os.getenv("GEMINI_API_KEY2", "")
-        if not self.gemini_api_key2:
-            raise RuntimeError("环境变量GEMINI_API_KEY2未设置")
-        self.model_id = "gemini-2.5-pro"
-        self.api_url = f"{self.gemini_api_url}/{self.model_id}:generateContent"
+        self.api_key = os.getenv("OPENAI_API_KEY")
         self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "x-goog-api-key": f"{self.gemini_api_key},{self.gemini_api_key2}",
         }
-        self.max_retries = 3
-        self.initial_delay = 5
+        self.max_retries = 3  # 最大重试次数
+        self.initial_delay = 5  # 初始延迟秒数
 
         # 初始化Redis客户端
         self.redis_url = os.getenv("REDIS_URL")
@@ -38,8 +31,7 @@ class MemorySummarizer:
         self.redis_client = redis.Redis.from_url(self.redis_url)
 
         logger.info(
-            "[MemorySummarizer] Initialized with Gemini API URL: %s and Redis",
-            self.api_url,
+            "[MemorySummarizer] Initialized with API URL: %s and Redis", self.api_url
         )
 
     def summarize(self, data_type: str, data: List[Dict]) -> Dict:
@@ -56,6 +48,23 @@ class MemorySummarizer:
 
     def summarize_chat(self, chats: List[Dict]) -> List[Dict]:
         """总结聊天记录（按话题分割为多个记忆项）"""
+        # 转换聊天记录格式为 role: content
+        formatted_chats = []
+        for chat in chats:
+            # 根据角色替换名称
+            role = "德克萨斯" if chat.get("role") == "assistant" else "Kawaro"
+            formatted_chats.append(f"{role}: {chat.get('content', '')}")
+
+        # 获取最后一条聊天记录的时间戳
+        last_chat_timestamp = None
+        if chats:
+            last_chat = chats[-1]
+            if "created_at" in last_chat:
+                last_chat_timestamp = last_chat["created_at"]
+                # 如果是datetime对象，转换为字符串
+                if isinstance(last_chat_timestamp, datetime):
+                    last_chat_timestamp = last_chat_timestamp.isoformat()
+
         prompt = f"""
 请分析以下聊天记录，识别其中的关键话题（至少一个，没有上限，根据情况而定）。
 为每个独立话题生成一个JSON对象，包含：
@@ -65,15 +74,22 @@ class MemorySummarizer:
 - importance: 重要度评分 (0.1-0.9)
 - tags: 相关标签（数组）
 - participants: 参与者列表（数组）
+- category: 分类（例如：chat, movie_recommendations, daily_life等）
 
 对话是德克萨斯与另一个人之间的聊天记录，小德是德克萨斯的昵称。另一个人是Kawaro。如果无法知道另一个人是谁，那么就认为他叫Kawaro。
 
 将多个话题组织在JSON数组中返回。
 
 聊天记录：
-{json.dumps(chats, ensure_ascii=False)}
+{chr(10).join(formatted_chats)}
 """
-        return self._call_api("daily_conversation", prompt, len(chats), is_array=True)
+        return self._call_api(
+            "chat",
+            prompt,
+            len(chats),
+            is_array=True,
+            chat_timestamp=last_chat_timestamp,
+        )
 
     def summarize_schedule(self, schedules: List[Dict]) -> Dict:
         """总结日程和经历，如果关联大事件则包含大事件信息"""
@@ -111,6 +127,7 @@ class MemorySummarizer:
 - 详细内容 (500-3000字)（详细介绍发生了什么）
 - 重要度评分 (0.1-0.9)
 - 相关标签
+- category: 分类（例如：schedule, work, personal等）
 
 日程数据：
 {json.dumps(schedule_details, ensure_ascii=False)}
@@ -137,6 +154,7 @@ class MemorySummarizer:
 - 详细内容 (200-500字)
 - 重要度评分 (固定1.0)
 - 相关标签
+- category: 分类（例如：event, work, personal等）
 
 事件数据：
 {json.dumps(events, ensure_ascii=False)}
@@ -150,11 +168,18 @@ class MemorySummarizer:
         source_count: int,
         importance: float = None,
         is_array: bool = False,
+        chat_timestamp: str = None,  # 新增参数，用于聊天记录的时间戳
     ) -> Dict:
         """调用AI总结API"""
         # 检查Redis缓存
-        memory_date = datetime.utcnow().strftime("%Y-%m-%d")
-        cache_key = f"mem0:{data_type}_{memory_date}"
+        if data_type == "chat" and chat_timestamp:
+            # 对于聊天记录，使用最后一条记录的时间戳作为缓存键
+            cache_key = f"mem0:{data_type}_{chat_timestamp}"
+        else:
+            # 对于其他类型，使用日期作为缓存键
+            memory_date = datetime.utcnow().strftime("%Y-%m-%d")
+            cache_key = f"mem0:{data_type}_{memory_date}"
+
         cached_data = self.redis_client.get(cache_key)
         if cached_data:
             logger.info("[MemorySummarizer] 命中缓存: %s", cache_key)
@@ -165,7 +190,7 @@ class MemorySummarizer:
             len(prompt),
             source_count,
         )
-        # Define JSON Schema template
+        # 定义JSON Schema模板
         base_schema = {
             "type": "object",
             "properties": {
@@ -173,14 +198,16 @@ class MemorySummarizer:
                 "details": {"type": "string", "description": "详细内容描述"},
                 "importance": {"type": "number", "minimum": 0.1, "maximum": 1.0},
                 "tags": {"type": "array", "items": {"type": "string"}},
+                "category": {"type": "string", "description": "分类"},
             },
-            "required": ["summary", "details", "importance", "tags"],
+            "required": ["summary", "details", "importance", "tags", "category"],
+            "additionalProperties": False,
         }
 
-        # Adjust schema based on data type
+        # 根据数据类型调整schema
         if is_array:
-            # Chat history requires an array response
-            schema = {
+            # 聊天记录需要返回数组
+            base_schema = {
                 "type": "array",
                 "items": {
                     "type": "object",
@@ -191,6 +218,7 @@ class MemorySummarizer:
                         "importance": {"type": "number", "minimum": 0.1, "maximum": 1},
                         "tags": {"type": "array", "items": {"type": "string"}},
                         "participants": {"type": "array", "items": {"type": "string"}},
+                        "category": {"type": "string", "description": "分类"},
                     },
                     "required": [
                         "topic",
@@ -199,79 +227,189 @@ class MemorySummarizer:
                         "importance",
                         "tags",
                         "participants",
+                        "category",
                     ],
+                    "additionalProperties": False,
                 },
             }
         else:
-            # Other types maintain the object structure
-            schema = base_schema
-            if "event" in prompt:
-                schema["properties"]["importance"] = {"type": "number", "const": 1.0}
+            # 其他类型保持对象结构
+            if "chat" in prompt:
+                base_schema["properties"]["participants"] = {
+                    "type": "array",
+                    "items": {"type": "string"},
+                }
+            elif "event" in prompt:
+                base_schema["properties"]["importance"]["const"] = 1.0
 
+        # 修改为标准的 messages 格式
         payload = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": 0.7,
-                "responseMimeType": "application/json",
-                "responseSchema": schema,
+            "model": "gemini-2.5-flash",  # 明确指定支持结构化输出的模型
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.3,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "memory_summary",
+                    "strict": True,
+                    "schema": base_schema,
+                },
             },
         }
+        time.sleep(60)
 
         for attempt in range(self.max_retries):
             try:
-                with httpx.Client(timeout=60.0) as client:
-                    response = client.post(
-                        self.api_url,
-                        headers=self.headers,
-                        json=payload,
-                    )
-                    response.raise_for_status()
+                response = requests.post(
+                    self.api_url, headers=self.headers, json=payload, timeout=60
+                )
+                response.raise_for_status()  # 检查HTTP错误
 
+                # 第一次解析：获取AI模型的原始响应
                 api_response_data = response.json()
 
+                # 检查并提取实际的总结内容，通常在 'message' -> 'content' 或 'text' 中
                 if (
-                    "candidates" in api_response_data
-                    and api_response_data["candidates"]
+                    "choices" in api_response_data
+                    and len(api_response_data["choices"]) > 0
                 ):
-                    content_part = api_response_data["candidates"][0]["content"][
-                        "parts"
-                    ][0]
-                    if "text" in content_part:
-                        # Gemini with JSON schema mode returns the JSON as a string in 'text'
-                        result = json.loads(content_part["text"])
+                    choice = api_response_data["choices"][0]
+                    if "message" in choice and "content" in choice["message"]:
+                        result_str = choice["message"]["content"]
+                    elif "text" in choice:  # 兼容旧版或某些模型直接返回text
+                        result_str = choice["text"]
                     else:
-                        raise ValueError("AI响应中未找到'text'字段")
+                        raise ValueError("AI响应中未找到'message.content'或'text'字段")
                 else:
                     raise ValueError(
-                        f"AI响应中未找到'candidates'字段或其为空: {api_response_data}"
+                        f"AI响应中未找到'choices'字段或其为空:{api_response_data}"
                     )
 
-                logger.info(
-                    "[MemorySummarizer] API call successful. Parsed content keys: %s",
-                    list(result.keys()) if isinstance(result, dict) else "N/A",
-                )
+                # 验证返回的JSON格式是否正确
+                max_validation_attempts = 3
+                for validation_attempt in range(max_validation_attempts):
+                    try:
+                        # 第二次解析：将总结内容字符串解析为JSON对象
+                        result = json.loads(result_str)
 
-                # 构建标准记忆格式，只包含核心总结内容
-                utc_now = datetime.now(pytz.utc)
-                memory = {
-                    "id": f"memory_{utc_now.strftime('%Y_%m_%d_%H%M%S')}",
-                    "date": utc_now.date().isoformat(),
-                    "type": data_type,
-                    "source_count": source_count,
-                    "content": result,  # 直接存储解析后的JSON对象
-                }
+                        # 验证JSON结构是否符合预期
+                        if is_array:
+                            # 对于聊天记录，应该返回数组
+                            if not isinstance(result, list):
+                                raise ValueError("期望返回数组格式")
+                            # 验证数组中的每个对象
+                            for item in result:
+                                if not isinstance(item, dict):
+                                    raise ValueError("数组中的项目应为对象")
+                                required_keys = [
+                                    "topic",
+                                    "summary",
+                                    "details",
+                                    "importance",
+                                    "tags",
+                                    "participants",
+                                ]
+                                for key in required_keys:
+                                    if key not in item:
+                                        raise ValueError(f"缺少必需的键: {key}")
+                        else:
+                            # 对于其他类型，应该返回对象
+                            if not isinstance(result, dict):
+                                raise ValueError("期望返回对象格式")
+                            # 验证必需的键
+                            required_keys = ["summary", "details", "importance", "tags"]
+                            if "chat" in prompt:
+                                required_keys.append("participants")
+                            elif "event" in prompt:
+                                if result.get("importance") != 1.0:
+                                    raise ValueError("事件重要度应为1.0")
 
-                if importance is not None:
-                    memory["importance"] = importance
+                            for key in required_keys:
+                                if key not in result:
+                                    raise ValueError(f"缺少必需的键: {key}")
 
-                # 缓存API结果（24小时有效期）
-                self.redis_client.setex(
-                    cache_key, 86400, json.dumps(memory, ensure_ascii=False)
-                )
-                logger.info("[MemorySummarizer] 已缓存结果: %s", cache_key)
-                return memory
+                        logger.info(
+                            "[MemorySummarizer] API call successful. Parsed content keys: %s",
+                            list(result.keys()) if isinstance(result, dict) else "N/A",
+                        )
 
-            except (httpx.RequestError, json.JSONDecodeError, ValueError) as e:
+                        # 构建标准记忆格式，只包含核心总结内容
+                        utc_now = datetime.now(pytz.utc)
+                        memory = {
+                            "id": f"memory_{utc_now.strftime('%Y_%m_%d_%H%M%S')}",
+                            "date": utc_now.date().isoformat(),
+                            "type": data_type,
+                            "source_count": source_count,
+                            "content": result,  # 直接存储解析后的JSON对象
+                        }
+
+                        if importance is not None:
+                            memory["importance"] = importance
+
+                        # 缓存API结果
+                        if data_type == "chat":
+                            # 聊天记录缓存3小时
+                            cache_expiry = 10800
+                        else:
+                            # 其他类型缓存24小时
+                            cache_expiry = 86400
+
+                        self.redis_client.setex(
+                            cache_key,
+                            cache_expiry,
+                            json.dumps(memory, ensure_ascii=False),
+                        )
+                        logger.info(
+                            "[MemorySummarizer] 已缓存结果: %s (过期时间: %d秒)",
+                            cache_key,
+                            cache_expiry,
+                        )
+                        return memory
+
+                    except (json.JSONDecodeError, ValueError) as validation_error:
+                        logger.warning(
+                            "[MemorySummarizer] JSON验证失败 (attempt %d/%d): %s",
+                            validation_attempt + 1,
+                            max_validation_attempts,
+                            str(validation_error),
+                        )
+                        if validation_attempt < max_validation_attempts - 1:
+                            # 重新生成结果
+                            logger.info("[MemorySummarizer] 重新生成结果...")
+                            response = requests.post(
+                                self.api_url,
+                                headers=self.headers,
+                                json=payload,
+                                timeout=60,
+                            )
+                            response.raise_for_status()
+                            api_response_data = response.json()
+
+                            if (
+                                "choices" in api_response_data
+                                and len(api_response_data["choices"]) > 0
+                            ):
+                                choice = api_response_data["choices"][0]
+                                if (
+                                    "message" in choice
+                                    and "content" in choice["message"]
+                                ):
+                                    result_str = choice["message"]["content"]
+                                elif "text" in choice:
+                                    result_str = choice["text"]
+                                else:
+                                    raise ValueError(
+                                        "AI响应中未找到'message.content'或'text'字段"
+                                    )
+                            else:
+                                raise ValueError(
+                                    f"AI响应中未找到'choices'字段或其为空:{api_response_data}"
+                                )
+                        else:
+                            # 所有验证尝试都失败了
+                            raise RuntimeError(f"JSON验证失败: {str(validation_error)}")
+
+            except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
                 logger.warning(
                     "[MemorySummarizer] API call failed (attempt %d/%d): %s",
                     attempt + 1,

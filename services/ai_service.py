@@ -446,14 +446,14 @@ async def stream_reply_ai_by_gemini(
     payload = {
         "contents": gemini_contents,
         "generationConfig": {
-            "temperature": 0.75,
-            "topP": 0.95,
+            # "temperature": 0.75,
+            # "topP": 0.95,
             "maxOutputTokens": 1536,
             "responseMimeType": "text/plain",
-            "thinkingConfig": {
-                "thinkingBudget": 8192,
-                "includeThoughts": False,
-            },
+            # "thinkingConfig": {
+            #     "thinkingBudget": 8192,
+            #     "includeThoughts": False,
+            # },
         },
     }
     logger.debug(
