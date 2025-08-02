@@ -146,7 +146,7 @@ async def stream_openrouter(
                 logger.error(
                     f"❌ OpenRouter流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
                 )
-                yield f"❌ API调用失败 (错误代码: {status_code})"
+                yield f"[自动回复] 在忙，有事请留言 ({status_code})"
                 return
         except Exception as e:
             if attempt < max_retries - 1:
@@ -278,7 +278,7 @@ async def stream_reply_ai(
                 logger.error(
                     f"❌ Reply AI流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
                 )
-                yield f"❌ API调用失败 (错误代码: {status_code})"
+                yield f"[自动回复] 在忙，有事请留言 ({status_code})"
                 return
         except Exception as e:
             if attempt < max_retries - 1:
@@ -406,7 +406,7 @@ async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") 
             logger.error(
                 f"❌ OpenRouter调用失败: HTTP错误: {status_code} - {http_err.response.text}"
             )
-            return f"❌ API调用失败 (错误代码: {status_code})"
+            return f"[自动回复] 在忙，有事请留言 ({status_code})"
     except Exception as e:
         logger.error(f"❌ OpenRouter调用失败: 未知错误: {e}")
         return ""
@@ -450,10 +450,10 @@ async def stream_reply_ai_by_gemini(
             # "topP": 0.95,
             "maxOutputTokens": 1536,
             "responseMimeType": "text/plain",
-            # "thinkingConfig": {
-            #     "thinkingBudget": 8192,
-            #     "includeThoughts": False,
-            # },
+            "thinkingConfig": {
+                "thinkingBudget": 32768,
+                "includeThoughts": False,
+            },
         },
     }
     logger.debug(
@@ -552,7 +552,7 @@ async def stream_reply_ai_by_gemini(
                 logger.error(
                     f"❌ Gemini流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
                 )
-                yield f"❌ API调用失败 (错误代码: {status_code})"
+                yield f"[自动回复] 在忙，有事请留言 ({status_code})"
                 return
         except Exception as e:
             logger.error(f"❌ Gemini流式调用遇到未知错误: {type(e).__name__}: {e}")
@@ -640,7 +640,7 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
             logger.error(
                 f"❌ Gemini 调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
             )
-            return f"❌ API调用失败 (错误代码: {status_code})"
+            return f"[自动回复] 在忙，有事请留言 ({status_code})"
     except Exception as e:
         logger.error(f"❌ Gemini 调用失败: 未知错误: {e}")
         return ""
@@ -696,7 +696,7 @@ async def call_openai(messages, model="gpt-4o-mini") -> str:
             logger.error(
                 f"❌ OpenAI 调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
             )
-            return f"❌ API调用失败 (错误代码: {status_code})"
+            return f"[自动回复] 在忙，有事请留言 ({status_code})"
     except Exception as e:
         logger.error(f"❌ OpenAI 调用失败: 未知错误: {e}")
         return ""
@@ -826,7 +826,7 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
                 await asyncio.sleep(2**attempt)  # 指数退避
                 continue
             else:
-                logger.error(f"❌ API调用失败: {error_msg}")
+                logger.error(f"[自动回复] 在忙，有事请留言 ({error_msg})")
                 return {"error": error_msg}
 
         except Exception as e:
