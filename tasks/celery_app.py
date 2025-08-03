@@ -36,7 +36,7 @@ celery_app.conf.update(
         },
         "process-scheduled-interactions": {
             "task": "tasks.interaction_tasks.process_scheduled_interactions",
-            "schedule": 300,  # 每5分钟执行一次
+            "schedule": 180,  # 每3分钟执行一次
         },
         "fetch-and-store-life-data": {
             "task": "tasks.life_data_tasks.fetch_and_store_life_data_task",

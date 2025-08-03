@@ -18,9 +18,21 @@ logging.basicConfig(level=logging.INFO)
 class MattermostWebSocketClient:
     def __init__(self):
         self.http_base_url = settings.MATTERMOST_HOST
-        self.websocket_url = (
-            self.http_base_url.replace("http", "ws") + "/api/v4/websocket"
-        )
+        # 根据是否以 https 开头，确定使用 wss 还是 ws
+
+        if self.http_base_url.startswith("https://"):
+            scheme = "wss"
+            host = self.http_base_url.removeprefix("https://")
+        elif self.http_base_url.startswith("http://"):
+            scheme = "ws"
+            host = self.http_base_url.removeprefix("http://")
+        else:
+            # 默认使用 ws，如果未明确指定协议
+            scheme = "ws"
+            host = self.http_base_url
+
+        self.websocket_url = f"{scheme}://{host}/api/v4/websocket"
+        
         self.token = settings.MATTERMOST_TOKEN
         self.user_id = None
         self.chat_engine = ChatEngine()
@@ -340,6 +352,7 @@ class MattermostWebSocketClient:
         async for message in self.connection:
             data = json.loads(message)
             event = data.get("event")
+            logging.info(f"📡 收到事件类型: {event}，完整内容如下：\n{json.dumps(data, ensure_ascii=False, indent=2)}")
 
             if event == "posted":
                 post_data = json.loads(data["data"]["post"])
@@ -371,13 +384,13 @@ class MattermostWebSocketClient:
                     channel_id, message, channel_info, user_info
                 )
 
-            elif event == "user_typing":
+            elif event == "typing":
                 # 处理用户打字事件
                 typing_data = data["data"]
-                channel_id = typing_data.get("channel_id")
                 user_id = typing_data.get("user_id")
-
-                if channel_id and user_id != self.user_id:
+                broadcast_data = data["broadcast"]
+                channel_id = broadcast_data.get("channel_id")
+                if channel_id and (user_id != self.user_id):
                     # 独立记录输入状态时间
                     self.last_typing_time[channel_id] = time.time()
                     # 保持原活动状态更新
@@ -394,10 +407,6 @@ class MattermostWebSocketClient:
                     json={"channel_id": channel_id},
                     headers=headers,
                 )
-                # if response.status_code == 200:
-                #     logging.info(f"✅ 发送打字指示器成功，频道 {channel_id}")
-                # else:
-                #     logging.warning(f"⚠️ 发送打字指示器失败: {response.status_code} - {response.text}")
             except Exception as e:
                 logging.warning(f"⚠️ 发送打字指示器异常: {e}")
 
@@ -423,10 +432,6 @@ class MattermostWebSocketClient:
             ):
                 if segment.strip():
                     cleaned_segment = segment.strip()
-                    # 移除去除句号的操作，因为用户反馈这可能导致重复发送
-                    # if cleaned_segment.endswith((".", "。")):
-                    #     cleaned_segment = cleaned_segment[:-1]
-                    # 在等待期间持续发送打字指示器
                     await self._send_message_with_typing(channel_id, cleaned_segment)
             return  # 简单消息处理完毕，直接返回
 
@@ -465,7 +470,6 @@ class MattermostWebSocketClient:
         try:
             while True:
                 # 获取最新活动时间
-                time.sleep(4)
                 current_activity_time = self.channel_activity.get(channel_id, {}).get(
                     "last_activity", start_time
                 )
@@ -492,21 +496,19 @@ class MattermostWebSocketClient:
                     or (first_run and typing_elapsed > 2)
                 ):  # 新增输入状态检测
                     trigger_reason = []
-                    if total_elapsed > 30:
-                        trigger_reason.append(f"总时长超时(30s){total_elapsed:.2f}")
-                    if activity_elapsed > 7:
-                        trigger_reason.append(f"活动中断(7s){activity_elapsed:.2f}")
-                    if typing_elapsed > 4:
-                        trigger_reason.append(f"输入停止(4s){typing_elapsed:.2f}")
+                    if total_elapsed > 45:
+                        trigger_reason.append(f"总时长超时(45s){total_elapsed:.2f}")
+                    if activity_elapsed > 15:
+                        trigger_reason.append(f"活动中断(15s){activity_elapsed:.2f}")
+                    if typing_elapsed > 3:
+                        trigger_reason.append(f"输入停止(3s){typing_elapsed:.2f}")
 
                     logging.info(
                         f"⏳ 频道 {channel_id} 触发超时: {', '.join(trigger_reason)}"
-                        f"\n上次收到typing时间{current_typing_time:.2f}"
-                        f"\n上次收到activity时间{current_activity_time:.2f}"
                     )
                     break
                 first_run = False
-                await asyncio.sleep(1)  # 每1秒检查一次
+                await asyncio.sleep(0.5)  # 每0.5秒检查一次
 
             # 从 Redis 获取当前缓冲区中的所有消息
             messages = self.redis_client.lrange(f"channel_buffer:{channel_id}", 0, -1)
@@ -681,7 +683,7 @@ class MattermostWebSocketClient:
             async def continuous_typing():
                 while True:
                     await self.send_typing(channel_id)
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(0.5)
 
             typing_task = asyncio.create_task(continuous_typing())
 

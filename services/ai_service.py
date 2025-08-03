@@ -18,7 +18,7 @@ GEMINI_API_URL = os.getenv(
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
-OPENAI_API_MODEL = "gemini-2.5-flash"  # 默认模型改为 gemini-2.5-flash
+OPENAI_API_MODEL = "claude-3-7-sonnet-20250219"  # 默认模型改为 claude-3-7-sonnet-20250219
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ async def stream_openrouter(
                 logger.error(
                     f"❌ OpenRouter流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
                 )
-                yield f"❌ API调用失败 (错误代码: {status_code})"
+                yield f"[自动回复] 在忙，有事请留言 ({status_code})"
                 return
         except Exception as e:
             if attempt < max_retries - 1:
@@ -182,11 +182,11 @@ async def stream_reply_ai(
             "temperature": 0.75,
             "presence_penalty": 0.3,
             "top_p": 0.95,
-            "max_tokens": 1536,
+            "max_tokens": 512,
             "extra_body": {
                 "google": {
                     "thinking_config": {
-                        "thinking_budget": 4096,
+                        "thinking_budget": 8192,
                         "include_thoughts": False,
                     }
                 }
@@ -201,7 +201,7 @@ async def stream_reply_ai(
             "temperature": 0.75,
             "presence_penalty": 0.3,
             "top_p": 0.95,
-            "max_tokens": 1536,
+            "max_tokens": 512,
         }
 
     async def _stream_request():
@@ -278,7 +278,7 @@ async def stream_reply_ai(
                 logger.error(
                     f"❌ Reply AI流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
                 )
-                yield f"❌ API调用失败 (错误代码: {status_code})"
+                yield f"[自动回复] 在忙，有事请留言 ({status_code})"
                 return
         except Exception as e:
             if attempt < max_retries - 1:
@@ -297,78 +297,73 @@ async def stream_reply_ai(
 async def stream_ai_chat(messages: list, model: Optional[str] = None):
     """
     流式生成AI回复，按分隔符分段输出。
+    修复重复发送问题。
     """
-    # 如果没有指定模型，或者指定的是 DeepSeek V3 模型，则使用 Reply AI 渠道
+    # 模型选择逻辑保持不变...
     if model is None or model == "deepseek-v3-250324":
-        logger.info(
-            f"🔄 正在使用 Reply AI 渠道进行 stream_ai_chat(): {OPENAI_API_MODEL}"
-        )
+        logger.info(f"🔄 正在使用 Reply AI 渠道进行 stream_ai_chat(): {OPENAI_API_MODEL}")
         stream_func = stream_reply_ai
         actual_model = OPENAI_API_MODEL
     elif model == "gemini-api":
         logger.info(f"🔄 正在使用 Gemini API 渠道进行 stream_ai_chat(): {model}")
         stream_func = stream_reply_ai_by_gemini
-        actual_model = (
-            "gemini-2.5-pro"  # 当使用 gemini-api 时，使用 gemini-2.5-pro 模型
-        )
+        actual_model = "gemini-2.5-pro"
     else:
-        # 否则，使用 OpenRouter 渠道
         logger.info(f"🔄 正在使用 OpenRouter 渠道进行 stream_ai_chat(): {model}")
         stream_func = stream_openrouter
         actual_model = model
 
+    def clean_segment(text):
+        """清理文本中的时间戳和发言人标识"""
+        return re.sub(
+            r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+            "",
+            text,
+        ).strip()
+
     buffer = ""
+    total_processed = 0  # 跟踪已处理的字符数
+    
     async for chunk in stream_func(messages, model=actual_model):
         buffer += chunk
 
-        # 优先按句号、问号、感叹号切分（包括中文标点）
         while True:
-            # 查找句号、问号、感叹号的位置
+            original_buffer_len = len(buffer)
+            
+            # 优先按句号、问号、感叹号切分
             period_index = buffer.find("。")
-            question_index = buffer.find("？")
-            exclamation_index = buffer.find("！")
+            question_index = buffer.find("？") 
+            exclamation_index = buffer.find("!")
 
-            # 找到最近的标点符号位置
-            indices = [
-                i for i in [period_index, question_index, exclamation_index] if i != -1
-            ]
+            indices = [i for i in [period_index, question_index, exclamation_index] if i != -1]
+            
             if indices:
                 earliest_index = min(indices)
-                segment = buffer[: earliest_index + 1].strip()
-                # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
-                segment = re.sub(
-                    r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
-                    "",
-                    segment,
-                ).strip()
-                if segment:
-                    yield segment
-                buffer = buffer[earliest_index + 1 :]
+                segment = buffer[:earliest_index + 1].strip()
+                cleaned_segment = clean_segment(segment)
+                if cleaned_segment:
+                    yield cleaned_segment
+                buffer = buffer[earliest_index + 1:]
+                total_processed += earliest_index + 1
                 continue
+                
             # 再尝试按换行符切分
             newline_index = buffer.find("\n")
             if newline_index != -1:
                 segment = buffer[:newline_index].strip()
-                # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
-                segment = re.sub(
-                    r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
-                    "",
-                    segment,
-                ).strip()
-                if segment:
-                    yield segment
-                buffer = buffer[newline_index + 1 :]
+                cleaned_segment = clean_segment(segment)
+                if cleaned_segment:
+                    yield cleaned_segment
+                buffer = buffer[newline_index + 1:]
+                total_processed += newline_index + 1
                 continue
+                
+            # 如果没有找到分割点，跳出循环
             break
 
-    # 最终剩余内容
+    # 处理最终剩余内容 - 只有当buffer中还有未处理的内容时才处理
     if buffer.strip():
-        # 删除时间戳和发言人标识行，支持多种时间差格式，并确保匹配整个行
-        final_segment = re.sub(
-            r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
-            "",
-            buffer,
-        ).strip()
+        final_segment = clean_segment(buffer)
         if final_segment:
             yield final_segment
 
@@ -406,14 +401,14 @@ async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") 
             logger.error(
                 f"❌ OpenRouter调用失败: HTTP错误: {status_code} - {http_err.response.text}"
             )
-            return f"❌ API调用失败 (错误代码: {status_code})"
+            return f"[自动回复] 在忙，有事请留言 ({status_code})"
     except Exception as e:
         logger.error(f"❌ OpenRouter调用失败: 未知错误: {e}")
         return ""
 
 
 async def stream_reply_ai_by_gemini(
-    messages, model=OPENAI_API_MODEL
+    messages, model="gemini-2.5-pro"
 ) -> AsyncGenerator[str, None]:
     """
     流式调用 Gemini API (支持 OpenAI 协议)，返回异步生成器。
@@ -446,12 +441,12 @@ async def stream_reply_ai_by_gemini(
     payload = {
         "contents": gemini_contents,
         "generationConfig": {
-            # "temperature": 0.75,
+            "temperature": 1.2,
             # "topP": 0.95,
             "maxOutputTokens": 1536,
             "responseMimeType": "text/plain",
             # "thinkingConfig": {
-            #     "thinkingBudget": 8192,
+            #     "thinkingBudget": 32768,
             #     "includeThoughts": False,
             # },
         },
@@ -552,7 +547,7 @@ async def stream_reply_ai_by_gemini(
                 logger.error(
                     f"❌ Gemini流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
                 )
-                yield f"❌ API调用失败 (错误代码: {status_code})"
+                yield f"[自动回复] 在忙，有事请留言 ({status_code})"
                 return
         except Exception as e:
             logger.error(f"❌ Gemini流式调用遇到未知错误: {type(e).__name__}: {e}")
@@ -640,7 +635,7 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
             logger.error(
                 f"❌ Gemini 调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
             )
-            return f"❌ API调用失败 (错误代码: {status_code})"
+            return f"[自动回复] 在忙，有事请留言 ({status_code})"
     except Exception as e:
         logger.error(f"❌ Gemini 调用失败: 未知错误: {e}")
         return ""
@@ -696,7 +691,7 @@ async def call_openai(messages, model="gpt-4o-mini") -> str:
             logger.error(
                 f"❌ OpenAI 调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
             )
-            return f"❌ API调用失败 (错误代码: {status_code})"
+            return f"[自动回复] 在忙，有事请留言 ({status_code})"
     except Exception as e:
         logger.error(f"❌ OpenAI 调用失败: 未知错误: {e}")
         return ""
@@ -826,7 +821,7 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
                 await asyncio.sleep(2**attempt)  # 指数退避
                 continue
             else:
-                logger.error(f"❌ API调用失败: {error_msg}")
+                logger.error(f"[自动回复] 在忙，有事请留言 ({error_msg})")
                 return {"error": error_msg}
 
         except Exception as e:
@@ -1192,7 +1187,7 @@ async def generate_micro_experiences(
 如果德克萨斯认为这件事值得分享给用户，则设置为ture，交互内容是德克萨斯对这件事想要和用户分享的经历和感受。
 而不是指对德克萨斯日程中的伙伴，而是和她只能通过网络进行交流，但是是关系最好的朋友的主动交互。即判断此时德克萨斯是否会想要将当前的经历发送给该好友。
 注意，如果是与早上起床相关的日程，则必须在某一个合适的item中设置need_interaction为true，交互内容是德克萨斯对早上起床的感受和道早安。
-主动交互为true大概要占据30%左右，不要过低，至少需要有一个，但不要超过一半。
+主动交互为true大概要占据40%左右，不要过低，至少需要有一个，但不要超过一半。
 
 请严格按照以下JSON格式输出，不要包含任何其他文本：
 {{

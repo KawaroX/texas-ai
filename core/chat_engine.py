@@ -114,12 +114,18 @@ class ChatEngine:
         # 调试输出
         logger.info(f"\n=== 新消息结构 ===")
         for i, m in enumerate(prompt_messages):
-            logger.info(f"Message {i+1} - Role: {m['role']}")
-            logger.info(f"Content: {m['content']}")
-            logger.info(f"Content length: {len(m['content'])} characters\n")
+            l_i = (
+                f"\n\nMessage {i+1} - Role: {m['role']}\n"
+                f"Content: {m['content'][:100]}...\n"
+                f"Content length: {len(m['content'])} characters\n\n"
+            )
+            logger.info(l_i)
+            # logger.info(f"Message {i+1} - Role: {m['role']}")
+            # logger.info(f"Content: {m['content']}")
+            # logger.info(f"Content length: {len(m['content'])} characters\n")
 
         # 4. 流式调用 AI 模型
-        async for segment in stream_ai_chat(prompt_messages, "gemini-api"): # &&&&&&
+        async for segment in stream_ai_chat(prompt_messages): # &&&&&& "gemini-api"
             yield segment
 
     # 为了向后兼容，保留原有的单消息接口

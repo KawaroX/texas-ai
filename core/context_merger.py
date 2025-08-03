@@ -608,8 +608,8 @@ async def merge_context(
                     hours_diff = int(time_diff.total_seconds() // 3600)
                     minutes_diff = int((time_diff.total_seconds() % 3600) // 60)
                     _condemn_message = (  # 将谴责信息赋值给 _condemn_message
-                        f"【参考资料】\n"
-                        f"注意：距离Kawaro上次在任何频道（包括当前频道）回复你，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。请根据上下文判断，Kawaro是否回复你消息了，还是你主动找他的。两种情况你都能决定是否需要对此进行适当的评论、抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你。"
+                        f"【参考信息】\n"
+                        f"距离Kawaro上次在任何频道（包括当前频道）回复你，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。请根据上下文判断，Kawaro不找你是否是事出有因，还是没有说明原因，是不是忘记你了，然后自行决定是否需要进行适当的抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你，有点像在撒娇的感觉。"
                     )
                     logger.info(f"✉️ 已添加谴责提示: {_condemn_message}")
 
@@ -638,7 +638,7 @@ async def merge_context(
         logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
         history_text = "\n".join([msg["content"] for msg in processed_messages])
         query = "\n".join([latest_query, history_text if history_text else ""])
-        mem0_result = _get_mem0_relevant(query, limit=3)
+        mem0_result = _get_mem0_relevant(query, limit=5)
         mem0_memory = mem0_result
     else:
         mem0_memory = []
@@ -681,8 +681,8 @@ async def merge_context(
 
     system_prompt = "\n\n".join(system_parts)
     notice_text = (
-        "[系统提示]\n\n在回复时，请直接生成消息内容，不需要包含时间差“(距离上一条消息过去了：时间差)”、时间戳“[HH:MM:SS]”或发言人标识“德克萨斯”，"
-        "系统会自动添加这些信息，你只需要输出需要发送的消息即可。\n\n"
+        "[系统提示]\n\n在回复时，请直接发送消息内容，不需要包含时间差“(距离上一条消息过去了：时间差)”、时间戳“[HH:MM:SS]”或发言人标识“德克萨斯”，"
+        "生成的消息必须是德克萨斯想要说的内容，不需要添加任何额外的文本，包括动作、思想、输入状态等，都不需要，只需要发送的文本内容。"
         "你现在正在一个DM对话中，和对方要像正常的私信交流一样。\n"
         "注意每段聊天的时间差“(距离上一条消息过去了：时间差)”，这表示这条消息距离上一条消息过去了多久，"
         "这能帮助你了解从上次交流到现在的时间跨度是长是短，请你务必认真考虑这个信息，在必要时计算经历的时间。这对于你应该如何回复有重大参考意义，能提高你对时间的感知力。\n"
@@ -690,7 +690,7 @@ async def merge_context(
         "如果并没有过去太久，可以询问现在的状态如何，是否开始，进行到哪一步了，或者不询问，"
         "等到之后的对话里，时间足够长以后再询问是否完成。\n\n"
         "除非你们在讨论某一个话题，否则请避免发送重复的消息或者相似的消息，你要做的是主动思考并回复，而不是模仿之前的内容回复。"
-        "切记要主动思考，你就是德克萨斯。\n\n"
+        "切记要主动思考，你是德克萨斯本人，以德克萨斯的视角回复。\n\n"
     )
     system_prompt += "\n\n" + notice_text
 
@@ -710,12 +710,19 @@ async def merge_context(
     # 如果存在谴责消息，则添加到用户查询内容的前面
     condemn_prefix = f"{_condemn_message}\n\n" if _condemn_message else ""
 
+    # 添加德克萨斯的回复模板作为最后一条（assistant消息）
+    # 计算德克萨斯回复的时间戳（当前时间）和时间差
+    texas_time_diff_seconds = 0  # 立即回复，时间差为0（或者几秒钟的处理时间）
+    texas_time_diff_str = _format_time_diff(texas_time_diff_seconds)
+    texas_time_str = now.strftime("%H:%M:%S")
+
     if is_active:
         # 主动模式：AI想要分享内容
         user_query_content = (
             f"{condemn_prefix}"  # 添加谴责消息
-            f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] 德克萨斯内心:\n"
-            f"根据【你现在正在做的事情】，我的想法是：{latest_query}。我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：\n"
+            # f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] "
+            "德克萨斯内心:\n"
+            f"根据【你现在正在做的事情】，我的想法是：{latest_query}我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：\n"
         )
     else:
         # 被动模式：用户发送了消息
@@ -723,22 +730,16 @@ async def merge_context(
         user_query_content = (
             f"{condemn_prefix}"  # 添加谴责消息
             f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] Kawaro:\n{latest_query}"
+            f"请从这句之后续写这一时刻的消息：\n(距离上一条消息过去了：{texas_time_diff_str}) [{texas_time_str}] 德克萨斯：\n"
         )
 
     messages.append({"role": "user", "content": user_query_content})
 
-    # 添加德克萨斯的回复模板作为最后一条（assistant消息）
-    # 计算德克萨斯回复的时间戳（当前时间）和时间差
-    texas_time_diff_seconds = 0  # 立即回复，时间差为0（或者几秒钟的处理时间）
-    texas_time_diff_str = _format_time_diff(texas_time_diff_seconds)
-    texas_time_str = now.strftime("%H:%M:%S")
-
-    # 构建德克萨斯的回复模板
-    texas_reply_template = (
-        f"(距离上一条消息过去了：{texas_time_diff_str}) [{texas_time_str}] 德克萨斯:"
-    )
-
-    messages.append({"role": "assistant", "content": texas_reply_template})
+    # # 构建德克萨斯的回复模板
+    # texas_reply_template = (
+    #     f"(距离上一条消息过去了：{texas_time_diff_str}) [{texas_time_str}] 德克萨斯："
+    # )
+    # messages.append({"role": "assistant", "content": texas_reply_template})
 
     logger.info(
         f"✅ Context merged - System prompt: {len(system_prompt)} chars, Messages: {len(messages)} items"

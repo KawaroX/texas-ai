@@ -7,7 +7,7 @@ from app.config import settings
 from utils.postgres_service import insert_messages
 
 # 消息保留时长（秒）
-MEMORY_RETENTION_SECONDS = 6 * 60 * 60  # 6 小时
+MEMORY_RETENTION_SECONDS = 48 * 60 * 60  # 48 小时
 
 # Redis 客户端
 redis_client = redis.StrictRedis.from_url(settings.REDIS_URL, decode_responses=True)

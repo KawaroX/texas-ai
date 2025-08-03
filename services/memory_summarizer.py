@@ -82,6 +82,7 @@ class MemorySummarizer:
 
 聊天记录：
 {chr(10).join(formatted_chats)}
+请用中文完成任务。
 """
         return self._call_api(
             "chat",
@@ -132,7 +133,8 @@ class MemorySummarizer:
 日程数据：
 {json.dumps(schedule_details, ensure_ascii=False)}
 {major_event_context}
-        """
+请用中文完成任务。
+"""
         return self._call_api("daily_schedule", prompt, len(schedules))
 
     def summarize_event(self, events: List[Dict]) -> Dict:
@@ -158,6 +160,7 @@ class MemorySummarizer:
 
 事件数据：
 {json.dumps(events, ensure_ascii=False)}
+请用中文完成任务。
 """
         return self._call_api("major_event", prompt, len(events), importance=1.0)
 
