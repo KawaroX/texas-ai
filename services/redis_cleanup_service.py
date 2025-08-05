@@ -18,8 +18,8 @@ class RedisCleanupService:
             settings.REDIS_URL, decode_responses=True
         )
         self.cleanup_interval = 2 * 60 * 60  # 2小时运行一次清理
-        self.retention_seconds = 8 * 60 * 60  # 8小时保留时间
-        self.min_keep_count = 200  # 无论过期多久都保留的最近记录数量
+        self.retention_seconds = 48 * 60 * 60  # 48小时保留时间
+        self.min_keep_count = 1000  # 无论过期多久都保留的最近记录数量
 
     async def start_cleanup_scheduler(self):
         """启动定期清理任务"""
@@ -72,13 +72,15 @@ class RedisCleanupService:
             retention_cutoff_timestamp = now_timestamp - self.retention_seconds
 
             channel_key = f"channel_memory:{channel_id}"
-            
+
             # 获取当前频道的总消息数量
             total_count = self.redis_client.zcard(channel_key)
-            
+
             if total_count <= self.min_keep_count:
                 # 如果总数不超过最小保留数量，不进行任何清理
-                logging.info(f"📋 频道 {channel_id}: 总消息数 {total_count} <= {self.min_keep_count}，跳过清理")
+                logging.info(
+                    f"📋 频道 {channel_id}: 总消息数 {total_count} <= {self.min_keep_count}，跳过清理"
+                )
                 return 0, 0
 
             # 获取所有消息，按时间戳倒序排列（最新的在前）
@@ -86,17 +88,21 @@ class RedisCleanupService:
             all_messages = self.redis_client.zrevrange(
                 channel_key, 0, -1, withscores=True
             )
-            
+
             if len(all_messages) <= self.min_keep_count:
-                logging.info(f"📋 频道 {channel_id}: 实际消息数 {len(all_messages)} <= {self.min_keep_count}，跳过清理")
+                logging.info(
+                    f"📋 频道 {channel_id}: 实际消息数 {len(all_messages)} <= {self.min_keep_count}，跳过清理"
+                )
                 return 0, 0
 
             # 确定要保留的消息（最新的25条）
-            messages_to_keep = all_messages[:self.min_keep_count]
-            
+            messages_to_keep = all_messages[: self.min_keep_count]
+
             # 找出需要删除的过期消息（超过8小时且不在最新25条中）
             messages_to_delete = []
-            for message_json, timestamp in all_messages[self.min_keep_count:]:  # 从第26条开始检查
+            for message_json, timestamp in all_messages[
+                self.min_keep_count :
+            ]:  # 从第26条开始检查
                 if timestamp < retention_cutoff_timestamp:
                     messages_to_delete.append((message_json, timestamp))
 
@@ -114,8 +120,12 @@ class RedisCleanupService:
                     # 可选：解析消息内容用于日志记录
                     try:
                         msg_data = json.loads(message_json)
-                        msg_time = datetime.datetime.fromtimestamp(timestamp, tz).strftime("%Y-%m-%d %H:%M:%S")
-                        logging.debug(f"删除消息: {msg_time} - {msg_data.get('role', 'unknown')}")
+                        msg_time = datetime.datetime.fromtimestamp(
+                            timestamp, tz
+                        ).strftime("%Y-%m-%d %H:%M:%S")
+                        logging.debug(
+                            f"删除消息: {msg_time} - {msg_data.get('role', 'unknown')}"
+                        )
                     except:
                         pass  # 忽略JSON解析错误
 

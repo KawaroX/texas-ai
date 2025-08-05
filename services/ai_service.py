@@ -18,7 +18,7 @@ GEMINI_API_URL = os.getenv(
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
-OPENAI_API_MODEL = "claude-3-7-sonnet-20250219"  # 默认模型改为 claude-3-7-sonnet-20250219
+OPENAI_API_MODEL = "gemini-2.5-pro"  # 默认模型改为 claude-3-7-sonnet-20250219
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ async def stream_reply_ai(
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
-    if model == "gemini-2.5-flash":
+    if model == "gemini-2.5-pro":
         payload = {
             "model": model,
             "messages": messages,
@@ -182,11 +182,11 @@ async def stream_reply_ai(
             "temperature": 0.75,
             "presence_penalty": 0.3,
             "top_p": 0.95,
-            "max_tokens": 512,
+            # "max_tokens": 512,
             "extra_body": {
                 "google": {
                     "thinking_config": {
-                        "thinking_budget": 8192,
+                        "thinking_budget": 16384,
                         "include_thoughts": False,
                     }
                 }
@@ -301,7 +301,9 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     """
     # 模型选择逻辑保持不变...
     if model is None or model == "deepseek-v3-250324":
-        logger.info(f"🔄 正在使用 Reply AI 渠道进行 stream_ai_chat(): {OPENAI_API_MODEL}")
+        logger.info(
+            f"🔄 正在使用 Reply AI 渠道进行 stream_ai_chat(): {OPENAI_API_MODEL}"
+        )
         stream_func = stream_reply_ai
         actual_model = OPENAI_API_MODEL
     elif model == "gemini-api":
@@ -323,30 +325,32 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
 
     buffer = ""
     total_processed = 0  # 跟踪已处理的字符数
-    
+
     async for chunk in stream_func(messages, model=actual_model):
         buffer += chunk
 
         while True:
             original_buffer_len = len(buffer)
-            
+
             # 优先按句号、问号、感叹号切分
             period_index = buffer.find("。")
-            question_index = buffer.find("？") 
+            question_index = buffer.find("？")
             exclamation_index = buffer.find("!")
 
-            indices = [i for i in [period_index, question_index, exclamation_index] if i != -1]
-            
+            indices = [
+                i for i in [period_index, question_index, exclamation_index] if i != -1
+            ]
+
             if indices:
                 earliest_index = min(indices)
-                segment = buffer[:earliest_index + 1].strip()
+                segment = buffer[: earliest_index + 1].strip()
                 cleaned_segment = clean_segment(segment)
                 if cleaned_segment:
                     yield cleaned_segment
-                buffer = buffer[earliest_index + 1:]
+                buffer = buffer[earliest_index + 1 :]
                 total_processed += earliest_index + 1
                 continue
-                
+
             # 再尝试按换行符切分
             newline_index = buffer.find("\n")
             if newline_index != -1:
@@ -354,10 +358,10 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
                 cleaned_segment = clean_segment(segment)
                 if cleaned_segment:
                     yield cleaned_segment
-                buffer = buffer[newline_index + 1:]
+                buffer = buffer[newline_index + 1 :]
                 total_processed += newline_index + 1
                 continue
-                
+
             # 如果没有找到分割点，跳出循环
             break
 
@@ -441,9 +445,9 @@ async def stream_reply_ai_by_gemini(
     payload = {
         "contents": gemini_contents,
         "generationConfig": {
-            "temperature": 1.2,
+            "temperature": 0.7,
             # "topP": 0.95,
-            "maxOutputTokens": 1536,
+            # "maxOutputTokens": 1536,
             "responseMimeType": "text/plain",
             # "thinkingConfig": {
             #     "thinkingBudget": 32768,
@@ -592,7 +596,7 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
         "generationConfig": {
             "temperature": 0.75,
             "topP": 0.95,
-            "maxOutputTokens": 1536,
+            # "maxOutputTokens": 1536,
             "responseMimeType": "text/plain",
             "thinkingConfig": {
                 "thinkingBudget": 8192,

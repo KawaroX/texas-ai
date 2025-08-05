@@ -45,7 +45,7 @@ class ChannelMemory:
         now_timestamp = datetime.datetime.now(tz).timestamp()
         six_hours_ago_timestamp = now_timestamp - MEMORY_RETENTION_SECONDS
 
-        # 获取最近6小时内的消息
+        # 获取最近48小时内的消息
         raw_messages = redis_client.zrangebyscore(
             f"channel_memory:{self.channel_id}", six_hours_ago_timestamp, now_timestamp
         )
