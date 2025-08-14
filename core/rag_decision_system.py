@@ -272,12 +272,12 @@ class RAGDecisionMaker:
             context_data = self.redis_client.get(self._context_key)
             if context_data:
                 context_dict = json.loads(context_data.decode("utf-8"))
-                logger.info(
-                    f"[RAG DECISION] Successfully loaded context from Redis: {context_dict}"
+                logger.debug(
+                    f"[RAG DECISION] Loaded context from Redis: {context_dict}"
                 )
                 return SimpleContext.from_dict(context_dict)
             else:
-                logger.info("[RAG DECISION] No context found in Redis, using default")
+                logger.debug("[RAG DECISION] No context in Redis, using default")
         except (redis.RedisError, json.JSONDecodeError, TypeError) as e:
             logger.error(f"[RAG DECISION] Failed to load context from Redis: {e}")
 
@@ -330,7 +330,7 @@ class RAGDecisionMaker:
             # 保存统计
             stats_json = json.dumps(stats)
             self.redis_client.setex(self._stats_key, self.cache_ttl, stats_json)
-            logger.info(
+            logger.debug(
                 f"[RAG DECISION] Updated stats: total_queries={stats['total_queries']}, "
                 f"search_count={stats['search_count']}, no_search_count={stats['no_search_count']}, "
                 f"avg_score={stats['avg_score']:.3f}"
@@ -527,7 +527,7 @@ class RAGDecisionMaker:
         logger.debug(f"  - Question score: {question_score:.3f}")
 
         total_score = min(total_score, 1.0)
-        logger.info(f"[RAG DECISION] Base score calculated: {total_score:.3f}")
+        logger.debug(f"[RAG DECISION] Base score calculated: {total_score:.3f}")
         return total_score
 
     def _generate_memory_spark(self, base_score: float) -> float:
@@ -650,7 +650,7 @@ class RAGDecisionMaker:
                 )
 
         self._context.last_update_time = current_time
-        logger.info(
+        logger.debug(
             f"[RAG DECISION] Context updated: accumulated_score={self._context.accumulated_score:.4f}, "
             f"consecutive_queries={self._context.consecutive_queries}, "
             f"last_update_time={current_time}"
@@ -669,7 +669,7 @@ class RAGDecisionMaker:
         Returns:
             bool: True表示需要搜索，False表示不需要
         """
-        logger.info(f"[RAG DECISION]接收到的信息是：{message}")
+        logger.info(f"[RAG DECISION] should_search() 开始, message={message}")
 
         # 阶段1：快速过滤
         quick_result = self._quick_filter(message)

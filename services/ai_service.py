@@ -108,7 +108,7 @@ async def load_gemini_cfg() -> dict:
             # Redis 无配置时，写入默认值并返回
             try:
                 await _redis.set(REDIS_GEMINI_CFG_KEY, json.dumps(DEFAULT_GEMINI_CFG, ensure_ascii=False))
-                logger.info(f"🔧 Redis 无配置，已写入默认 Gemini 配置: {DEFAULT_GEMINI_CFG}")
+                logger.debug(f"[ai] Redis 无配置，写入默认 Gemini 配置")
             except Exception as se:
                 logger.warning(f"⚠️ 写入默认 Gemini 配置到 Redis 失败: {se}")
             return DEFAULT_GEMINI_CFG
@@ -163,7 +163,7 @@ async def stream_openrouter(
     """
     流式调用OpenRouter API，返回异步生成器。
     """
-    logger.info(f"🔄 正在使用模型进行 stream_openrouter(): {model}")
+    logger.info(f"[ai] 开始 stream_openrouter 模型={model}")
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
@@ -266,7 +266,7 @@ async def stream_reply_ai(
     """
     流式调用 Reply AI API (支持 OpenAI 协议)，返回异步生成器。
     """
-    logger.info(f"🔄 正在使用模型进行 stream_reply_ai(): {model}")
+    logger.info(f"[ai] 开始 stream_reply_ai 模型={model}")
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json",
@@ -411,15 +411,15 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     """
     # 模型选择逻辑保持不变...
     if model is None or model == "deepseek-v3-250324":
-        logger.info(f"🔄 正在使用 Reply AI 渠道进行 stream_ai_chat(): {OPENAI_API_MODEL}")
+        logger.info(f"[ai] 开始 stream_ai_chat 渠道=ReplyAI 模型={OPENAI_API_MODEL}")
         stream_func = stream_reply_ai
         actual_model = OPENAI_API_MODEL
     elif model == "gemini-api":
-        logger.info(f"🔄 正在使用 Gemini API 渠道进行 stream_ai_chat(): {model}")
+        logger.info(f"[ai] 开始 stream_ai_chat 渠道=GeminiAPI 模型={model}")
         stream_func = stream_reply_ai_by_gemini
         actual_model = "gemini-2.5-pro"
     else:
-        logger.info(f"🔄 正在使用 OpenRouter 渠道进行 stream_ai_chat(): {model}")
+        logger.info(f"[ai] 开始 stream_ai_chat 渠道=OpenRouter 模型={model}")
         stream_func = stream_openrouter
         actual_model = model
 
@@ -492,7 +492,7 @@ async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") 
     }
 
     async def _call_request():
-        logger.info(f"🔄 正在使用模型进行 call_openrouter(): {model}")
+        logger.info(f"[ai] 开始 call_openrouter 模型={model}")
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
                 OPENROUTER_API_URL, headers=headers, json=payload
@@ -644,8 +644,8 @@ async def stream_reply_ai_by_gemini(
                         for part in parts:
                             # 跳过思考内容
                             if part.get("thought"):
-                                logger.info(
-                                    f"跳过思考内容: '{part.get('text','')[:50]}...'"
+                                logger.debug(
+                                    f"[ai] 跳过思考内容: '{part.get('text','')[:50]}...'"
                                 )
                                 continue
                             text = part.get("text")
@@ -730,8 +730,8 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
                 headers=headers,
                 json=payload,
             )
-            logger.info(f"🌐 状态码: {response.status_code}")
-            logger.info(f"📥 返回内容: {response.text}")
+            logger.debug(f"[ai] 状态码: {response.status_code}")
+            logger.debug(f"[ai] 返回内容: {response.text}")
             response.raise_for_status()
             # Gemini API 的响应结构不同
             return response.json()["candidates"][0]["content"]["parts"][0]["text"]
@@ -787,8 +787,8 @@ async def call_openai(messages, model="gpt-4o-mini") -> str:
                 headers=headers,
                 json=payload,
             )
-            logger.info(f"🌐 状态码: {response.status_code}")
-            logger.info(f"📥 返回内容: {response.text}")
+            logger.debug(f"[ai] 状态码: {response.status_code}")
+            logger.debug(f"[ai] 返回内容: {response.text}")
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]
 
@@ -823,7 +823,7 @@ async def call_ai_summary(prompt: str) -> str:
     """
     messages = [{"role": "user", "content": prompt}]
     model = "mistralai/mistral-7b-instruct:free"
-    logger.info(f"🔄 正在使用模型进行 call_ai_summary(): {model}")
+    logger.info(f"[ai] 开始 call_ai_summary 模型={model}")
     # 你可以根据需求自由切换模型名
     return await call_openrouter(messages, model)
 
@@ -997,10 +997,10 @@ def get_weather_info(date: str, location: str = "") -> str:
     ]
     if not location:
         location = random.choice(default_locations)
-        logger.info(f"使用随机位置ID: {location} 查询 {date} 天气")
+        logger.debug(f"[ai.weather] 使用随机位置ID: {location} 查询 {date} 天气")
 
     try:
-        logger.info(f"开始获取 {date} 在 {location} 的天气信息...")
+        logger.info(f"[ai.weather] 开始获取天气 date={date} location={location}")
         url = (
             "https://"
             + os.getenv("HEFENG_API_HOST", "have_no_api_host")
@@ -1011,13 +1011,13 @@ def get_weather_info(date: str, location: str = "") -> str:
             "key": os.getenv("HEFENG_API_KEY"),
             "lang": "zh",
         }
-        logger.debug(f"天气API请求参数: {params}")
+        logger.debug(f"[ai.weather] 请求参数: {params}")
 
         response = httpx.get(url, params=params, timeout=10)
         response.raise_for_status()
 
         data = response.json()
-        logger.debug(f"天气API响应: {data}")
+        logger.debug(f"[ai.weather] 响应: {data}")
 
         if data.get("code") != "200":
             error_msg = f"API错误代码: {data.get('code')}"
@@ -1038,7 +1038,7 @@ def get_weather_info(date: str, location: str = "") -> str:
                     f"日出：{day.get('sunrise')}，日落：{day.get('sunset')}，"
                     f"月升：{day.get('moonrise')}，月落：{day.get('moonset')}。"
                 )
-                logger.info(f"成功获取 {date} 天气: {result[:50]}...")
+                logger.info(f"[ai.weather] 成功获取 {date} 天气")
                 return result
 
         logger.warning(f"未找到 {date} 的天气数据，使用最后一天数据替代")
@@ -1055,7 +1055,7 @@ def get_weather_info(date: str, location: str = "") -> str:
             f"日出：{day.get('sunrise')}，日落：{day.get('sunset')}，"
             f"月升：{day.get('moonrise')}，月落：{day.get('moonset')}。"
         )
-        logger.info(f"使用最后一天数据作为 {date} 天气: {result[:50]}...")
+        logger.debug(f"[ai.weather] 使用最后一天数据作为 {date} 天气: {result[:50]}...")
         return result
     except httpx.HTTPError as e:
         logger.error(f"HTTP请求失败: {e}")
@@ -1075,7 +1075,7 @@ def get_weather_info(date: str, location: str = "") -> str:
     weather_weights = [0.4, 0.25, 0.2, 0.05, 0.1]
 
     result = random.choices(weather_options, weights=weather_weights)[0]
-    logger.info(f"生成伪随机天气: {result}")
+    logger.debug(f"[ai.weather] 生成伪随机天气: {result}")
     return result
 
 

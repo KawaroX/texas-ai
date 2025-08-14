@@ -42,31 +42,31 @@ async def generate_and_store_daily_life(target_date: date):
     包括获取天气、生成日程、存储到数据库和文件。
     """
     date_str = target_date.strftime("%Y-%m-%d")
-    print(f"--- 正在为 {date_str} 生成每日日程 ---")
+    logger.info(f"[daily_life] 开始生成每日日程: {date_str}")
 
     # 1. 获取天气信息
     weather = get_weather_info(date_str)
-    print(f"天气信息: {weather}")
+    logger.debug(f"[daily_life] 天气信息: {weather}")
 
     # 2. 判断工作日/周末 (简化逻辑，实际可根据节假日等更复杂判断)
     day_type = "weekend" if target_date.weekday() >= 5 else "weekday"
-    print(f"日期类型: {day_type}")
+    logger.debug(f"[daily_life] 日期类型: {day_type}")
 
     # 3. 检查大事件
     is_in_major_event = False
     major_event_context = None
-    print(f"🔍 检查 {date_str} 是否处于大事件中...")
+    logger.debug(f"[daily_life] 检查是否处于大事件: {date_str}")
 
     # 检查数据库是否已存在包含目标日期的大事件
     major_event_context = get_major_event_by_date(date_str)
 
     if major_event_context:
-        print(
-            f"✅ 检测到已存在大事件: {major_event_context.get('event_title', '未知事件')}"
+        logger.debug(
+            f"[daily_life] 已存在大事件: {major_event_context.get('event_title', '未知事件')}"
         )
         is_in_major_event = True
     else:
-        print("ℹ️ 未检测到已存在的大事件")
+        logger.debug("[daily_life] 未检测到已存在的大事件")
 
     # 如果没有大事件，则根据0.028概率决定是否生成新的大事件
     if not is_in_major_event:
@@ -75,8 +75,8 @@ async def generate_and_store_daily_life(target_date: date):
 
         gen_prob = 0.028  # 0.028
         rand_val = random.random()
-        logger.info(
-            f"🎲 检查是否生成新大事件: 概率={gen_prob*100}%, 随机值={rand_val:.4f}"
+        logger.debug(
+            f"[daily_life] 评估是否生成新大事件: 概率={gen_prob*100}%, 随机值={rand_val:.4f}"
         )
 
         if rand_val < gen_prob:  # 0.028概率生成大事件
@@ -89,24 +89,24 @@ async def generate_and_store_daily_life(target_date: date):
             # logger.info(f"随机1000次结果：{Counter(results)}\n\n")
 
             duration_days = max(1, min(7, int(random.gauss(4, 2))))
-            logger.info(f"📅 生成大事件持续天数: {duration_days}天 (正态分布 μ=4, σ=2)")
+            logger.debug(f"[daily_life] 大事件持续天数: {duration_days}天 (μ=4, σ=2)")
 
             # 随机选择事件类型
             event_types = ["出差任务", "特殊快递", "培训学习", "个人事务", "生病"]
             weights = [0.4, 0.3, 0.15, 0.1, 0.05]  # 事件类型概率权重
             event_type = random.choices(event_types, weights=weights)[0]
-            logger.info(f"📌 选择事件类型: {event_type} (权重: {weights})")
+            logger.debug(f"[daily_life] 选择事件类型: {event_type} (权重: {weights})")
 
             # 生成大事件
             end_date = target_date + timedelta(days=duration_days - 1)
-            logger.info(
-                f"🛫 生成大事件: {event_type}, 从 {date_str} 到 {end_date.strftime('%Y-%m-%d')}"
+            logger.debug(
+                f"[daily_life] 生成大事件: {event_type}, {date_str} -> {end_date.strftime('%Y-%m-%d')}"
             )
             major_event_context = await generate_and_store_major_event(
                 target_date, end_date, event_type
             )
             is_in_major_event = True
-            logger.info(f"✅ 成功生成新大事件: {event_type}, 持续{duration_days}天")
+            logger.debug(f"[daily_life] 新大事件生成完成: {event_type}, 持续{duration_days}天")
 
     # 如果处于大事件中，但未获取上下文，尝试从数据库获取
     if is_in_major_event and not major_event_context:
@@ -121,14 +121,14 @@ async def generate_and_store_daily_life(target_date: date):
             }
     if is_in_major_event:
         weather += "以上为随机天气情况，仅供参考，以大事件情况为准。"
-        logger.info(
-            f"ℹ️ 大事件状态: '存在', 类型: {major_event_context.get('event_type', '无')}"
+        logger.debug(
+            f"[daily_life] 大事件状态: 存在, 类型: {major_event_context.get('event_type', '无')}"
         )
     else:
-        logger.info("ℹ️ 大事件状态: '不存在'")
+        logger.debug("[daily_life] 大事件状态: 不存在")
 
     # 4. 调用AI生成每日日程
-    logger.info("正在调用AI生成每日日程...")
+    logger.debug("[daily_life] 调用 AI 生成每日日程")
     daily_schedule_data = await generate_daily_schedule(
         date=date_str,
         day_type=day_type,
@@ -142,10 +142,10 @@ async def generate_and_store_daily_life(target_date: date):
         logger.error(f"❌ AI生成日程失败: {daily_schedule_data['error']}")
         return None
 
-    logger.info("✅ AI日程生成成功。")
+    logger.debug("[daily_life] AI日程生成成功")
 
     # 5. 存储到数据库
-    logger.info("正在存储日程到数据库...")
+    logger.debug("[daily_life] 存储日程到数据库")
     try:
         # 检查该日期是否已存在日程，如果存在则更新，否则插入
         existing_schedule = get_daily_schedule_by_date(date_str)
@@ -160,7 +160,7 @@ async def generate_and_store_daily_life(target_date: date):
                     major_event_context["id"] if major_event_context else None
                 ),
             )
-            logger.info(f"✅ 日程已更新 (ID: {schedule_id})")
+            logger.debug(f"[daily_life] 日程已更新 (ID: {schedule_id})")
         else:
             schedule_id = insert_daily_schedule(
                 date=date_str,
@@ -171,7 +171,7 @@ async def generate_and_store_daily_life(target_date: date):
                     major_event_context["id"] if major_event_context else None
                 ),
             )
-            logger.info(f"✅ 日程已插入 (ID: {schedule_id})")
+            logger.debug(f"[daily_life] 日程已插入 (ID: {schedule_id})")
 
         daily_schedule_data["id"] = str(schedule_id)  # 将数据库生成的ID添加到数据中
     except Exception as e:
@@ -179,20 +179,20 @@ async def generate_and_store_daily_life(target_date: date):
         return None
 
     # 6. 存储到文件
-    logger.info("正在存储日程到文件...")
+    logger.debug("[daily_life] 存储日程到文件")
     os.makedirs(GENERATED_CONTENT_DIR, exist_ok=True)
     file_path = os.path.join(GENERATED_CONTENT_DIR, f"daily_schedule_{date_str}.json")
     try:
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(daily_schedule_data, f, ensure_ascii=False, indent=2)
-        logger.info(f"✅ 日程已保存到文件: {file_path}")
+        logger.debug(f"[daily_life] 日程已保存到文件: {file_path}")
     except Exception as e:
         logger.error(f"❌ 保存日程到文件失败: {e}")
 
     # 7. 生成并存储微观经历
     if "schedule_items" in daily_schedule_data:
-        logger.info(
-            f"开始生成微观经历，共 {len(daily_schedule_data['schedule_items'])} 个项目..."
+        logger.debug(
+            f"[daily_life] 生成微观经历: 共 {len(daily_schedule_data['schedule_items'])} 个项目"
         )
         successful_experiences = 0
 
@@ -203,8 +203,8 @@ async def generate_and_store_daily_life(target_date: date):
             # 设置当前时间为项目开始时间
             current_time = item["start_time"]
 
-            logger.info(
-                f"生成微观经历项 [{index+1}/{len(daily_schedule_data['schedule_items'])}]: {item['title']}"
+            logger.debug(
+                f"[daily_life] 生成微观经历项 [{index+1}/{len(daily_schedule_data['schedule_items'])}]: {item['title']}"
             )
             micro_experiences = await generate_and_store_micro_experiences(
                 schedule_item=item,
@@ -223,16 +223,16 @@ async def generate_and_store_daily_life(target_date: date):
                 ]
                 previous_experiences_summary = exp_summaries
 
-        logger.info(
-            f"✅ 微观经历生成完成: {successful_experiences}/{len(daily_schedule_data['schedule_items'])} 成功"
+        logger.debug(
+            f"[daily_life] 微观经历生成完成: {successful_experiences}/{len(daily_schedule_data['schedule_items'])} 成功"
         )
     else:
         logger.warning("⚠️ 日程中没有可生成微观经历的项目")
 
-    logger.info(f"--- {date_str} 每日日程生成与存储完成 ---")
+    logger.info(f"[daily_life] 生成完成: {date_str} 每日日程与存储")
 
     # 8. 使用专用函数收集需要交互的微观经历
-    logger.info("开始收集需要主动交互的微观经历...")
+    logger.debug("[daily_life] 开始收集需要主动交互的微观经历")
     await collect_interaction_experiences(target_date)
 
     return daily_schedule_data
@@ -243,7 +243,7 @@ async def collect_interaction_experiences(target_date: date):
     单独收集需要交互的微观经历并存入Redis
     """
     date_str = target_date.strftime("%Y-%m-%d")
-    logger.info(f"--- 开始单独收集 {date_str} 需要主动交互的微观经历 ---")
+    logger.info(f"[interactions] 开始收集需要主动交互的微观经历: {date_str}")
 
     try:
         # 从数据库获取当日日程 ID
@@ -257,7 +257,7 @@ async def collect_interaction_experiences(target_date: date):
         # 查询关联的微观经历
         micro_experiences = get_micro_experiences_by_daily_schedule_id(schedule_id)
         if not micro_experiences:
-            logger.info("当日没有微观经历数据")
+            logger.debug("[interactions] 当日没有微观经历数据")
             return False
 
         # 筛选需要交互的条目
@@ -268,7 +268,7 @@ async def collect_interaction_experiences(target_date: date):
                 if exp.get("need_interaction") is True:
                     interaction_needed.append(exp)
 
-        logger.info(f"找到 {len(interaction_needed)} 条需要交互的微观经历")
+        logger.debug(f"[interactions] 需要交互的微观经历条数: {len(interaction_needed)}")
 
         # 存储到 Redis
         r = redis.Redis.from_url(os.getenv("REDIS_URL"))
@@ -295,7 +295,7 @@ async def collect_interaction_experiences(target_date: date):
 
         # 设置 24 小时过期
         r.expire(redis_key, 86400)
-        logger.info(f"已存储到 Redis Sorted Set 键: {redis_key} (24小时过期)")
+        logger.info(f"[interactions] 已存储到 Redis: {redis_key} (24h 过期)")
         return True
 
     except Exception as e:
@@ -312,7 +312,7 @@ async def generate_and_store_major_event(
     start_date_str = start_date.strftime("%Y-%m-%d")
     end_date_str = end_date.strftime("%Y-%m-%d")
     duration_days = (end_date - start_date).days + 1
-    logger.info(f"--- 正在生成大事件 ({start_date_str} 至 {end_date_str}) ---")
+    logger.info(f"[major_event] 开始生成大事件: {start_date_str} -> {end_date_str}")
 
     # 1. 获取真实天气
     import random
@@ -343,7 +343,7 @@ async def generate_and_store_major_event(
     # 统一选择一个地点（纬度, 经度），并转为字符串
     lat, lon = random.choice(WORLD_CITIES)
     selected_location = f"{lat:.2f},{lon:.2f}"
-    logger.info(f"🌍 本次大事件天气模拟地点: {selected_location}")
+    logger.debug(f"[major_event] 天气模拟地点: {selected_location}")
 
     weather_forecast = {}
     for i in range(duration_days):
@@ -352,10 +352,10 @@ async def generate_and_store_major_event(
             current_date.strftime("%Y-%m-%d"), location=selected_location
         )
 
-    logger.info(f"模拟天气预报: {weather_forecast}")
+    logger.debug(f"[major_event] 模拟天气预报: {weather_forecast}")
 
     # 2. 调用AI生成大事件
-    logger.info("正在调用AI生成大事件...")
+    logger.debug("[major_event] 调用 AI 生成大事件")
     major_event_data = await generate_major_event(
         duration_days=duration_days,
         event_type=event_type,
@@ -367,10 +367,10 @@ async def generate_and_store_major_event(
         logger.error(f"❌ AI生成大事件失败: {major_event_data['error']}")
         return None
 
-    logger.info("✅ AI大事件生成成功。")
+    logger.debug("[major_event] AI 大事件生成成功")
 
     # 3. 存储到数据库
-    logger.info("正在存储大事件到数据库...")
+    logger.debug("[major_event] 存储大事件到数据库")
     try:
         event_id = insert_major_event(
             start_date=start_date_str,
@@ -381,14 +381,14 @@ async def generate_and_store_major_event(
             event_type=event_type,
             status="active",  # 假设生成后即为活跃状态
         )
-        logger.info(f"✅ 大事件已插入 (ID: {event_id})")
+        logger.debug(f"[major_event] 大事件已插入 (ID: {event_id})")
         major_event_data["id"] = str(event_id)  # 将数据库生成的ID添加到数据中
     except Exception as e:
         logger.error(f"❌ 存储大事件到数据库失败: {e}")
         return None
 
     # 4. 存储到文件
-    logger.info("正在存储大事件到文件...")
+    logger.debug("[major_event] 存储大事件到文件")
     os.makedirs(GENERATED_CONTENT_DIR, exist_ok=True)
     file_path = os.path.join(
         GENERATED_CONTENT_DIR,
@@ -397,11 +397,11 @@ async def generate_and_store_major_event(
     try:
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(major_event_data, f, ensure_ascii=False, indent=2)
-        logger.info(f"✅ 大事件已保存到文件: {file_path}")
+        logger.debug(f"[major_event] 大事件已保存到文件: {file_path}")
     except Exception as e:
         logger.error(f"❌ 保存大事件到文件失败: {e}")
 
-    logger.info(f"--- 大事件生成与存储完成 ---")
+    logger.info(f"[major_event] 大事件生成与存储完成")
     return major_event_data
 
 
@@ -416,11 +416,11 @@ async def generate_and_store_micro_experiences(
     为单个日程项目生成并存储多个微观经历项（5-30分钟颗粒度）
     """
     logger.info(
-        f"--- 正在为日程项目 '{schedule_item.get('title', '未知项目')}' 生成微观经历项 ---"
+        f"[micro_exp] 开始为日程项生成微观经历: {schedule_item.get('title', '未知项目')}"
     )
 
     # 1. 调用AI生成多个微观经历项
-    logger.info("正在调用AI生成微观经历项（5-30分钟颗粒度）...")
+    logger.debug("[micro_exp] 调用 AI 生成微观经历（5-30 分钟）")
     micro_experiences = await generate_micro_experiences(
         schedule_item=schedule_item,
         current_date=current_date.strftime("%Y-%m-%d"),
@@ -433,10 +433,10 @@ async def generate_and_store_micro_experiences(
         logger.error(f"❌ AI生成微观经历失败: {', '.join(errors)}")
         return None
 
-    logger.info(f"✅ AI生成成功，共 {len(micro_experiences)} 个微观经历项")
+    logger.debug(f"[micro_exp] AI 生成成功，数量: {len(micro_experiences)}")
 
     # 2. 存储到数据库
-    logger.info("正在存储微观经历项到数据库...")
+    logger.debug("[micro_exp] 存储微观经历项到数据库")
     try:
         experience_id = insert_micro_experience(
             date=current_date.strftime("%Y-%m-%d"),
@@ -444,16 +444,16 @@ async def generate_and_store_micro_experiences(
             related_item_id=schedule_item.get("id"),
             experiences=micro_experiences,
         )
-        logger.info(f"✅ 微观经历已存储 (ID: {experience_id})")
+        logger.debug(f"[micro_exp] 微观经历已存储 (ID: {experience_id})")
         successful_items = len(micro_experiences)
     except Exception as e:
         logger.error(f"❌ 存储微观经历失败: {e}")
         successful_items = 0
 
-    logger.info(f"✅ 成功存储 {successful_items}/{len(micro_experiences)} 个微观经历项")
+    logger.debug(f"[micro_exp] 成功存储 {successful_items}/{len(micro_experiences)} 个微观经历项")
 
     # 3. 存储到文件
-    logger.info("正在存储微观经历到文件...")
+    logger.debug("[micro_exp] 存储微观经历到文件")
     os.makedirs(GENERATED_CONTENT_DIR, exist_ok=True)
     title = schedule_item.get("title", "unknown").replace(" ", "_")
     date_str = current_date.strftime("%Y-%m-%d")
@@ -472,11 +472,11 @@ async def generate_and_store_micro_experiences(
                 ensure_ascii=False,
                 indent=2,
             )
-        logger.info(f"✅ 微观经历项已保存到文件: {file_path}")
+        logger.debug(f"[micro_exp] 微观经历项已保存到文件: {file_path}")
     except Exception as e:
         logger.error(f"❌ 保存微观经历项到文件失败: {e}")
 
-    logger.info(f"--- 微观经历项生成与存储完成 ---")
+    logger.info(f"[micro_exp] 微观经历项生成与存储完成")
     return micro_experiences
 
 
@@ -645,13 +645,13 @@ async def main(target_date: date = None):
     target_date = target_date or date.today()
 
     try:
-        logger.info(f"🚀 开始生成 {target_date} 的日程系统")
+        logger.info(f"[main] 开始生成日程系统: {target_date}")
 
         # 生成主日程
         await generate_and_store_daily_life(target_date)
 
         # 示例查询功能验证
-        logger.info("验证系统查询功能...")
+        logger.debug("[main] 验证系统查询功能")
         query = LifeSystemQuery(target_date)
         print(f"\n{target_date} 是否处于大事件中: {await query.is_in_major_event()}")
         print(f"当日日程摘要: {await query.get_daily_schedule_info() or '无日程'}")
@@ -696,5 +696,5 @@ if __name__ == "__main__":
             logger.error(f"无效日期格式: {args.date}, 使用今日日期")
             target_date = date.today()
 
-    logger.info(f"🕒 执行日期: {target_date}")
+    logger.debug(f"[main] 执行日期: {target_date}")
     asyncio.run(main(target_date))

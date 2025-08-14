@@ -16,7 +16,7 @@ class MemoryStorage:
         if not redis_url:
             raise ValueError("REDIS_URL环境变量未设置")
         self.client = redis.Redis.from_url(redis_url)
-        logger.info("[MemoryStorage] Redis client initialized with URL: %s", redis_url)
+        logger.debug("[MemoryStorage] Redis client initialized with URL: %s", redis_url)
 
     def _ensure_string(self, value) -> str:
         """确保值是字符串类型"""
@@ -65,8 +65,8 @@ class MemoryStorage:
             else:
                 logger.debug("[MemoryStorage] Skipping None value for key: %s", key)
 
-        logger.info(
-            "[MemoryStorage] Metadata prepared: %d fields 距离上一条消息过去了：cleanup",
+        logger.debug(
+            "[MemoryStorage] Metadata prepared: %d fields (cleanup)",
             len(cleaned_metadata),
         )
         return cleaned_metadata
@@ -120,12 +120,12 @@ class MemoryStorage:
             memories = (
                 [memory_data] if not isinstance(memory_data, list) else memory_data
             )
-            logger.info("[MemoryStorage] Processing %d memories", len(memories))
+            logger.info("[MemoryStorage] 开始处理记忆 count=%d", len(memories))
 
             mem0_operations_count = 0  # 计数器
 
             for i, memory in enumerate(memories):
-                logger.info(
+                logger.debug(
                     "[MemoryStorage] Processing memory %d/%d", i + 1, len(memories)
                 )
                 logger.debug(
@@ -165,7 +165,7 @@ class MemoryStorage:
                 # 构建新的key格式：mem0:类型_日期:ID
                 key = f"mem0:{memory_type}_{memory_date}"
 
-                logger.info("[MemoryStorage] Storing memory for key: %s", key)
+                logger.debug("[MemoryStorage] Storing memory for key: %s", key)
                 serialized = json.dumps(memory, ensure_ascii=False)
                 logger.debug(
                     "[MemoryStorage] Serialized data length: %d bytes", len(serialized)
@@ -201,14 +201,14 @@ class MemoryStorage:
 
                 ai_summary_content = memory.get("content")
                 content_type = type(ai_summary_content).__name__
-                logger.info(
+                logger.debug(
                     "[MemoryStorage] Processing content of type: %s", content_type
                 )
 
                 if isinstance(
                     ai_summary_content, list
                 ):  # 例如：chat总结，是一个话题列表
-                    logger.info(
+                    logger.debug(
                         "[MemoryStorage] Processing list content with %d items",
                         len(ai_summary_content),
                     )
@@ -260,7 +260,7 @@ class MemoryStorage:
                             messages = self._create_conversation_messages(content_str)
 
                             # 提交到Mem0
-                            logger.info(
+                            logger.debug(
                                 "[MemoryStorage] Submitting list item %d to Mem0", j + 1
                             )
                             logger.debug(
@@ -272,8 +272,8 @@ class MemoryStorage:
                                 clean_metadata,
                             )
                             try:
-                                logger.info(
-                                    f"[MemoryStorage] \n\n\n!!!!!!!!!!!!!!\nMessages: {messages}\nMetadata: {clean_metadata.keys()}\n\n\n"
+                                logger.debug(
+                                    f"[MemoryStorage] messages+metadata 预览: keys={list(clean_metadata.keys())}"
                                 )
                                 result = mem0.add(
                                     messages=messages,
@@ -282,7 +282,7 @@ class MemoryStorage:
                                     infer=False,
                                 )
                                 mem0_operations_count += 1
-                                logger.info(
+                                logger.debug(
                                     "[MemoryStorage] Successfully added list item %d to Mem0. Result: %s",
                                     j + 1,
                                     str(result)[:200] if result else "None",
@@ -327,7 +327,7 @@ class MemoryStorage:
                             )
 
                 elif isinstance(ai_summary_content, dict):  # 例如：schedule或event总结
-                    logger.info(
+                    logger.debug(
                         "[MemoryStorage] Processing dict content with %d keys",
                         len(ai_summary_content),
                     )
@@ -371,7 +371,7 @@ class MemoryStorage:
                         messages = self._create_conversation_messages(content_str)
 
                         # 提交到Mem0
-                        logger.info("[MemoryStorage] Submitting dict content to Mem0")
+                        logger.debug("[MemoryStorage] Submitting dict content to Mem0")
                         logger.debug(
                             "[MemoryStorage] Messages to be sent to Mem0: %s", messages
                         )
@@ -387,10 +387,11 @@ class MemoryStorage:
                                 infer=False,
                             )
                             mem0_operations_count += 1
-                            logger.info(
+                            logger.debug(
                                 "[MemoryStorage] Successfully added dict content to Mem0. Result: %s",
                                 str(result)[:200] if result else "None",
                             )
+            logger.info("[MemoryStorage] 记忆处理完成 count=%d", len(memories))
                             logger.debug(
                                 "[MemoryStorage] Full result from Mem0: %s", result
                             )
@@ -429,7 +430,7 @@ class MemoryStorage:
                         )
 
                 else:  # 其他情况，直接使用原始content
-                    logger.info(
+                    logger.debug(
                         "[MemoryStorage] Processing raw content of type: %s",
                         content_type,
                     )
@@ -454,7 +455,7 @@ class MemoryStorage:
                         messages = self._create_conversation_messages(content_str)
 
                         # 提交到Mem0
-                        logger.info("[MemoryStorage] Submitting raw content to Mem0")
+                        logger.debug("[MemoryStorage] Submitting raw content to Mem0")
                         logger.debug(
                             "[MemoryStorage] Messages to be sent to Mem0: %s", messages
                         )
@@ -470,7 +471,7 @@ class MemoryStorage:
                                 infer=False,
                             )
                             mem0_operations_count += 1
-                            logger.info(
+                            logger.debug(
                                 "[MemoryStorage] Successfully added raw content to Mem0. Result: %s",
                                 str(result)[:200] if result else "None",
                             )

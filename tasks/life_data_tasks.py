@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 @shared_task
 def fetch_and_store_life_data_task():
     """供Celery调用的生活数据存储任务"""
-    logger.info("Fetching and storing life data...")
+    logger.info("[life_data_tasks] 开始获取并存储生活数据")
     today = date.today()
     
     # 检查今天的数据是否已存在

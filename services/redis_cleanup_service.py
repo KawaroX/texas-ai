@@ -7,7 +7,7 @@ import pytz
 from app.config import settings
 from utils.postgres_service import insert_messages
 
-logging.basicConfig(level=logging.INFO)
+# 日志配置由应用主入口统一设置
 
 
 class RedisCleanupService:
@@ -23,7 +23,7 @@ class RedisCleanupService:
 
     async def start_cleanup_scheduler(self):
         """启动定期清理任务"""
-        logging.info("🔄 启动Redis缓存清理服务...")
+        logging.info("[redis_cleanup] 启动 Redis 缓存清理服务")
         while True:
             try:
                 await self.cleanup_expired_messages()
@@ -39,10 +39,10 @@ class RedisCleanupService:
             channel_keys = self.redis_client.keys("channel_memory:*")
 
             if not channel_keys:
-                logging.info("🔍 没有找到需要清理的聊天记录")
+                logging.debug("[redis_cleanup] 没有找到需要清理的聊天记录")
                 return
 
-            logging.info(f"🔍 开始清理 {len(channel_keys)} 个频道的过期消息...")
+            logging.info(f"[redis_cleanup] 开始清理 {len(channel_keys)} 个频道的过期消息")
 
             total_archived = 0
             total_deleted = 0
@@ -55,10 +55,10 @@ class RedisCleanupService:
 
             if total_archived > 0 or total_deleted > 0:
                 logging.info(
-                    f"✅ 清理完成: 归档 {total_archived} 条消息, 删除 {total_deleted} 条过期消息"
+                    f"[redis_cleanup] 清理完成: 归档 {total_archived} 条, 删除 {total_deleted} 条"
                 )
             else:
-                logging.info("✅ 清理完成: 没有过期消息需要处理")
+                logging.info("[redis_cleanup] 清理完成: 没有过期消息")
 
         except Exception as e:
             logging.error(f"❌ 清理过期消息时出错: {e}")
@@ -78,7 +78,7 @@ class RedisCleanupService:
             
             if total_count <= self.min_keep_count:
                 # 如果总数不超过最小保留数量，不进行任何清理
-                logging.info(f"📋 频道 {channel_id}: 总消息数 {total_count} <= {self.min_keep_count}，跳过清理")
+                logging.debug(f"[redis_cleanup] 频道 {channel_id}: 总消息数 {total_count} <= {self.min_keep_count}，跳过清理")
                 return 0, 0
 
             # 获取所有消息，按时间戳倒序排列（最新的在前）
@@ -88,7 +88,7 @@ class RedisCleanupService:
             )
             
             if len(all_messages) <= self.min_keep_count:
-                logging.info(f"📋 频道 {channel_id}: 实际消息数 {len(all_messages)} <= {self.min_keep_count}，跳过清理")
+                logging.debug(f"[redis_cleanup] 频道 {channel_id}: 实际消息数 {len(all_messages)} <= {self.min_keep_count}，跳过清理")
                 return 0, 0
 
             # 确定要保留的消息（最新的25条）
@@ -101,7 +101,7 @@ class RedisCleanupService:
                     messages_to_delete.append((message_json, timestamp))
 
             if not messages_to_delete:
-                logging.info(f"📋 频道 {channel_id}: 没有需要清理的过期消息")
+                logging.debug(f"[redis_cleanup] 频道 {channel_id}: 没有需要清理的过期消息")
                 return 0, 0
 
             # 批量删除过期消息
@@ -122,8 +122,7 @@ class RedisCleanupService:
             if deleted_count > 0:
                 remaining_count = self.redis_client.zcard(channel_key)
                 logging.info(
-                    f"🧹 频道 {channel_id}: 删除 {deleted_count} 条过期消息，"
-                    f"保留 {remaining_count} 条消息（包含最近 {self.min_keep_count} 条）"
+                    f"[redis_cleanup] 频道 {channel_id}: 删除 {deleted_count} 条过期消息，保留 {remaining_count} 条"
                 )
 
             return 0, deleted_count
@@ -141,7 +140,7 @@ class RedisCleanupService:
             if not buffer_keys:
                 return
 
-            logging.info(f"🧹 检查 {len(buffer_keys)} 个消息缓冲区...")
+            logging.debug(f"[redis_cleanup] 检查 {len(buffer_keys)} 个消息缓冲区")
 
             cleaned_count = 0
             for buffer_key in buffer_keys:
@@ -154,7 +153,7 @@ class RedisCleanupService:
                     pass
 
             if cleaned_count > 0:
-                logging.info(f"🧹 清理了 {cleaned_count} 个被遗弃的消息缓冲区")
+                logging.info(f"[redis_cleanup] 清理了 {cleaned_count} 个被遗弃的消息缓冲区")
 
         except Exception as e:
             logging.error(f"❌ 清理被遗弃缓冲区时出错: {e}")

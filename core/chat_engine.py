@@ -27,7 +27,7 @@ class ChatEngine:
     ):
         """流式生成回复，使用新的消息结构（system + 单条 user 消息）"""
         logger.info(
-            f"🧠 流式生成回复 for channel {channel_id}, 消息数: {len(messages)}"
+            f"[chat_engine] 开始流式生成回复 channel={channel_id}, 消息数={len(messages)}"
         )
 
         # 1. 系统提示词 (根据频道和用户信息动态生成)
@@ -62,7 +62,7 @@ class ChatEngine:
         # 2. 获取整合的系统提示词和完整消息列表
         if context_info:
             # 如果提供了 context_info，说明已经预先调用了 merge_context
-            logger.info("使用预提供的 context_info")
+            logger.debug("[chat_engine] 使用预提供的 context_info")
 
             if isinstance(context_info, tuple) and len(context_info) == 2:
                 # 如果 context_info 是 merge_context 返回的元组格式
@@ -73,13 +73,13 @@ class ChatEngine:
                 context_messages = context_info.get("messages", [])
             else:
                 # 兼容旧格式：context_info 是单一字符串
-                logger.warning("context_info 使用旧格式，建议更新调用方式")
+                logger.warning("[chat_engine] context_info 使用旧格式，建议更新调用方式")
                 bg_info = ""  # 无法从旧格式中提取背景信息
                 # 将旧格式转换为消息格式
                 context_messages = [{"role": "user", "content": context_info}]
 
-            logger.info(
-                f"使用 context_info - 背景信息长度: {len(bg_info)}, 消息数量: {len(context_messages)}"
+            logger.debug(
+                f"[chat_engine] context_info 背景长度={len(bg_info)}, 消息数={len(context_messages)}"
             )
 
         else:
@@ -89,26 +89,26 @@ class ChatEngine:
                 channel_id, latest_query, is_active=is_active_interaction
             )
 
-            logger.info(
-                f"使用 merge_context - 背景信息长度: {len(bg_info)}, 消息数量: {len(context_messages)}"
+            logger.debug(
+                f"[chat_engine] merge_context 背景长度={len(bg_info)}, 消息数={len(context_messages)}"
             )
 
         # 3. 替换 dynamic_system_prompt 中的 <BgInfo> 占位符
         if "<BgInfo>" in dynamic_system_prompt:
             final_system_prompt = dynamic_system_prompt.replace("<BgInfo>", bg_info)
-            logger.info("已替换 dynamic_system_prompt 中的 <BgInfo> 占位符")
+            logger.debug("[chat_engine] 已替换 <BgInfo> 占位符")
         else:
             # 如果没有占位符，直接追加背景信息
             final_system_prompt = f"{dynamic_system_prompt}\n\n{bg_info}"
-            logger.info("dynamic_system_prompt 中无 <BgInfo> 占位符，直接追加背景信息")
+            logger.debug("[chat_engine] 无 <BgInfo> 占位符，直接追加背景信息")
 
         # 4. 构建新的消息结构：system + 完整的对话历史
         prompt_messages = [
             {"role": "system", "content": final_system_prompt}
         ] + context_messages
 
-        logger.info(
-            f"构建完成 - 系统提示词长度: {len(final_system_prompt)}, 消息数量: {len(context_messages)}"
+        logger.debug(
+            f"[chat_engine] 构建完成 system_len={len(final_system_prompt)}, 消息数={len(context_messages)}"
         )
 
         # 调试输出
@@ -125,8 +125,9 @@ class ChatEngine:
             # logger.info(f"Content length: {len(m['content'])} characters\n")
 
         # 4. 流式调用 AI 模型
-        async for segment in stream_ai_chat(prompt_messages, "gemini-api"): # &&&&&& "gemini-api"
+        async for segment in stream_ai_chat(prompt_messages, "gemini-api"):
             yield segment
+        logger.info(f"[chat_engine] 流式生成回复完成 channel={channel_id}")
 
     # 为了向后兼容，保留原有的单消息接口
     async def stream_reply_single(

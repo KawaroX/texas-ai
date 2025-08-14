@@ -22,9 +22,9 @@ def process_scheduled_interactions():
     Celery 任务：处理需要主动交互的事件。
     每分钟执行一次，检查 Redis 中到期的 interaction_needed 事件。
     """
-    logger.info("🚀 启动 process_scheduled_interactions Celery 任务...")
+    logger.info("[interactions] 启动定时主动交互任务")
     current_timestamp = datetime.now().timestamp()
-    logger.info(f"当前时间戳: {current_timestamp}!!!!!!!!!!!!!!!!!")
+    logger.debug(f"[interactions] 当前时间戳: {current_timestamp}")
 
     # 假设 interaction_needed 的 key 是 interaction_needed:{YYYY-MM-DD}
     today_key = f"interaction_needed:{datetime.now().strftime('%Y-%m-%d')}"
@@ -36,7 +36,7 @@ def process_scheduled_interactions():
             import httpx
 
             response = httpx.get("http://bot:8000/collect-interactions", timeout=10.0)
-            logger.info(f"📡 请求采集接口返回状态: {response.status_code}")
+            logger.debug(f"[interactions] 采集接口返回状态: {response.status_code}")
             if response.status_code != 200:
                 logger.warning("⚠️ 采集接口未成功响应，后续可能仍无数据")
         except Exception as e:
@@ -46,10 +46,10 @@ def process_scheduled_interactions():
     expired_events = redis_client.zrangebyscore(today_key, 0, current_timestamp)
 
     if not expired_events:
-        logger.info(f"ℹ️ {today_key} 中没有到期的主动交互事件。")
+        logger.debug(f"[interactions] {today_key} 中没有到期的主动交互事件")
         return
 
-    logger.info(f"✅ 发现 {len(expired_events)} 个到期的主动交互事件。")
+    logger.debug(f"[interactions] 到期的主动交互事件数量: {len(expired_events)}")
 
     # 实例化 MattermostWebSocketClient
     ws_client = MattermostWebSocketClient()
@@ -69,7 +69,7 @@ def process_scheduled_interactions():
     except Exception as e:
         logger.error(f"❌ 运行异步任务时发生错误: {e}")
 
-    logger.info("✅ process_scheduled_interactions Celery 任务执行完毕。")
+    logger.info("[interactions] 定时主动交互任务完成")
 
 
 async def _process_events_async(
@@ -109,7 +109,7 @@ async def _process_events_async(
         logger.error(f"❌ 获取 'kawaro' 私聊频道时发生错误: {e}")
         return
 
-    logger.info(f"✅ 已获取 'kawaro' 的私聊频道 ID: {kawaro_dm_channel_id}")
+    logger.debug(f"[interactions] 已获取 'kawaro' 私聊频道 ID: {kawaro_dm_channel_id}")
 
     # 辅助函数：将 HH:MM 格式的时间字符串转换为当天的 datetime 对象
     def time_str_to_datetime(date_obj: datetime.date, time_str: str) -> datetime:
@@ -125,7 +125,7 @@ async def _process_events_async(
         try:
             event_data = json.loads(event_json_str)
             interaction_content = event_data.get("interaction_content")
-            logger.info(f"Processing interaction content: {interaction_content}")
+            logger.debug(f"[interactions] Processing interaction content: {interaction_content}")
 
             experience_id = event_data.get("id")  # 使用微观经历的唯一ID
             start_time_str = event_data.get("start_time")
@@ -145,7 +145,7 @@ async def _process_events_async(
 
             # 检查是否已交互过
             if redis_client.sismember(interacted_key, experience_id):
-                logger.info(f"ℹ️ 事件 {experience_id} 已交互过，跳过。")
+                logger.debug(f"[interactions] 事件 {experience_id} 已交互过，跳过。")
                 print(f"DEBUG: 事件 {experience_id} 已在交互记录中")
                 # 仍然从 Sorted Set 中移除，因为已经处理过（即使是之前处理的）
                 redis_client.zrem(redis_key, event_json_str)
@@ -161,15 +161,15 @@ async def _process_events_async(
             )
 
             if not (event_start_dt <= current_time < event_end_dt):
-                logger.info(
-                    f"ℹ️ 事件 {experience_id} 不在当前时间范围内 ({start_time_str}-{end_time_str})，跳过。"
+                logger.debug(
+                    f"[interactions] 事件 {experience_id} 不在当前时间范围内 ({start_time_str}-{end_time_str})，跳过"
                 )
                 print(f"DEBUG: 事件 {experience_id} 时间不匹配，跳过")
                 # 不从 Sorted Set 中移除，等待下次到期或进入时间范围
                 continue
 
-            logger.info(
-                f"处理事件: {interaction_content[:50]}... (ID: {experience_id})"
+            logger.debug(
+                f"[interactions] 处理事件: {interaction_content[:50]}... (ID: {experience_id})"
             )
             print(f"DEBUG: 开始处理事件 {experience_id}")
 
@@ -178,8 +178,8 @@ async def _process_events_async(
             kawaro_user_info = kawaro_info["user_info"]
             kawaro_dm_channel_id = await ws_client.create_direct_channel(kawaro_user_id)
             kawaro_channel_info = kawaro_info["channel_info"]
-            logger.info(f"Kawaro 用户信息: {kawaro_user_info}")
-            logger.info(f"Kawaro 频道信息: {kawaro_channel_info}")
+            logger.debug(f"[interactions] Kawaro 用户信息: {kawaro_user_info}")
+            logger.debug(f"[interactions] Kawaro 频道信息: {kawaro_channel_info}")
 
             context = await merge_context(
                 channel_id=kawaro_dm_channel_id,
@@ -205,8 +205,8 @@ async def _process_events_async(
             redis_client.expire(interacted_key, 86400)  # 24小时过期
 
             processed_count += 1
-            logger.info(
-                f"✅ 成功处理并发送主动交互消息，并从 Redis 移除事件: {experience_id}"
+            logger.debug(
+                f"[interactions] 成功处理并发送主动交互消息，已从 Redis 移除事件: {experience_id}"
             )
             print(f"DEBUG: 成功处理事件 {experience_id}，已添加到交互记录")
 
@@ -216,4 +216,4 @@ async def _process_events_async(
             logger.error(f"❌ 处理主动交互事件时发生错误: {event_json_str} - {e}")
             # 考虑是否需要重试机制或将失败事件放入死信队列
 
-    logger.info(f"✨ 成功处理了 {processed_count} 个主动交互事件。")
+    logger.info(f"[interactions] 主动交互处理完成 count={processed_count}")

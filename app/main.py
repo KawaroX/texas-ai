@@ -22,10 +22,10 @@ DEFAULT_GEMINI_CFG_2 = {
 }
 ALLOWED_KEYS = set(DEFAULT_GEMINI_CFG.keys())
 
-# 配置日志，包含时间戳、级别、名称和消息
+# 配置日志：时间戳、级别、模块、函数、行号、消息
 logging.basicConfig(
-    level=logging.INFO,  # 可以根据需要调整日志级别
-    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s:%(funcName)s:%(lineno)d - %(message)s",
 )
 
 from app.mattermost_client import MattermostWebSocketClient

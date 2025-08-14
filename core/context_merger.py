@@ -76,7 +76,7 @@ def _get_life_system_context() -> str:
         life_data = redis_client.hgetall(redis_key)
 
         if not life_data:
-            logger.info("ℹ️ 未找到生活系统数据")
+            logger.debug("[context_merger] 未找到生活系统数据")
             return ""
 
         context_parts = []
@@ -267,9 +267,9 @@ async def _get_mem0_relevant(
                 raise RuntimeError("mem0.search 返回 None（内部异常）")
             for item in results:
                 me = item.get('memory', '')
-                logger.info(f"📋 记忆：{me}")
+                logger.debug(f"[context_merger] mem0.search 命中记忆：{me}")
             if attempt > 1:
-                logger.info(f"✅ mem0.search 第 {attempt} 次尝试成功")
+                logger.debug(f"[context_merger] mem0.search 第 {attempt} 次尝试成功")
             return results
         except asyncio.TimeoutError:
             logger.warning(f"⏱️ mem0.search 第 {attempt} 次尝试超过 {timeout}s 超时")
@@ -440,15 +440,15 @@ async def merge_context(
     """
     shanghai_tz = pytz.timezone("Asia/Shanghai")
     now = now or datetime.now(shanghai_tz)
-    logger.info(f"🔍 Merging context for channel: {channel_id}")
+    logger.info(f"[context_merger] 开始合并上下文 channel={channel_id}")
 
     _condemn_message = ""  # 初始化谴责消息变量
 
     # 1. 获取并处理聊天记录
     raw_messages = get_channel_memory(channel_id).get_recent_messages()
     processed_messages = _process_chat_messages(raw_messages)
-    logger.info(
-        f"🧠 Processed {len(processed_messages)} message blocks from {len(raw_messages)} raw messages"
+    logger.debug(
+        f"[context_merger] 处理消息块 {len(processed_messages)} / 原始消息 {len(raw_messages)}"
     )
 
     # 2. 获取参考资料（其他频道摘要）- 判断是否需要摘要
@@ -475,8 +475,8 @@ async def merge_context(
                         latest_current_message_time = datetime.fromisoformat(
                             raw_messages[i]["timestamp"]
                         )
-                        logger.info(
-                            f"📝 当前频道最后一条assistant消息之前的user消息: {raw_messages[i]['content']} | 时间: {latest_current_message_time}"
+                        logger.debug(
+                            f"[context_merger] 当前频道最后 assistant 前的 user: {latest_current_message_time}"
                         )
                         break
 
@@ -485,8 +485,8 @@ async def merge_context(
                 latest_current_message_time = datetime.fromisoformat(
                     raw_messages[-1]["timestamp"]
                 )
-                logger.info(
-                    f"📝 当前频道未找到符合条件的user消息，使用最后一条消息: {raw_messages[-1]['content']} | 时间: {latest_current_message_time}"
+                logger.debug(
+                    f"[context_merger] 当前频道无匹配 user，使用最后一条消息时间 {latest_current_message_time}"
                 )
 
             if latest_current_message_time:
@@ -512,8 +512,8 @@ async def merge_context(
                         latest_other_message_time = datetime.fromisoformat(
                             messages[i]["timestamp"]
                         )
-                        logger.info(
-                            f"📝 频道 {other_channel} 最后一条assistant消息之前的user消息: {messages[i]['content']} | 时间: {latest_other_message_time}"
+                        logger.debug(
+                            f"[context_merger] 频道 {other_channel} 最后 assistant 前的 user 时间: {latest_other_message_time}"
                         )
                         break
 
@@ -521,8 +521,8 @@ async def merge_context(
                 latest_other_message_time = datetime.fromisoformat(
                     messages[-1]["timestamp"]
                 )
-                logger.info(
-                    f"📝 频道 {other_channel} 未找到符合条件的user消息，使用最后一条消息: {messages[-1]['content']} | 时间: {latest_other_message_time}"
+                logger.debug(
+                    f"[context_merger] 频道 {other_channel} 使用最后一条消息时间: {latest_other_message_time}"
                 )
 
             if latest_other_message_time:
@@ -555,12 +555,12 @@ async def merge_context(
             time_diff = current_time - latest_overall_message_time
 
             if len(all_latest_timestamps) == 1:
-                logger.info(f"⏱️ 仅使用当前频道消息进行时间差判断")
+                logger.debug(f"[context_merger] 仅使用当前频道消息进行时间差判断")
             else:
-                logger.info(f"⏱️ 使用所有频道最新消息进行时间差判断")
+                logger.debug(f"[context_merger] 使用所有频道最新消息进行时间差判断")
 
-            logger.info(
-                f"⏱️ 最后消息时间={latest_overall_message_time} 当前时间={current_time} 时间差={time_diff}"
+            logger.debug(
+                f"[context_merger] 时间差: 最后={latest_overall_message_time} 当前={current_time} 差={time_diff}"
             )
 
             if time_diff > timedelta(hours=1):
@@ -595,14 +595,11 @@ async def merge_context(
                     # 粗略判断，如果时间差超过8小时，且跨越了整个睡眠时间段
                     is_during_sleep_time = True
 
-                logger.info(
-                    f"🌙 睡眠时间检查: 最后消息小时={latest_local_time.hour} 当前小时={current_local_time.hour}"
+                logger.debug(
+                    f"[context_merger] 睡眠检查: last_hr={latest_local_time.hour} curr_hr={current_local_time.hour} 初判={is_during_sleep_time}"
                 )
-                logger.info(
-                    f"初始睡眠判断: is_during_sleep_time={is_during_sleep_time}"
-                )
-                logger.info(
-                    f"⏳ 时间跨度检查: 开始<{SLEEP_START_HOUR}时? {latest_local_time.hour < SLEEP_START_HOUR} 结束>={SLEEP_END_HOUR}时? {current_local_time.hour >= SLEEP_END_HOUR} 时间差>8h? {time_diff > timedelta(hours=8)}"
+                logger.debug(
+                    f"[context_merger] 时间跨度检查: <{SLEEP_START_HOUR}? {latest_local_time.hour < SLEEP_START_HOUR} >= {SLEEP_END_HOUR}? {current_local_time.hour >= SLEEP_END_HOUR} >8h? {time_diff > timedelta(hours=8)}"
                 )
 
                 # 精确计算睡眠时间重叠
@@ -639,8 +636,8 @@ async def merge_context(
                 is_during_sleep_time = (
                     total_sleep_overlap_seconds >= timedelta(hours=4).total_seconds()
                 )
-                logger.info(
-                    f"💤 睡眠重叠时间: {total_sleep_overlap_seconds}秒 | 是否睡眠时段: {is_during_sleep_time}"
+                logger.debug(
+                    f"[context_merger] 睡眠重叠时间: {total_sleep_overlap_seconds}秒 | 是否睡眠时段: {is_during_sleep_time}"
                 )
 
                 if not is_during_sleep_time:
@@ -650,21 +647,21 @@ async def merge_context(
                         f"【参考信息】\n"
                         f"距离Kawaro上次回复你，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。请根据上下文判断，Kawaro不找你是否是事出有因，还是没有说明原因，是不是忘记你了，然后自行决定是否需要进行适当的抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你，有点像在撒娇的感觉。"
                     )
-                    logger.info(f"✉️ 已添加谴责提示: {_condemn_message}")
+                    logger.debug(f"[context_merger] 已添加谴责提示: {_condemn_message}")
 
         if not all_latest_timestamps and raw_messages:
             # 特殊情况：有当前频道消息但没有其他频道消息
-            logger.info("ℹ️ 仅当前频道有消息，但未找到其他频道消息")
+            logger.debug("[context_merger] 仅当前频道有消息，但未找到其他频道消息")
         elif not all_latest_timestamps and not raw_messages:
-            logger.info("ℹ️ 未找到任何频道消息，跳过时间差判断")
+            logger.debug("[context_merger] 未找到任何频道消息，跳过时间差判断")
 
-        logger.info(f"✅ 成功获取 {len(summary_notes)} 个频道摘要 (包括潜在的谴责提示)")
+        logger.debug(f"[context_merger] 获取频道摘要数量: {len(summary_notes)}")
     else:
-        logger.info("📝 消息较简单，跳过跨频道摘要")
+        logger.debug("[context_merger] 消息较简单，跳过跨频道摘要")
 
     # 3. 获取生活系统信息
     life_system_context = _get_life_system_context()
-    logger.info(f"🏠 Life system context: {len(life_system_context)} characters")
+    logger.debug(f"[context_merger] Life system context 长度: {len(life_system_context)}")
 
     # 4. 获取记忆信息
     from core.rag_decision_system import RAGDecisionMaker
@@ -674,7 +671,7 @@ async def merge_context(
     _needs_rag = rag_decision.should_search(latest_query)
 
     if _needs_rag:
-        logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
+    logger.debug("[context_merger] 开始检索记忆")
         history_text = "\n".join([msg["content"] for msg in processed_messages])
         query = "\n".join([latest_query, history_text if history_text else ""])
         mem0_result = await _get_mem0_relevant(query, limit=5, timeout=3.0, max_retries=1)

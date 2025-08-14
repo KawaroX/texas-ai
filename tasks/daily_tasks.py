@@ -29,7 +29,7 @@ def generate_daily_memories():
             ("schedule", collector.get_yesterday_schedule_experiences),
             ("event", collector.get_major_events),
         ]:
-            logger.info(f"💡 开始处理 {data_type} 数据")
+            logger.info(f"[daily_tasks] 开始处理 {data_type} 数据")
             data = collector_method()
             if data:
                 # 提取ID用于后续标记
@@ -52,15 +52,15 @@ def generate_daily_memories():
                     for event_id in ids:
                         collector.mark_event_embedded(event_id)
 
-                logger.info(
-                    f"✅ 成功处理 {data_type} 数据，生成 {len(memories)} 条记忆。"
+                logger.debug(
+                    f"[daily_tasks] 成功处理 {data_type} 数据，生成 {len(memories)} 条记忆"
                 )
 
     except Exception as e:
         logger.error(f"生成每日记忆失败: {str(e)}")
         raise
 
-    logger.info("🎉 每日记忆生成任务完成。")
+    logger.info("[daily_tasks] 每日记忆生成任务完成")
 
 
 @shared_task
@@ -75,7 +75,7 @@ def generate_chat_memories():
         all_chats = collector.get_unembedded_chats()
         
         if not all_chats:
-            logger.info("💡 没有未嵌入的聊天记录需要处理")
+            logger.debug("[daily_tasks] 没有未嵌入的聊天记录需要处理")
             return
 
         # 按时间分段处理（如果时间跨度超过3小时）
@@ -94,7 +94,7 @@ def generate_chat_memories():
         
         # 如果时间跨度超过3小时，则分段处理
         if time_span > timedelta(hours=3):
-            logger.info(f"💡 聊天记录时间跨度超过3小时 ({time_span})，将分段处理")
+            logger.debug(f"[daily_tasks] 聊天记录时间跨度超过3小时 ({time_span})，分段处理")
             
             # 按3小时分段处理
             current_start = earliest_time
@@ -112,22 +112,22 @@ def generate_chat_memories():
                 ]
                 
                 if chats_in_period:
-                    logger.info(f"💡 处理时间段 {current_start} 到 {current_end} 的聊天记录，共 {len(chats_in_period)} 条")
+                    logger.debug(f"[daily_tasks] 处理时间段 {current_start}~{current_end} 聊天记录 {len(chats_in_period)} 条")
                     process_chat_batch(chats_in_period, collector, summarizer, storage)
                 else:
-                    logger.info(f"💡 时间段 {current_start} 到 {current_end} 没有聊天记录")
+                    logger.debug(f"[daily_tasks] 时间段 {current_start}~{current_end} 没有聊天记录")
                 
                 current_start = current_end
         else:
             # 时间跨度不超过3小时，一次性处理
-            logger.info(f"💡 聊天记录时间跨度未超过3小时 ({time_span})，一次性处理")
+            logger.debug(f"[daily_tasks] 聊天记录时间跨度未超过3小时 ({time_span})，一次性处理")
             process_chat_batch(all_chats, collector, summarizer, storage)
 
     except Exception as e:
         logger.error(f"生成聊天记录记忆失败: {str(e)}")
         raise
 
-    logger.info("🎉 聊天记录记忆生成任务完成。")
+    logger.info("[daily_tasks] 聊天记录记忆生成任务完成")
 
 
 def process_chat_batch(chats: List[Dict], collector: MemoryDataCollector, summarizer: MemorySummarizer, storage: MemoryStorage):
@@ -148,7 +148,7 @@ def process_chat_batch(chats: List[Dict], collector: MemoryDataCollector, summar
     # 标记数据为已嵌入
     collector.mark_chats_embedded(ids)
     
-    logger.info(f"✅ 成功处理 {len(chats)} 条聊天记录，生成 {len(memories)} 条记忆。")
+    logger.debug(f"[daily_tasks] 已处理聊天记录 {len(chats)} 条，生成记忆 {len(memories)} 条")
 
 
 @shared_task
@@ -159,7 +159,7 @@ def clean_generated_content():
     try:
         dir_path = "generated_content"
         if not os.path.exists(dir_path):
-            logger.info(f"目录不存在: {dir_path}")
+            logger.debug(f"[daily_tasks] 目录不存在: {dir_path}")
             return {"status": "success", "removed": 0}
         yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
         pattern = os.path.join(dir_path, f"*{yesterday}*")
@@ -169,15 +169,15 @@ def clean_generated_content():
             try:
                 if os.path.isfile(file_path):
                     os.remove(file_path)
-                    logger.info(f"✅ 已删除文件: {file_path}")
+                    logger.debug(f"[daily_tasks] 已删除文件: {file_path}")
                     removed_count += 1
                 elif os.path.isdir(file_path):
                     shutil.rmtree(file_path)
-                    logger.info(f"✅ 已删除文件夹: {file_path}")
+                    logger.debug(f"[daily_tasks] 已删除文件夹: {file_path}")
                     removed_count += 1
             except Exception as file_err:
                 logger.error(f"删除文件失败: {file_path}: {file_err}")
-        logger.info(f"共删除 {removed_count} 个包含日期 {yesterday} 的文件/文件夹。")
+        logger.info(f"[daily_tasks] 清理完成，删除 {removed_count} 个包含日期 {yesterday} 的项")
         return {"status": "success", "removed": removed_count}
     except Exception as e:
         logger.error(f"清理 generated_content 目录失败: {str(e)}")
@@ -191,7 +191,7 @@ def generate_daily_life_task(date: str | None = None):
         if not date:
             date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")  # 明天
 
-        logger.info(f"📅 正在生成 {date} 的日程")
+        logger.info(f"[daily_tasks] 开始触发生成日程 date={date}")
         response = httpx.get(
             f"http://bot:8000/generate-daily-life?target_date={date}",
             headers={"Authorization": f"Bearer {settings.INTERNAL_API_KEY}"},

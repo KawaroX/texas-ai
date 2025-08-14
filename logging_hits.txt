@@ -1,0 +1,594 @@
+./tasks/daily_tasks.py:10:import logging
+./tasks/daily_tasks.py:16:logger = logging.getLogger(__name__)
+./tasks/daily_tasks.py:32:            logger.info(f"[daily_tasks] 开始处理 {data_type} 数据")
+./tasks/daily_tasks.py:55:                logger.debug(
+./tasks/daily_tasks.py:60:        logger.error(f"生成每日记忆失败: {str(e)}")
+./tasks/daily_tasks.py:63:    logger.info("[daily_tasks] 每日记忆生成任务完成")
+./tasks/daily_tasks.py:78:            logger.debug("[daily_tasks] 没有未嵌入的聊天记录需要处理")
+./tasks/daily_tasks.py:97:            logger.debug(f"[daily_tasks] 聊天记录时间跨度超过3小时 ({time_span})，分段处理")
+./tasks/daily_tasks.py:115:                    logger.debug(f"[daily_tasks] 处理时间段 {current_start}~{current_end} 聊天记录 {len(chats_in_period)} 条")
+./tasks/daily_tasks.py:118:                    logger.debug(f"[daily_tasks] 时间段 {current_start}~{current_end} 没有聊天记录")
+./tasks/daily_tasks.py:123:            logger.debug(f"[daily_tasks] 聊天记录时间跨度未超过3小时 ({time_span})，一次性处理")
+./tasks/daily_tasks.py:127:        logger.error(f"生成聊天记录记忆失败: {str(e)}")
+./tasks/daily_tasks.py:130:    logger.info("[daily_tasks] 聊天记录记忆生成任务完成")
+./tasks/daily_tasks.py:151:    logger.debug(f"[daily_tasks] 已处理聊天记录 {len(chats)} 条，生成记忆 {len(memories)} 条")
+./tasks/daily_tasks.py:162:            logger.debug(f"[daily_tasks] 目录不存在: {dir_path}")
+./tasks/daily_tasks.py:172:                    logger.debug(f"[daily_tasks] 已删除文件: {file_path}")
+./tasks/daily_tasks.py:176:                    logger.debug(f"[daily_tasks] 已删除文件夹: {file_path}")
+./tasks/daily_tasks.py:179:                logger.error(f"删除文件失败: {file_path}: {file_err}")
+./tasks/daily_tasks.py:180:        logger.info(f"[daily_tasks] 清理完成，删除 {removed_count} 个包含日期 {yesterday} 的项")
+./tasks/daily_tasks.py:183:        logger.error(f"清理 generated_content 目录失败: {str(e)}")
+./tasks/daily_tasks.py:194:        logger.info(f"[daily_tasks] 开始触发生成日程 date={date}")
+./tasks/life_data_tasks.py:7:import logging
+./tasks/life_data_tasks.py:9:logger = logging.getLogger(__name__)
+./tasks/life_data_tasks.py:14:    logger.info("Fetching and storing life data...")
+./tasks/life_data_tasks.py:20:        logger.warning(f"No daily schedule found for {today}. Triggering generate_daily_life_task...")
+./tasks/life_data_tasks.py:29:        logger.info(f"Successfully stored life data for {today}: {result}")
+./tasks/life_data_tasks.py:32:        logger.error(f"Error fetching life data for {today}: {e}")
+./tasks/interaction_tasks.py:3:import logging
+./tasks/interaction_tasks.py:13:logger = logging.getLogger(__name__)
+./tasks/interaction_tasks.py:25:    logger.info("[interactions] 启动定时主动交互任务")
+./tasks/interaction_tasks.py:27:    logger.debug(f"[interactions] 当前时间戳: {current_timestamp}")
+./tasks/interaction_tasks.py:34:        logger.warning(f"⚠️ Redis 中不存在 key: {today_key}，将尝试采集交互事件")
+./tasks/interaction_tasks.py:39:            logger.debug(f"[interactions] 采集接口返回状态: {response.status_code}")
+./tasks/interaction_tasks.py:41:                logger.warning("⚠️ 采集接口未成功响应，后续可能仍无数据")
+./tasks/interaction_tasks.py:43:            logger.error(f"❌ 请求采集接口失败: {e}")
+./tasks/interaction_tasks.py:49:        logger.debug(f"[interactions] {today_key} 中没有到期的主动交互事件")
+./tasks/interaction_tasks.py:52:    logger.debug(f"[interactions] 到期的主动交互事件数量: {len(expired_events)}")
+./tasks/interaction_tasks.py:70:        logger.error(f"❌ 运行异步任务时发生错误: {e}")
+./tasks/interaction_tasks.py:72:    logger.info("[interactions] 定时主动交互任务完成")
+./tasks/interaction_tasks.py:85:            logger.error("❌ 无法获取 BOT user ID，跳过主动交互事件处理。")
+./tasks/interaction_tasks.py:100:        logger.error("❌ 未找到 'kawaro' 用户 ID，无法发送主动交互消息。")
+./tasks/interaction_tasks.py:106:            logger.error(f"❌ 无法获取或创建与 'kawaro' 的私聊频道。")
+./tasks/interaction_tasks.py:109:        logger.error(f"❌ 获取 'kawaro' 私聊频道时发生错误: {e}")
+./tasks/interaction_tasks.py:112:    logger.debug(f"[interactions] 已获取 'kawaro' 私聊频道 ID: {kawaro_dm_channel_id}")
+./tasks/interaction_tasks.py:128:            logger.debug(f"[interactions] Processing interaction content: {interaction_content}")
+./tasks/interaction_tasks.py:140:                logger.warning(f"⚠️ 事件数据缺少必要字段，跳过: {event_json_str}")
+./tasks/interaction_tasks.py:148:                logger.info(f"ℹ️ 事件 {experience_id} 已交互过，跳过。")
+./tasks/interaction_tasks.py:164:                logger.debug(
+./tasks/interaction_tasks.py:171:            logger.debug(
+./tasks/interaction_tasks.py:181:            logger.debug(f"[interactions] Kawaro 用户信息: {kawaro_user_info}")
+./tasks/interaction_tasks.py:182:            logger.debug(f"[interactions] Kawaro 频道信息: {kawaro_channel_info}")
+./tasks/interaction_tasks.py:190:            # logger.info(f"Context:\n {context[0][:100]}...")
+./tasks/interaction_tasks.py:208:            logger.debug(
+./tasks/interaction_tasks.py:214:            logger.error(f"❌ 解析事件 JSON 失败，跳过: {event_json_str} - {e}")
+./tasks/interaction_tasks.py:216:            logger.error(f"❌ 处理主动交互事件时发生错误: {event_json_str} - {e}")
+./tasks/interaction_tasks.py:219:    logger.info(f"[interactions] 主动交互处理完成 count={processed_count}")
+./core/rag_decision_system.py:11:import logging
+./core/rag_decision_system.py:13:logger = logging.getLogger(__name__)
+./core/rag_decision_system.py:275:                logger.debug(
+./core/rag_decision_system.py:280:                logger.debug("[RAG DECISION] No context in Redis, using default")
+./core/rag_decision_system.py:282:            logger.error(f"[RAG DECISION] Failed to load context from Redis: {e}")
+./core/rag_decision_system.py:292:            logger.debug(
+./core/rag_decision_system.py:296:            logger.error(f"[RAG DECISION] Failed to save context to Redis: {e}")
+./core/rag_decision_system.py:305:                logger.debug("[RAG DECISION] Loaded existing stats from Redis")
+./core/rag_decision_system.py:314:                logger.debug("[RAG DECISION] Created new stats structure")
+./core/rag_decision_system.py:333:            logger.debug(
+./core/rag_decision_system.py:340:            logger.error(f"[RAG DECISION] Failed to update stats in Redis: {e}")
+./core/rag_decision_system.py:362:        logger.debug(f"[RAG DECISION] Applying quick filter for: {message}")
+./core/rag_decision_system.py:370:                    logger.debug(
+./core/rag_decision_system.py:374:                logger.debug("[RAG DECISION] Quick filter: short greeting -> no search")
+./core/rag_decision_system.py:389:            logger.debug("[RAG DECISION] Quick filter: memory pattern -> search")
+./core/rag_decision_system.py:402:            logger.debug("[RAG DECISION] Quick filter: time pattern -> search")
+./core/rag_decision_system.py:408:            logger.debug(
+./core/rag_decision_system.py:414:        logger.debug("[RAG DECISION] Quick filter: no match, need detailed analysis")
+./core/rag_decision_system.py:420:        logger.debug(f"[RAG DECISION] Calculating base score for: {message}")
+./core/rag_decision_system.py:434:        logger.debug(f"  - Texas keywords score: {min(texas_score, 0.35):.3f}")
+./core/rag_decision_system.py:442:        logger.debug(f"  - Memory keywords score: {min(memory_score, 0.45):.3f}")
+./core/rag_decision_system.py:458:        logger.debug(f"  - Pattern scores: {pattern_scores}")
+./core/rag_decision_system.py:478:        logger.debug(f"  - Personalization score: {personal_score:.3f}")
+./core/rag_decision_system.py:502:        logger.debug(f"  - Emotion score: {emotion_score:.3f}")
+./core/rag_decision_system.py:507:        logger.debug(f"  - Length score: {length_score:.3f}")
+./core/rag_decision_system.py:527:        logger.debug(f"  - Question score: {question_score:.3f}")
+./core/rag_decision_system.py:530:        logger.info(f"[RAG DECISION] Base score calculated: {total_score:.3f}")
+./core/rag_decision_system.py:548:            logger.debug(f"[RAG DECISION] Memory boost triggered: +{memory_boost:.4f}")
+./core/rag_decision_system.py:557:            logger.debug(
+./core/rag_decision_system.py:570:                logger.debug(
+./core/rag_decision_system.py:575:        logger.debug(f"[RAG DECISION] Generated memory spark: {random_factor:.4f}")
+./core/rag_decision_system.py:601:                logger.debug(
+./core/rag_decision_system.py:612:                logger.debug(
+./core/rag_decision_system.py:623:            logger.debug("[RAG DECISION] Search triggered, partial accumulation reset")
+./core/rag_decision_system.py:646:                logger.debug(
+./core/rag_decision_system.py:653:        logger.debug(
+./core/rag_decision_system.py:672:        logger.info(f"[RAG DECISION]接收到的信息是：{message}")
+./core/rag_decision_system.py:680:            logger.info(
+./core/rag_decision_system.py:723:        logger.info(
+./core/rag_decision_system.py:805:            logger.error(f"[RAG DECISION] Failed to clear user data from Redis: {e}")
+./core/rag_decision_system.py:836:            logger.error(f"[RAG DECISION] Failed to get cache info: {e}")
+./core/rag_decision_system.py:843:        logger.info(
+./core/chat_engine.py:1:import logging
+./core/chat_engine.py:12:logger = logging.getLogger(__name__)
+./core/chat_engine.py:29:        logger.info(
+./core/chat_engine.py:65:            logger.debug("[chat_engine] 使用预提供的 context_info")
+./core/chat_engine.py:76:                logger.warning("[chat_engine] context_info 使用旧格式，建议更新调用方式")
+./core/chat_engine.py:81:            logger.debug(
+./core/chat_engine.py:92:            logger.debug(
+./core/chat_engine.py:99:            logger.debug("[chat_engine] 已替换 <BgInfo> 占位符")
+./core/chat_engine.py:103:            logger.debug("[chat_engine] 无 <BgInfo> 占位符，直接追加背景信息")
+./core/chat_engine.py:110:        logger.debug(
+./core/chat_engine.py:115:        # logger.info(f"\n=== 新消息结构 ===")
+./core/chat_engine.py:122:        #     logger.info(l_i)
+./core/chat_engine.py:123:            # logger.info(f"Message {i+1} - Role: {m['role']}")
+./core/chat_engine.py:124:            # logger.info(f"Content: {m['content']}")
+./core/chat_engine.py:125:            # logger.info(f"Content length: {len(m['content'])} characters\n")
+./core/chat_engine.py:130:        logger.info(f"[chat_engine] 流式生成回复完成 channel={channel_id}")
+./core/context_merger.py:1:import logging
+./core/context_merger.py:14:logger = logging.getLogger(__name__)
+./core/context_merger.py:63:        logger.warning(f"⚠️ 频道 {channel_id} 摘要失败: {e}")
+./core/context_merger.py:79:            logger.info("ℹ️ 未找到生活系统数据")
+./core/context_merger.py:114:                logger.warning(f"⚠️ 大事件数据解析失败: {e}")
+./core/context_merger.py:161:                        logger.debug(f"开始时间戳：{start_ts}，现在时间戳：{now_ts}")
+./core/context_merger.py:195:                logger.warning(f"⚠️ 日程解析失败: {e}")
+./core/context_merger.py:219:                logger.warning(f"⚠️ 微观经历解析失败: {e}")
+./core/context_merger.py:228:        logger.error(f"⚠️ 获取生活系统数据失败: {str(e)}", exc_info=True)
+./core/context_merger.py:253:            logger.warning(f"⚠️ mem0.search 异常: {e}")
+./core/context_merger.py:270:                logger.info(f"📋 记忆：{me}")
+./core/context_merger.py:272:                logger.info(f"✅ mem0.search 第 {attempt} 次尝试成功")
+./core/context_merger.py:275:            logger.warning(f"⏱️ mem0.search 第 {attempt} 次尝试超过 {timeout}s 超时")
+./core/context_merger.py:277:            logger.warning(f"⚠️ mem0.search 第 {attempt} 次尝试失败: {e}")
+./core/context_merger.py:279:    logger.error(f"❌ mem0.search 共 {max_retries + 1} 次尝试均失败，返回空列表")
+./core/context_merger.py:443:    logger.info(f"[context_merger] 开始合并上下文 channel={channel_id}")
+./core/context_merger.py:450:    logger.debug(
+./core/context_merger.py:478:                        logger.debug(
+./core/context_merger.py:488:                logger.debug(
+./core/context_merger.py:515:                        logger.debug(
+./core/context_merger.py:524:                logger.debug(
+./core/context_merger.py:545:                    logger.warning(f"⚠️ 频道摘要失败: {summary}")
+./core/context_merger.py:558:                logger.debug(f"[context_merger] 仅使用当前频道消息进行时间差判断")
+./core/context_merger.py:560:                logger.debug(f"[context_merger] 使用所有频道最新消息进行时间差判断")
+./core/context_merger.py:562:            logger.debug(
+./core/context_merger.py:598:                logger.debug(
+./core/context_merger.py:601:                logger.debug(
+./core/context_merger.py:608:                logger.debug(f"💤 精确计算睡眠时间重叠")
+./core/context_merger.py:639:                logger.info(
+./core/context_merger.py:650:                    logger.info(f"✉️ 已添加谴责提示: {_condemn_message}")
+./core/context_merger.py:654:            logger.info("ℹ️ 仅当前频道有消息，但未找到其他频道消息")
+./core/context_merger.py:656:            logger.info("ℹ️ 未找到任何频道消息，跳过时间差判断")
+./core/context_merger.py:658:        logger.debug(f"[context_merger] 获取频道摘要数量: {len(summary_notes)}")
+./core/context_merger.py:660:        logger.debug("[context_merger] 消息较简单，跳过跨频道摘要")
+./core/context_merger.py:664:    logger.debug(f"[context_merger] Life system context 长度: {len(life_system_context)}")
+./core/context_merger.py:674:    logger.debug("[context_merger] 开始检索记忆")
+./core/context_merger.py:786:    logger.info(
+./app/mattermost_client_副本.py:5:import logging
+./app/mattermost_client_副本.py:61:                logging.warning(f"⚠️ 无法获取频道信息: {resp.status_code} - {resp.text}")
+./app/mattermost_client_副本.py:85:                logging.warning(f"⚠️ 无法获取用户信息: {resp.status_code} - {resp.text}")
+./app/mattermost_client_副本.py:96:                logging.info(f"✅ Bot user ID: {self.user_id}")
+./app/mattermost_client_副本.py:98:                logging.error("❌ Failed to fetch bot user ID")
+./app/mattermost_client_副本.py:106:                logging.info(f"✅ Bot user ID: {self.user_id}")
+./app/mattermost_client_副本.py:111:                logging.info(f"Connecting to {self.websocket_url}...")
+./app/mattermost_client_副本.py:116:                logging.info("✅ WebSocket connected.")
+./app/mattermost_client_副本.py:120:                logging.error(f"❌ Connection attempt {i+1}/{retries} failed: {e}")
+./app/mattermost_client_副本.py:122:                    logging.info(f"Retrying in {delay} seconds...")
+./app/mattermost_client_副本.py:125:                    logging.error("❌ All connection attempts failed. Exiting.")
+./app/mattermost_client_副本.py:151:                logging.info(
+./app/mattermost_client_副本.py:174:                    logging.debug(f"⌨️ 更新频道 {channel_id} 输入状态时间")
+./app/mattermost_client_副本.py:187:                #     logging.info(f"✅ 发送打字指示器成功，频道 {channel_id}")
+./app/mattermost_client_副本.py:189:                #     logging.warning(f"⚠️ 发送打字指示器失败: {response.status_code} - {response.text}")
+./app/mattermost_client_副本.py:191:                logging.warning(f"⚠️ 发送打字指示器异常: {e}")
+./app/mattermost_client_副本.py:207:            logging.info(f"⚡ 收到简单消息 '{message}'，立即回复。")
+./app/mattermost_client_副本.py:234:        logging.info(
+./app/mattermost_client_副本.py:290:                    logging.info(
+./app/mattermost_client_副本.py:301:            logging.info(
+./app/mattermost_client_副本.py:311:            logging.info(f"⚠️ 处理任务被取消，频道 {channel_id}")
+./app/mattermost_client_副本.py:313:            logging.error(f"❌ 智能处理出错，频道 {channel_id}: {e}")
+./app/mattermost_client_副本.py:333:            logging.info(
+./app/mattermost_client_副本.py:350:            logging.info(f"🧹 清空频道 {channel_id} 的消息缓冲区")
+./app/mattermost_client_副本.py:353:            logging.error(f"❌ 生成回复出错，频道 {channel_id}: {e}")
+./app/mattermost_client_副本.py:415:            logging.info(f"✅ Replied with: {text}")
+./app/mattermost_client_副本.py:418:            logging.error(
+./app/mattermost_client_副本.py:425:            logging.info("📊 开始获取初始数据...")
+./app/mattermost_client_副本.py:509:                        logging.info(
+./app/mattermost_client_副本.py:540:                        logging.info(f"✅ 已存储 {len(users_data)} 个用户信息")
+./app/mattermost_client_副本.py:543:            logging.error(f"❌ 获取初始数据失败: {e}")
+./app/mattermost_client.py:5:import logging
+./app/mattermost_client.py:60:                logging.error("❌ BOT user ID 未知，无法获取 Team 列表。")
+./app/mattermost_client.py:71:                logging.debug(f"[mm] 成功获取 Team 数量: {len(teams)}")
+./app/mattermost_client.py:76:                logging.warning(
+./app/mattermost_client.py:86:                logging.error("❌ BOT user ID 未知，无法获取频道列表。")
+./app/mattermost_client.py:97:                logging.debug(f"[mm] 成功获取 Team {team_id} 频道数: {len(channels)}")
+./app/mattermost_client.py:102:                logging.warning(
+./app/mattermost_client.py:117:                logging.debug(f"[mm] 频道 {channel_id} 成员数: {len(members)}")
+./app/mattermost_client.py:120:                logging.warning(
+./app/mattermost_client.py:144:                logging.warning(f"⚠️ 无法获取频道信息: {resp.status_code} - {resp.text}")
+./app/mattermost_client.py:168:                logging.warning(f"⚠️ 无法获取用户信息: {resp.status_code} - {resp.text}")
+./app/mattermost_client.py:179:                logging.debug(f"[mm] Bot user ID: {self.user_id}")
+./app/mattermost_client.py:181:                logging.error("❌ Failed to fetch bot user ID")
+./app/mattermost_client.py:188:        logging.info("[mm] 开始同步 Mattermost 基础数据到 Redis")
+./app/mattermost_client.py:194:                logging.error("❌ 无法获取 BOT user ID，跳过数据同步。")
+./app/mattermost_client.py:204:            logging.debug(f"[mm] 已将 {len(teams)} 个 Team 信息存储到 Redis")
+./app/mattermost_client.py:206:            logging.warning("⚠️ 未获取到任何 Team 信息。")
+./app/mattermost_client.py:220:            logging.debug(f"[mm] 已将 {len(all_channels)} 个频道信息存储到 Redis")
+./app/mattermost_client.py:222:            logging.warning("⚠️ 未获取到任何频道信息。")
+./app/mattermost_client.py:244:                    logging.warning(
+./app/mattermost_client.py:264:                    logging.debug(f"[mm] 标记用户 'kawaro' ({user_details['id']})")
+./app/mattermost_client.py:271:            logging.debug(f"[mm] 已将 {len(all_users)} 个用户信息存储到 Redis")
+./app/mattermost_client.py:273:            logging.warning("⚠️ 未获取到任何用户信息。")
+./app/mattermost_client.py:279:        logging.debug(f"[mm] DM 频道数量: {len(dm_channels_from_api)}")
+./app/mattermost_client.py:309:                    logging.debug(
+./app/mattermost_client.py:313:                    logging.warning(
+./app/mattermost_client.py:317:                logging.warning(f"⚠️ 无法找到 DM 频道 {dm_channel_id} 的对方用户。")
+./app/mattermost_client.py:319:        logging.info("[mm] Mattermost 基础数据同步完成")
+./app/mattermost_client.py:327:                logging.info(f"[mm] 连接 WebSocket: {self.websocket_url}")
+./app/mattermost_client.py:332:                logging.info("[mm] WebSocket 连接成功")
+./app/mattermost_client.py:343:                logging.error(f"❌ 连接失败 {i+1}/{retries}: {e}")
+./app/mattermost_client.py:345:                    logging.debug(f"[mm] {delay} 秒后重试连接")
+./app/mattermost_client.py:348:                    logging.error("❌ 所有连接尝试失败，退出。")
+./app/mattermost_client.py:355:            # logging.info(f"📡 收到事件类型: {event}，完整内容如下：\n{json.dumps(data, ensure_ascii=False, indent=2)}")
+./app/mattermost_client.py:375:                logging.debug(
+./app/mattermost_client.py:388:                logging.debug(f"[mm] 接收到 Typing 信号 ts={time.time()}")
+./app/mattermost_client.py:399:                    logging.debug(f"⌨️ 更新频道 {channel_id} 输入状态时间")
+./app/mattermost_client.py:412:                logging.warning(f"⚠️ 发送打字指示器异常: {e}")
+./app/mattermost_client.py:428:            logging.info(f"⚡ 收到简单消息 '{message}'，立即回复。")
+./app/mattermost_client.py:452:        logging.info(
+./app/mattermost_client.py:507:                    logging.info(
+./app/mattermost_client.py:516:            logging.info(
+./app/mattermost_client.py:528:            logging.debug(f"[mm] 处理任务被取消 channel={channel_id}")
+./app/mattermost_client.py:530:            logging.error(f"❌ 智能处理出错，频道 {channel_id}: {e}")
+./app/mattermost_client.py:546:                logging.error("❌ 无法获取 BOT user ID，无法创建或获取私聊频道。")
+./app/mattermost_client.py:561:                    logging.debug(f"[mm] 创建私聊频道成功: {channel_data['id']}")
+./app/mattermost_client.py:570:                    logging.debug(
+./app/mattermost_client.py:588:                                logging.debug(
+./app/mattermost_client.py:592:                    logging.warning(
+./app/mattermost_client.py:597:                    logging.warning(
+./app/mattermost_client.py:602:                logging.error(f"❌ 创建或获取私聊频道时发生异常: {e}")
+./app/mattermost_client.py:620:            logging.info(
+./app/mattermost_client.py:640:                logging.debug(f"[mm] 清空频道 {channel_id} 的消息缓冲区")
+./app/mattermost_client.py:642:                logging.debug(f"[mm] 未生成有效内容，保留频道 {channel_id} 的消息缓冲区")
+./app/mattermost_client.py:647:                    logging.warning(f"⚠️ 自动回复发送失败，频道 {channel_id}: {e}")
+./app/mattermost_client.py:650:            logging.error(f"❌ 生成 {log_prefix} 出错，频道 {channel_id}: {e}")
+./app/mattermost_client.py:734:            logging.info(f"[mm] 已回复: {text}")
+./app/mattermost_client.py:737:            logging.error(
+./app/mattermost_client.py:756:                logging.error("❌ 无法获取 BOT user ID，无法发送消息")
+./app/mattermost_client.py:769:            logging.warning("⚠️ 未找到 'kawaro' 用户")
+./app/mattermost_client.py:772:        logging.info(f"✅ 找到 'kawaro' 用户 ID: {kawaro_user_id}")
+./app/mattermost_client.py:777:            logging.error("❌ 无法获取 'kawaro' 的私聊频道，无法发送消息。")
+./app/mattermost_client.py:782:        logging.info(f"✅ 已向 'kawaro' 发送消息: '{message}'")
+./app/mattermost_client.py:799:                logging.error("❌ 无法获取 BOT user ID")
+./app/mattermost_client.py:814:            logging.warning("⚠️ 未找到 'kawaro' 用户")
+./app/mattermost_client.py:820:            logging.warning("⚠️ 无法获取与 'kawaro' 的私聊频道")
+./app/life_system.py:5:import logging
+./app/life_system.py:11:logger = logging.getLogger(__name__)
+./app/life_system.py:45:    logger.info(f"[daily_life] 开始生成每日日程: {date_str}")
+./app/life_system.py:49:    logger.debug(f"[daily_life] 天气信息: {weather}")
+./app/life_system.py:53:    logger.debug(f"[daily_life] 日期类型: {day_type}")
+./app/life_system.py:58:    logger.debug(f"[daily_life] 检查是否处于大事件: {date_str}")
+./app/life_system.py:64:        logger.debug(
+./app/life_system.py:69:        logger.debug("[daily_life] 未检测到已存在的大事件")
+./app/life_system.py:78:        logger.debug(
+./app/life_system.py:89:            # logger.info(f"随机1000次结果：{Counter(results)}\n\n")
+./app/life_system.py:92:            logger.debug(f"[daily_life] 大事件持续天数: {duration_days}天 (μ=4, σ=2)")
+./app/life_system.py:98:            logger.debug(f"[daily_life] 选择事件类型: {event_type} (权重: {weights})")
+./app/life_system.py:102:            logger.debug(
+./app/life_system.py:109:            logger.debug(f"[daily_life] 新大事件生成完成: {event_type}, 持续{duration_days}天")
+./app/life_system.py:113:        logger.warning("⚠️ 大事件上下文缺失，尝试从数据库获取...")
+./app/life_system.py:116:            logger.warning("❌ 数据库中也未找到大事件详情，使用默认值")
+./app/life_system.py:124:        logger.debug(
+./app/life_system.py:128:        logger.debug("[daily_life] 大事件状态: 不存在")
+./app/life_system.py:131:    logger.debug("[daily_life] 调用 AI 生成每日日程")
+./app/life_system.py:142:        logger.error(f"❌ AI生成日程失败: {daily_schedule_data['error']}")
+./app/life_system.py:145:    logger.debug("[daily_life] AI日程生成成功")
+./app/life_system.py:148:    logger.debug("[daily_life] 存储日程到数据库")
+./app/life_system.py:163:            logger.debug(f"[daily_life] 日程已更新 (ID: {schedule_id})")
+./app/life_system.py:174:            logger.debug(f"[daily_life] 日程已插入 (ID: {schedule_id})")
+./app/life_system.py:178:        logger.error(f"❌ 存储日程到数据库失败: {e}")
+./app/life_system.py:182:    logger.debug("[daily_life] 存储日程到文件")
+./app/life_system.py:188:        logger.debug(f"[daily_life] 日程已保存到文件: {file_path}")
+./app/life_system.py:190:        logger.error(f"❌ 保存日程到文件失败: {e}")
+./app/life_system.py:194:        logger.debug(
+./app/life_system.py:206:            logger.debug(
+./app/life_system.py:226:        logger.debug(
+./app/life_system.py:230:        logger.warning("⚠️ 日程中没有可生成微观经历的项目")
+./app/life_system.py:232:    logger.info(f"[daily_life] 生成完成: {date_str} 每日日程与存储")
+./app/life_system.py:235:    logger.debug("[daily_life] 开始收集需要主动交互的微观经历")
+./app/life_system.py:246:    logger.info(f"[interactions] 开始收集需要主动交互的微观经历: {date_str}")
+./app/life_system.py:252:            logger.warning(f"未找到 {date_str} 的日程数据")
+./app/life_system.py:260:            logger.debug("[interactions] 当日没有微观经历数据")
+./app/life_system.py:271:        logger.debug(f"[interactions] 需要交互的微观经历条数: {len(interaction_needed)}")
+./app/life_system.py:292:                logger.error(f"⚠️ 缺少时间字段，无法添加到 Sorted Set: {exp} - {ke}")
+./app/life_system.py:294:                logger.error(f"❌ 添加到 Redis Sorted Set 失败: {exp} - {add_e}")
+./app/life_system.py:298:        logger.info(f"[interactions] 已存储到 Redis: {redis_key} (24h 过期)")
+./app/life_system.py:302:        logger.error(f"收集交互微观经历失败: {str(e)}", exc_info=True)
+./app/life_system.py:315:    logger.info(f"[major_event] 开始生成大事件: {start_date_str} -> {end_date_str}")
+./app/life_system.py:346:    logger.debug(f"[major_event] 天气模拟地点: {selected_location}")
+./app/life_system.py:355:    logger.debug(f"[major_event] 模拟天气预报: {weather_forecast}")
+./app/life_system.py:358:    logger.debug("[major_event] 调用 AI 生成大事件")
+./app/life_system.py:367:        logger.error(f"❌ AI生成大事件失败: {major_event_data['error']}")
+./app/life_system.py:370:    logger.debug("[major_event] AI 大事件生成成功")
+./app/life_system.py:373:    logger.debug("[major_event] 存储大事件到数据库")
+./app/life_system.py:384:        logger.debug(f"[major_event] 大事件已插入 (ID: {event_id})")
+./app/life_system.py:387:        logger.error(f"❌ 存储大事件到数据库失败: {e}")
+./app/life_system.py:391:    logger.debug("[major_event] 存储大事件到文件")
+./app/life_system.py:400:        logger.debug(f"[major_event] 大事件已保存到文件: {file_path}")
+./app/life_system.py:402:        logger.error(f"❌ 保存大事件到文件失败: {e}")
+./app/life_system.py:404:    logger.info(f"[major_event] 大事件生成与存储完成")
+./app/life_system.py:418:    logger.info(
+./app/life_system.py:423:    logger.debug("[micro_exp] 调用 AI 生成微观经历（5-30 分钟）")
+./app/life_system.py:433:        logger.error(f"❌ AI生成微观经历失败: {', '.join(errors)}")
+./app/life_system.py:436:    logger.debug(f"[micro_exp] AI 生成成功，数量: {len(micro_experiences)}")
+./app/life_system.py:439:    logger.debug("[micro_exp] 存储微观经历项到数据库")
+./app/life_system.py:447:        logger.debug(f"[micro_exp] 微观经历已存储 (ID: {experience_id})")
+./app/life_system.py:450:        logger.error(f"❌ 存储微观经历失败: {e}")
+./app/life_system.py:453:    logger.debug(f"[micro_exp] 成功存储 {successful_items}/{len(micro_experiences)} 个微观经历项")
+./app/life_system.py:456:    logger.debug("[micro_exp] 存储微观经历到文件")
+./app/life_system.py:475:        logger.debug(f"[micro_exp] 微观经历项已保存到文件: {file_path}")
+./app/life_system.py:477:        logger.error(f"❌ 保存微观经历项到文件失败: {e}")
+./app/life_system.py:479:    logger.info(f"[micro_exp] 微观经历项生成与存储完成")
+./app/life_system.py:489:#     logger.info(f"--- 正在获取并总结每日计划 {daily_schedule_id} 的微观经历 ---")
+./app/life_system.py:492:#         logger.info("没有找到微观经历。")
+./app/life_system.py:495:#     logger.info(f"找到 {len(experiences)} 条微观经历，正在总结...")
+./app/life_system.py:497:#     logger.info("✅ 总结完成。")
+./app/life_system.py:528:        logger.debug(
+./app/life_system.py:533:            logger.debug("No daily schedule found.")
+./app/life_system.py:540:            logger.debug("Daily schedule has no 'schedule_data' or 'schedule_items'.")
+./app/life_system.py:546:            logger.error(f"Invalid target_time format: {target_time}")
+./app/life_system.py:554:                logger.warning(f"Schedule item missing start_time or end_time: {item}")
+./app/life_system.py:563:                logger.error(f"Invalid time format in schedule item: {item}")
+./app/life_system.py:566:            logger.debug(
+./app/life_system.py:570:                logger.debug(f"Matched schedule item: {item.get('title')}")
+./app/life_system.py:573:        logger.debug("No matching schedule item found for current time.")
+./app/life_system.py:584:        logger.debug(
+./app/life_system.py:591:            logger.debug(
+./app/life_system.py:599:            logger.error(f"Invalid target_time format: {target_time}")
+./app/life_system.py:605:                logger.debug(
+./app/life_system.py:615:                    logger.warning(
+./app/life_system.py:628:                    logger.error(f"Invalid time format in micro experience item: {exp}")
+./app/life_system.py:631:                logger.debug(
+./app/life_system.py:635:                    logger.debug(f"Matched micro experience: {exp.get('content')}")
+./app/life_system.py:638:        logger.debug("No matching micro experience found for current time.")
+./app/life_system.py:648:        logger.info(f"[main] 开始生成日程系统: {target_date}")
+./app/life_system.py:654:        logger.debug("[main] 验证系统查询功能")
+./app/life_system.py:660:        logger.critical(f"‼️ 主流程执行失败: {str(e)}", exc_info=True)
+./app/life_system.py:696:            logger.error(f"无效日期格式: {args.date}, 使用今日日期")
+./app/life_system.py:699:    logger.debug(f"[main] 执行日期: {target_date}")
+./app/main.py:1:import logging
+./app/main.py:26:logging.basicConfig(
+./app/main.py:27:    level=logging.INFO,
+./scripts/test_active_interaction.py:12:import logging
+./scripts/test_active_interaction.py:31:logging.basicConfig(
+./scripts/test_active_interaction.py:32:    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+./scripts/test_active_interaction.py:34:logger = logging.getLogger(__name__)
+./services/ai_service.py:3:import logging
+./services/ai_service.py:28:logger = logging.getLogger(__name__)
+./services/ai_service.py:30:# === compact payload logging helpers ===
+./services/ai_service.py:111:                logger.debug(f"[ai] Redis 无配置，写入默认 Gemini 配置")
+./services/ai_service.py:113:                logger.warning(f"⚠️ 写入默认 Gemini 配置到 Redis 失败: {se}")
+./services/ai_service.py:120:        logger.warning(f"⚠️ 读取 Gemini 配置失败，使用默认值: {e}")
+./services/ai_service.py:135:                    logger.warning(
+./services/ai_service.py:141:                    logger.error("❌ 达到最大重试次数，放弃重试")
+./services/ai_service.py:149:                logger.warning(f"{e}")
+./services/ai_service.py:150:                logger.warning(
+./services/ai_service.py:156:                logger.error("❌ 达到最大重试次数，放弃重试")
+./services/ai_service.py:166:    logger.info(f"[ai] 开始 stream_openrouter 模型={model}")
+./services/ai_service.py:198:                            logger.error(
+./services/ai_service.py:221:                logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+./services/ai_service.py:224:                    logger.warning(
+./services/ai_service.py:230:                    logger.error(
+./services/ai_service.py:244:                logger.error(
+./services/ai_service.py:252:                logger.warning(
+./services/ai_service.py:258:                logger.error(f"❌ OpenRouter流式调用失败: 未知错误: {e}")
+./services/ai_service.py:269:    logger.info(f"[ai] 开始 stream_reply_ai 模型={model}")
+./services/ai_service.py:342:                            logger.error(
+./services/ai_service.py:365:                logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+./services/ai_service.py:368:                    logger.warning(
+./services/ai_service.py:374:                    logger.error(
+./services/ai_service.py:388:                logger.error(
+./services/ai_service.py:396:                logger.warning(
+./services/ai_service.py:402:                logger.error(f"❌ Reply AI流式调用失败: 未知错误: {e}")
+./services/ai_service.py:414:        logger.info(f"[ai] 开始 stream_ai_chat 渠道=ReplyAI 模型={OPENAI_API_MODEL}")
+./services/ai_service.py:418:        logger.info(f"[ai] 开始 stream_ai_chat 渠道=GeminiAPI 模型={model}")
+./services/ai_service.py:422:        logger.info(f"[ai] 开始 stream_ai_chat 渠道=OpenRouter 模型={model}")
+./services/ai_service.py:495:        logger.info(f"[ai] 开始 call_openrouter 模型={model}")
+./services/ai_service.py:508:            logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+./services/ai_service.py:511:            logger.error(
+./services/ai_service.py:516:        logger.error(f"❌ OpenRouter调用失败: 未知错误: {e}")
+./services/ai_service.py:530:    logger.debug(f"🔄 正在使用模型进行 stream_reply_ai_by_gemini(): {model}")
+./services/ai_service.py:536:        logger.debug("使用 GEMINI_API_KEY2")
+./services/ai_service.py:554:    logger.debug(f"转换后的 Gemini contents: {gemini_contents}")
+./services/ai_service.py:558:    logger.debug(f"system prompt: {system_prompt}...")
+./services/ai_service.py:574:    logger.debug(
+./services/ai_service.py:587:                logger.warning("⚙️ 第二次尝试：强制使用 gemini-2.5-flash，thinkingBudget=24576")
+./services/ai_service.py:590:                logger.warning(f"🔄 第 {retry_count} 次重试请求: {full_url}")
+./services/ai_service.py:592:                logger.debug(f"🚀 开始向 Gemini API 发送请求: {full_url}")
+./services/ai_service.py:605:                    logger.debug(f"🌐 Gemini API 响应状态码: {response.status_code}")
+./services/ai_service.py:615:                            logger.debug(f"跳过事件行: {line}")
+./services/ai_service.py:618:                            logger.debug(f"跳过未知行: {line}")
+./services/ai_service.py:623:                            logger.debug("接收到流结束标记 [DONE]")
+./services/ai_service.py:629:                            logger.error(
+./services/ai_service.py:637:                            logger.warning(
+./services/ai_service.py:647:                                logger.info(
+./services/ai_service.py:655:                            logger.debug(f"生成器 yielding: '{text}'")
+./services/ai_service.py:660:                logger.warning(
+./services/ai_service.py:664:                    logger.debug(f"🔄 将进行第 {retry_count + 1} 次重试...")
+./services/ai_service.py:667:                    logger.error(f"❌ 经过 {max_retries + 1} 次尝试后仍未获得有效响应")
+./services/ai_service.py:670:                logger.debug("✅ Gemini API 调用成功并已流式输出")
+./services/ai_service.py:676:                logger.error(f"❌ 流式过程中断，但已产生部分输出，停止重试: {str(e)}")
+./services/ai_service.py:679:                logger.error(f"❌ 第 {retry_count + 1} 次请求失败: {str(e)}，将重试...")
+./services/ai_service.py:682:                logger.error(f"❌ 经过 {max_retries + 1} 次尝试后仍然失败: {str(e)}")
+./services/ai_service.py:685:    logger.debug("✅ Gemini API 流式请求完成")
+./services/ai_service.py:725:        logger.info(f"🔄 正在使用模型进行 call_gemini(): {model}")
+./services/ai_service.py:733:            logger.info(f"🌐 状态码: {response.status_code}")
+./services/ai_service.py:734:            logger.info(f"📥 返回内容: {response.text}")
+./services/ai_service.py:744:            logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+./services/ai_service.py:755:            logger.error(
+./services/ai_service.py:760:        logger.error(f"❌ Gemini 调用失败: 未知错误: {e}")
+./services/ai_service.py:783:        logger.info(f"🔄 正在使用模型进行 call_openai(): {model}")
+./services/ai_service.py:790:            logger.info(f"🌐 状态码: {response.status_code}")
+./services/ai_service.py:791:            logger.info(f"📥 返回内容: {response.text}")
+./services/ai_service.py:800:            logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+./services/ai_service.py:811:            logger.error(
+./services/ai_service.py:816:        logger.error(f"❌ OpenAI 调用失败: 未知错误: {e}")
+./services/ai_service.py:826:    logger.info(f"[ai] 开始 call_ai_summary 模型={model}")
+./services/ai_service.py:864:        logger.info(f"🔄 结构化生成调用: {STRUCTURED_API_MODEL}")
+./services/ai_service.py:873:            logger.warning(f"⚠️ 结构化生成调用超时 (模型: {STRUCTURED_API_MODEL})")
+./services/ai_service.py:876:            logger.error(f"❌ 结构化生成调用异常: {type(e).__name__}: {str(e)}")
+./services/ai_service.py:914:                        logger.warning(
+./services/ai_service.py:921:                logger.error(f"❌ JSON解析失败 (尝试 {attempt+1}/{max_retries}): {e}")
+./services/ai_service.py:940:                logger.warning(f"⚠️ 速率限制 (尝试 {attempt+1}/{max_retries})")
+./services/ai_service.py:944:                logger.error(f"[自动回复] 在忙，有事请留言 ({error_msg})")
+./services/ai_service.py:949:            logger.error(
+./services/ai_service.py:1000:        logger.debug(f"[ai.weather] 使用随机位置ID: {location} 查询 {date} 天气")
+./services/ai_service.py:1003:        logger.info(f"[ai.weather] 开始获取天气 date={date} location={location}")
+./services/ai_service.py:1014:        logger.debug(f"[ai.weather] 请求参数: {params}")
+./services/ai_service.py:1020:        logger.debug(f"[ai.weather] 响应: {data}")
+./services/ai_service.py:1024:            logger.error(error_msg)
+./services/ai_service.py:1041:                logger.info(f"[ai.weather] 成功获取 {date} 天气")
+./services/ai_service.py:1044:        logger.warning(f"未找到 {date} 的天气数据，使用最后一天数据替代")
+./services/ai_service.py:1058:        logger.info(f"使用最后一天数据作为 {date} 天气: {result[:50]}...")
+./services/ai_service.py:1061:        logger.error(f"HTTP请求失败: {e}")
+./services/ai_service.py:1063:        logger.error("天气API请求超时")
+./services/ai_service.py:1065:        logger.error(f"API返回数据错误: {e}")
+./services/ai_service.py:1067:        logger.error(f"获取天气异常: {str(e)}", exc_info=True)
+./services/ai_service.py:1072:    logger.warning(f"⚠️ 回退到伪随机天气 (种子: {seed})")
+./services/ai_service.py:1078:    logger.info(f"生成伪随机天气: {result}")
+./services/ai_service.py:1165:        logger.error(f"❌ generate_daily_schedule: AI返回的不是有效的JSON: {response}")
+./services/ai_service.py:1168:        logger.error(f"❌ generate_daily_schedule: 调用失败: {e}")
+./services/ai_service.py:1254:        logger.error(f"❌ generate_major_event: AI返回的不是有效的JSON: {response}")
+./services/ai_service.py:1257:        logger.error(f"❌ generate_major_event: 调用失败: {e}")
+./services/ai_service.py:1352:        logger.error(f"❌ generate_micro_experiences: AI返回的不是有效的JSON")
+./services/ai_service.py:1355:        logger.error(f"❌ generate_micro_experiences: 调用失败: {e}")
+./services/ai_service.py:1393:        logger.error(f"❌ summarize_past_micro_experiences: 调用失败: {e}")
+./services/life_data_service.py:2:import logging
+./services/life_data_service.py:6:import logging
+./services/life_data_service.py:9:logger = logging.getLogger(__name__)
+./services/life_data_service.py:13:logger = logging.getLogger(__name__)
+./services/life_data_service.py:32:        logger.info("[LIFE_DATA] 开始生成微观经历汇总")
+./services/life_data_service.py:50:                logger.warning("⚠️ AI汇总生成结果为空，保持重试状态")
+./services/life_data_service.py:60:                logger.debug("[LIFE_DATA] AI汇总生成成功")
+./services/life_data_service.py:74:            logger.error(f"❌ AI汇总生成失败: {str(e)}")
+./services/life_data_service.py:92:            logger.info(f"[LIFE_DATA] 开始获取生活系统数据 date={date_str}")
+./services/life_data_service.py:93:            logger.debug(f"[LIFE_DATA] 目标日期: {date_str}, 当前时间: {current_time}")
+./services/life_data_service.py:107:            logger.debug("[LIFE_DATA] 获取当前时刻的日程项")
+./services/life_data_service.py:115:                logger.debug("[LIFE_DATA] 遍历日程项")
+./services/life_data_service.py:117:                    logger.debug(f"[LIFE_DATA] 日程项开始时间: {item.get('start_time')}")
+./services/life_data_service.py:118:                    logger.debug(f"[LIFE_DATA] 日程项结束时间: {item.get('end_time')}")
+./services/life_data_service.py:128:                        logger.debug(f"[LIFE_DATA] 匹配的日程项: {schedule_item}")
+./services/life_data_service.py:132:                logger.debug(f"[LIFE_DATA] 找到匹配的日程项: {schedule_item}")
+./services/life_data_service.py:134:                logger.debug("[LIFE_DATA] 获取该日程项的微观经历")
+./services/life_data_service.py:138:                    logger.debug("[LIFE_DATA] 获取该日程项在当前时刻的微观经历")
+./services/life_data_service.py:150:                logger.debug("[LIFE_DATA] 获取当前时刻之前所有微观经历")
+./services/life_data_service.py:158:                        # logger.info("[LIFE_DATA] 🔍 日程项开始时间小于等于当前时间!!!!!")
+./services/life_data_service.py:167:                            # logger.info(
+./services/life_data_service.py:199:            logger.debug(f"[LIFE_DATA] prev: ...{prev_past_micro_experiences[-100:] if prev_past_micro_experiences else 'None'}")
+./services/life_data_service.py:200:            logger.debug(f"[LIFE_DATA] curr: ...{current_exp_json[-100:]}")
+./services/life_data_service.py:201:            logger.debug(f"[LIFE_DATA] summary_status: {summary_status}")
+./services/life_data_service.py:217:                logger.info("[LIFE_DATA] 发现数据差异，需要重新生成汇总")
+./services/life_data_service.py:228:                logger.info("[LIFE_DATA] 数据未变化但上次生成失败，进行重试")
+./services/life_data_service.py:239:                logger.info("[LIFE_DATA] 数据无变化且之前生成成功，使用现有汇总")
+./services/life_data_service.py:245:                    logger.info("[LIFE_DATA] 状态显示成功但未找到有效汇总，重新生成")
+./services/life_data_service.py:300:            logger.info(f"[LIFE_DATA] 生活系统数据已存储到 Redis: {redis_key}")
+./services/life_data_service.py:307:            logger.error(f"获取和存储生活数据失败: {str(e)}")
+./services/life_data_service.py:308:            logger.error(traceback.format_exc())
+./services/life_data_service.py:318:    logger.setLevel(logging.INFO)
+./services/life_data_service.py:319:    handler = logging.StreamHandler()
+./services/life_data_service.py:320:    formatter = logging.Formatter(
+./services/life_data_service.py:324:    logger.addHandler(handler)
+./services/life_data_service.py:329:        logger.info("[LIFE_DATA] ✅ 生活系统数据获取和存储成功")
+./services/life_data_service.py:331:        logger.error("❌ 生活系统数据获取和存储失败")
+./services/life_data_service.py:342:        logger.info(f"[LIFE_DATA] 🔍 Redis存储的数据 ({redis_key}):")
+./services/life_data_service.py:347:                logger.info(
+./services/life_data_service.py:351:                logger.info(f"[LIFE_DATA] {key}: {value}")
+./services/life_data_service.py:353:        logger.warning(f"ℹ️ 未找到Redis键: {redis_key}")
+./services/life_data_service.py:356:        logger.info(f"[LIFE_DATA] 📊 生成状态信息 ({status_key}):")
+./services/life_data_service.py:358:            logger.info(f"[LIFE_DATA] {key}: {value}")
+./services/life_data_service.py:360:        logger.info("[LIFE_DATA] 📊 未找到生成状态信息")
+./services/redis_cleanup_service.py:2:import logging
+./services/redis_cleanup_service.py:26:        logging.info("[redis_cleanup] 启动 Redis 缓存清理服务")
+./services/redis_cleanup_service.py:32:                logging.error(f"❌ Redis清理服务出错: {e}")
+./services/redis_cleanup_service.py:42:                logging.debug("[redis_cleanup] 没有找到需要清理的聊天记录")
+./services/redis_cleanup_service.py:45:            logging.info(f"[redis_cleanup] 开始清理 {len(channel_keys)} 个频道的过期消息")
+./services/redis_cleanup_service.py:57:                logging.info(
+./services/redis_cleanup_service.py:61:                logging.info("[redis_cleanup] 清理完成: 没有过期消息")
+./services/redis_cleanup_service.py:64:            logging.error(f"❌ 清理过期消息时出错: {e}")
+./services/redis_cleanup_service.py:81:                logging.debug(f"[redis_cleanup] 频道 {channel_id}: 总消息数 {total_count} <= {self.min_keep_count}，跳过清理")
+./services/redis_cleanup_service.py:91:                logging.debug(f"[redis_cleanup] 频道 {channel_id}: 实际消息数 {len(all_messages)} <= {self.min_keep_count}，跳过清理")
+./services/redis_cleanup_service.py:104:                logging.debug(f"[redis_cleanup] 频道 {channel_id}: 没有需要清理的过期消息")
+./services/redis_cleanup_service.py:118:                        logging.debug(f"删除消息: {msg_time} - {msg_data.get('role', 'unknown')}")
+./services/redis_cleanup_service.py:124:                logging.info(
+./services/redis_cleanup_service.py:131:            logging.error(f"❌ 清理频道 {channel_id} 消息时出错: {e}")
+./services/redis_cleanup_service.py:143:            logging.debug(f"[redis_cleanup] 检查 {len(buffer_keys)} 个消息缓冲区")
+./services/redis_cleanup_service.py:156:                logging.info(f"[redis_cleanup] 清理了 {cleaned_count} 个被遗弃的消息缓冲区")
+./services/redis_cleanup_service.py:159:            logging.error(f"❌ 清理被遗弃缓冲区时出错: {e}")
+./services/memory_summarizer.py:8:import logging
+./services/memory_summarizer.py:11:logger = logging.getLogger(__name__)
+./services/memory_summarizer.py:33:        logger.info(
+./services/memory_summarizer.py:39:        logger.info("[MemorySummarizer] Summarizing data of type: %s", data_type)
+./services/memory_summarizer.py:188:            logger.info("[MemorySummarizer] 命中缓存: %s", cache_key)
+./services/memory_summarizer.py:191:        logger.info(
+./services/memory_summarizer.py:334:                        logger.debug(
+./services/memory_summarizer.py:365:                        logger.debug(
+./services/memory_summarizer.py:373:                        logger.warning(
+./services/memory_summarizer.py:381:                            logger.debug("[MemorySummarizer] 重新生成结果以通过验证...")
+./services/memory_summarizer.py:416:                logger.warning(
+./services/memory_summarizer.py:424:                    logger.debug("[MemorySummarizer] %f 秒后重试...", delay)
+./services/memory_summarizer.py:428:                    logger.error("[MemorySummarizer] All API call attempts failed.")
+./services/memory_summarizer.py:442:                    logger.error(
+./services/memory_summarizer.py:470:                logger.error(
+./services/memory_storage.py:4:import logging
+./services/memory_storage.py:10:logger = logging.getLogger(__name__)
+./services/memory_storage.py:19:        logger.debug("[MemoryStorage] Redis client initialized with URL: %s", redis_url)
+./services/memory_storage.py:24:            logger.debug(
+./services/memory_storage.py:30:            logger.debug("[MemoryStorage] Converting None to empty string")
+./services/memory_storage.py:35:            logger.debug(
+./services/memory_storage.py:45:        logger.debug(
+./services/memory_storage.py:54:                logger.debug(
+./services/memory_storage.py:66:                logger.debug("[MemoryStorage] Skipping None value for key: %s", key)
+./services/memory_storage.py:68:        logger.info(
+./services/memory_storage.py:89:        logger.debug(
+./services/memory_storage.py:103:        logger.debug(
+./services/memory_storage.py:107:        logger.debug(
+./services/memory_storage.py:123:            logger.info("[MemoryStorage] 开始处理记忆 count=%d", len(memories))
+./services/memory_storage.py:128:                logger.debug(
+./services/memory_storage.py:131:                logger.debug(
+./services/memory_storage.py:145:                    logger.debug(
+./services/memory_storage.py:150:                    logger.debug(
+./services/memory_storage.py:159:                logger.debug(
+./services/memory_storage.py:168:                logger.debug("[MemoryStorage] Storing memory for key: %s", key)
+./services/memory_storage.py:170:                logger.debug(
+./services/memory_storage.py:174:                logger.debug(
+./services/memory_storage.py:184:                logger.debug(
+./services/memory_storage.py:191:                    logger.debug(
+./services/memory_storage.py:197:                    logger.debug(
+./services/memory_storage.py:204:                logger.info(
+./services/memory_storage.py:211:                    logger.debug(
+./services/memory_storage.py:217:                        logger.debug(
+./services/memory_storage.py:227:                            logger.debug(
+./services/memory_storage.py:251:                            logger.debug(
+./services/memory_storage.py:263:                            logger.debug(
+./services/memory_storage.py:266:                            logger.debug(
+./services/memory_storage.py:270:                            logger.debug(
+./services/memory_storage.py:275:                                logger.debug(
+./services/memory_storage.py:285:                                logger.debug(
+./services/memory_storage.py:290:                                logger.debug(
+./services/memory_storage.py:304:                                    logger.debug(
+./services/memory_storage.py:309:                                    logger.warning(
+./services/memory_storage.py:314:                                logger.error(
+./services/memory_storage.py:319:                                logger.error(
+./services/memory_storage.py:324:                            logger.warning(
+./services/memory_storage.py:330:                    logger.debug(
+./services/memory_storage.py:338:                        logger.debug(
+./services/memory_storage.py:362:                        logger.debug(
+./services/memory_storage.py:374:                        logger.debug("[MemoryStorage] Submitting dict content to Mem0")
+./services/memory_storage.py:375:                        logger.debug(
+./services/memory_storage.py:378:                        logger.debug(
+./services/memory_storage.py:390:                            logger.debug(
+./services/memory_storage.py:394:            logger.info("[MemoryStorage] 记忆处理完成 count=%d", len(memories))
+./services/memory_storage.py:395:                            logger.debug(
+./services/memory_storage.py:409:                                logger.debug(
+./services/memory_storage.py:414:                                logger.warning(
+./services/memory_storage.py:419:                            logger.error(
+./services/memory_storage.py:423:                            logger.error(
+./services/memory_storage.py:428:                        logger.warning(
+./services/memory_storage.py:433:                    logger.info(
+./services/memory_storage.py:439:                        logger.debug(
+./services/memory_storage.py:458:                        logger.info("[MemoryStorage] Submitting raw content to Mem0")
+./services/memory_storage.py:459:                        logger.debug(
+./services/memory_storage.py:462:                        logger.debug(
+./services/memory_storage.py:474:                            logger.info(
+./services/memory_storage.py:478:                            logger.debug(
+./services/memory_storage.py:492:                                logger.debug(
+./services/memory_storage.py:497:                                logger.warning(
+./services/memory_storage.py:502:                            logger.error(
+./services/memory_storage.py:506:                            logger.error(
+./services/memory_storage.py:511:                        logger.warning("[MemoryStorage] Raw content is empty or None")
+./services/memory_storage.py:513:            logger.info(
+./services/memory_storage.py:521:            logger.error(

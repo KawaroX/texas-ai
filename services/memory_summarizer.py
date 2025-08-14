@@ -30,7 +30,7 @@ class MemorySummarizer:
             raise RuntimeError("环境变量REDIS_URL未设置")
         self.redis_client = redis.Redis.from_url(self.redis_url)
 
-        logger.info(
+        logger.debug(
             "[MemorySummarizer] Initialized with API URL: %s and Redis", self.api_url
         )
 
@@ -185,11 +185,11 @@ class MemorySummarizer:
 
         cached_data = self.redis_client.get(cache_key)
         if cached_data:
-            logger.info("[MemorySummarizer] 命中缓存: %s", cache_key)
+            logger.debug("[MemorySummarizer] 命中缓存: %s", cache_key)
             return json.loads(cached_data)
 
         logger.info(
-            "[MemorySummarizer] Calling API with prompt length %d and source_count %d",
+            "[MemorySummarizer] 开始调用API prompt_len=%d source_count=%d",
             len(prompt),
             source_count,
         )
@@ -331,8 +331,8 @@ class MemorySummarizer:
                                 if key not in result:
                                     raise ValueError(f"缺少必需的键: {key}")
 
-                        logger.info(
-                            "[MemorySummarizer] API call successful. Parsed content keys: %s",
+                        logger.debug(
+                            "[MemorySummarizer] API 返回成功。字段: %s",
                             list(result.keys()) if isinstance(result, dict) else "N/A",
                         )
 
@@ -362,8 +362,8 @@ class MemorySummarizer:
                             cache_expiry,
                             json.dumps(memory, ensure_ascii=False),
                         )
-                        logger.info(
-                            "[MemorySummarizer] 已缓存结果: %s (过期时间: %d秒)",
+                        logger.debug(
+                            "[MemorySummarizer] 已缓存结果: %s (过期: %d秒)",
                             cache_key,
                             cache_expiry,
                         )
@@ -378,7 +378,7 @@ class MemorySummarizer:
                         )
                         if validation_attempt < max_validation_attempts - 1:
                             # 重新生成结果
-                            logger.info("[MemorySummarizer] 重新生成结果...")
+                            logger.debug("[MemorySummarizer] 重新生成结果以通过验证...")
                             response = requests.post(
                                 self.api_url,
                                 headers=self.headers,
@@ -414,14 +414,14 @@ class MemorySummarizer:
 
             except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
                 logger.warning(
-                    "[MemorySummarizer] API call failed (attempt %d/%d): %s",
+                    "[MemorySummarizer] API 调用失败 (attempt %d/%d): %s",
                     attempt + 1,
                     self.max_retries,
                     str(e),
                 )
                 if attempt < self.max_retries - 1:
                     delay = self.initial_delay * (2**attempt)  # 指数退避
-                    logger.info("[MemorySummarizer] Retrying in %f seconds...", delay)
+                    logger.debug("[MemorySummarizer] %f 秒后重试...", delay)
                     time.sleep(delay)
                 else:
                     # 所有重试都失败了，抛出最终错误
