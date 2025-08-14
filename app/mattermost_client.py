@@ -352,7 +352,7 @@ class MattermostWebSocketClient:
         async for message in self.connection:
             data = json.loads(message)
             event = data.get("event")
-            logging.info(f"📡 收到事件类型: {event}，完整内容如下：\n{json.dumps(data, ensure_ascii=False, indent=2)}")
+            # logging.info(f"📡 收到事件类型: {event}，完整内容如下：\n{json.dumps(data, ensure_ascii=False, indent=2)}")
 
             if event == "posted":
                 post_data = json.loads(data["data"]["post"])
@@ -385,6 +385,7 @@ class MattermostWebSocketClient:
                 )
 
             elif event == "typing":
+                logging.info(f"\n\n{time.time()}: 接收到Typing信号\n\n")
                 # 处理用户打字事件
                 typing_data = data["data"]
                 user_id = typing_data.get("user_id")
@@ -500,15 +501,15 @@ class MattermostWebSocketClient:
                         trigger_reason.append(f"总时长超时(45s){total_elapsed:.2f}")
                     if activity_elapsed > 15:
                         trigger_reason.append(f"活动中断(15s){activity_elapsed:.2f}")
-                    if typing_elapsed > 3:
-                        trigger_reason.append(f"输入停止(3s){typing_elapsed:.2f}")
+                    if typing_elapsed > 2.3:
+                        trigger_reason.append(f"输入停止(2.3s){typing_elapsed:.2f}")
 
                     logging.info(
                         f"⏳ 频道 {channel_id} 触发超时: {', '.join(trigger_reason)}"
                     )
                     break
                 first_run = False
-                await asyncio.sleep(0.5)  # 每0.5秒检查一次
+                await asyncio.sleep(0.1)  # 每0.1秒检查一次
 
             # 从 Redis 获取当前缓冲区中的所有消息
             messages = self.redis_client.lrange(f"channel_buffer:{channel_id}", 0, -1)
@@ -620,20 +621,30 @@ class MattermostWebSocketClient:
                 f"🧠 开始生成 {log_prefix}，频道 {channel_id}，处理消息数：{len(processed_messages)}"
             )
 
+            sent_any = False  # 标记是否实际发出了任何内容
+
             # 流式生成回复
             async for segment in self.chat_engine.stream_reply(
                 channel_id, processed_messages, channel_info, user_info, context_info, is_active_interaction
             ):
                 if segment.strip():
                     cleaned_segment = segment.strip()
+                    sent_any = True
                     # if cleaned_segment.endswith((".", "。")):
                     #     cleaned_segment = cleaned_segment[:-1]
                     await self._send_message_with_typing(channel_id, cleaned_segment)
 
-            # 如果是被动回复，清空 Redis 缓冲区
-            if not is_active_interaction:
+            # 如果是被动回复且确实发出了内容，才清空 Redis 缓冲区
+            if not is_active_interaction and sent_any:
                 self.redis_client.delete(f"channel_buffer:{channel_id}")
                 logging.info(f"🧹 清空频道 {channel_id} 的消息缓冲区")
+            elif not is_active_interaction and not sent_any:
+                logging.info(f"⏸ 未生成有效内容，保留频道 {channel_id} 的消息缓冲区以便重试")
+                # 追加自动回复，但不清空缓冲区
+                try:
+                    await self._send_message_with_typing(channel_id, "[自动回复]在忙，有事请留言")
+                except Exception as e:
+                    logging.warning(f"⚠️ 自动回复发送失败，频道 {channel_id}: {e}")
 
         except Exception as e:
             logging.error(f"❌ 生成 {log_prefix} 出错，频道 {channel_id}: {e}")
@@ -668,7 +679,7 @@ class MattermostWebSocketClient:
         # 生成主等待时间
         delay = random.normalvariate(mean, std_dev)
 
-        # 动态最大等待时间：平均7秒，标准差1秒，限制在6~8之间
+        # 动态最大等待时间：平均5秒，标准差1秒，限制在4~6之间
         max_dynamic = random.normalvariate(5.0, 1.0)
         max_dynamic = max(4.0, min(6.0, max_dynamic))  # 限制最大上限浮动范围
 
@@ -683,7 +694,7 @@ class MattermostWebSocketClient:
             async def continuous_typing():
                 while True:
                     await self.send_typing(channel_id)
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(2)
 
             typing_task = asyncio.create_task(continuous_typing())
 
@@ -702,6 +713,12 @@ class MattermostWebSocketClient:
 
     async def send_message(self, channel_id, text):
         clean_text = text.replace("。", " ").strip()
+        if "距离上一条消息过去了" in clean_text:
+            clean_text = clean_text.split("\n")[-1].strip()
+        if "\n" in clean_text:
+            clean_text = clean_text.replace("\n", "")
+        if "\\n" in clean_text:
+            clean_text = clean_text.replace("\\n", "")
         payload = {"channel_id": channel_id, "message": clean_text}
         headers = {
             "Authorization": f"Bearer {self.token}",

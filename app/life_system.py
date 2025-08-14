@@ -82,11 +82,11 @@ async def generate_and_store_daily_life(target_date: date):
         if rand_val < gen_prob:  # 0.028概率生成大事件
             # 正态分布生成持续天数 (μ=4, σ=2)，范围1-7天
             results = []
-            for _ in range(1000):
-                val = max(1, min(7, int(random.gauss(4, 2))))
-                results.append(val)
+            # for _ in range(1000):
+            #     val = max(1, min(7, int(random.gauss(4, 2))))
+            #     results.append(val)
 
-            logger.info(f"随机1000次结果：{Counter(results)}\n\n")
+            # logger.info(f"随机1000次结果：{Counter(results)}\n\n")
 
             duration_days = max(1, min(7, int(random.gauss(4, 2))))
             logger.info(f"📅 生成大事件持续天数: {duration_days}天 (正态分布 μ=4, σ=2)")

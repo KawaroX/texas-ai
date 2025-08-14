@@ -29,7 +29,7 @@ class LifeDataService:
         date_str
     ):
         """生成汇总并跟踪状态"""
-        logger.info("🤖 开始生成微观经历汇总")
+        logger.info("[LIFE_DATA] 🤖 开始生成微观经历汇总")
         
         # 记录开始尝试的状态
         attempt_status = {
@@ -57,7 +57,7 @@ class LifeDataService:
                 self.redis.hset(summary_generation_status_key, mapping=failure_status)
                 return "汇总生成中，请稍候..."
             else:
-                logger.info("✅ AI汇总生成成功")
+                logger.info("[LIFE_DATA] ✅ AI汇总生成成功")
                 # 记录成功状态
                 success_status = {
                     "last_success": "true",
@@ -89,8 +89,8 @@ class LifeDataService:
             date_str = today.strftime("%Y-%m-%d")
             current_time = datetime.now().strftime("%H:%M")
 
-            logger.info(f"🚀 开始获取{date_str}的生活系统数据")
-            logger.info(f"📅 目标日期: {date_str}, 当前时间: {current_time}")
+            logger.info(f"[LIFE_DATA] 🚀 开始获取{date_str}的生活系统数据")
+            logger.info(f"[LIFE_DATA] 📅 目标日期: {date_str}, 当前时间: {current_time}")
 
             # 初始化查询对象
             query = LifeSystemQuery(today)
@@ -104,7 +104,7 @@ class LifeDataService:
             # 获取当前时刻的微观经历
             current_micro_experience = None
             schedule_item = None  # 初始化schedule_item变量
-            logger.info("🔍 获取当前时刻的日程项")
+            logger.info("[LIFE_DATA] 🔍 获取当前时刻的日程项")
 
             # 先获取当前时刻的日程项
             if (
@@ -112,10 +112,10 @@ class LifeDataService:
                 and "schedule_data" in daily_schedule
                 and "schedule_items" in daily_schedule["schedule_data"]
             ):
-                logger.info("🔍 遍历日程项")
+                logger.info("[LIFE_DATA] 🔍 遍历日程项")
                 for item in daily_schedule["schedule_data"]["schedule_items"]:
-                    logger.info(f"日程项开始时间: {item.get('start_time')}")
-                    logger.info(f"日程项结束时间: {item.get('end_time')}")
+                    logger.info(f"[LIFE_DATA] 日程项开始时间: {item.get('start_time')}")
+                    logger.info(f"[LIFE_DATA] 日程项结束时间: {item.get('end_time')}")
                     item_start_time = item["start_time"]
                     item_end_time = item["end_time"]
                     item_start_time_obj = datetime.strptime(
@@ -125,17 +125,17 @@ class LifeDataService:
                     current_time_obj = datetime.strptime(current_time, "%H:%M").time()
                     if item_start_time_obj <= current_time_obj <= item_end_time_obj:
                         schedule_item = item
-                        logger.info(f"匹配的日程项: {schedule_item}")
+                        logger.info(f"[LIFE_DATA] 匹配的日程项: {schedule_item}")
                         break  # 找到第一个匹配项即可退出循环
 
             if schedule_item:
-                logger.info(f"找到匹配的日程项: {schedule_item}")
+                logger.info(f"[LIFE_DATA] 找到匹配的日程项: {schedule_item}")
                 # 获取该日程项的微观经历
-                logger.info("🔍 获取该日程项的微观经历")
+                logger.info("[LIFE_DATA] 🔍 获取该日程项的微观经历")
                 schedule_item_id = schedule_item.get("id")
                 if schedule_item_id:
                     # 获取该日程项在当前时刻的微观经历
-                    logger.info("🔍 获取该日程项在当前时刻的微观经历")
+                    logger.info("[LIFE_DATA] 🔍 获取该日程项在当前时刻的微观经历")
                     current_micro_experience = await query.get_micro_experience_at_time(
                         schedule_item_id, current_time
                     )
@@ -147,7 +147,7 @@ class LifeDataService:
                 and "schedule_data" in daily_schedule
                 and "schedule_items" in daily_schedule["schedule_data"]
             ):
-                logger.info("🔍 获取当前时刻之前所有微观经历")
+                logger.info("[LIFE_DATA] 🔍 获取当前时刻之前所有微观经历")
                 for item in daily_schedule["schedule_data"]["schedule_items"]:
                     item_time = item["start_time"]
                     item_start_time_obj = datetime.strptime(item_time, "%H:%M").time()
@@ -155,7 +155,7 @@ class LifeDataService:
                     if (
                         item_start_time_obj <= current_time_obj
                     ):  # 只包括当前时刻及之前的日程项
-                        logger.info("🔍 日程项开始时间小于等于当前时间!!!!!")
+                        # logger.info("[LIFE_DATA] 🔍 日程项开始时间小于等于当前时间!!!!!")
                         schedule_item_id = item.get("id")
                         if schedule_item_id:
                             # 获取该日程项的所有微观经历
@@ -196,9 +196,9 @@ class LifeDataService:
                 else ""
             )
 
-            logger.info(f"prev: ...{prev_past_micro_experiences[-100:] if prev_past_micro_experiences else 'None'}")
-            logger.info(f"curr: ...{current_exp_json[-100:]}")
-            logger.info(f"summary_status: {summary_status}")
+            logger.info(f"[LIFE_DATA] prev: ...{prev_past_micro_experiences[-100:] if prev_past_micro_experiences else 'None'}")
+            logger.info(f"[LIFE_DATA] curr: ...{current_exp_json[-100:]}")
+            logger.info(f"[LIFE_DATA] summary_status: {summary_status}")
 
             # 检查是否需要重新生成汇总
             data_changed = prev_past_micro_experiences != current_exp_json
@@ -214,7 +214,7 @@ class LifeDataService:
                 
             elif data_changed:
                 # 数据有变化，无论之前是否成功都需要重新生成
-                logger.info("发现数据差异，需要重新生成汇总")
+                logger.info("[LIFE_DATA] 发现数据差异，需要重新生成汇总")
                 summarized_past_micro_experiences_story = await self._generate_summary_with_status_tracking(
                     all_past_micro_experiences, 
                     current_exp_json,
@@ -225,7 +225,7 @@ class LifeDataService:
                 
             elif not last_generation_success and last_attempt_data == current_exp_json:
                 # 数据没变但上次生成失败，需要重试
-                logger.info("数据未变化但上次生成失败，进行重试")
+                logger.info("[LIFE_DATA] 数据未变化但上次生成失败，进行重试")
                 summarized_past_micro_experiences_story = await self._generate_summary_with_status_tracking(
                     all_past_micro_experiences,
                     current_exp_json, 
@@ -236,13 +236,13 @@ class LifeDataService:
                 
             else:
                 # 数据没变化且之前生成成功，使用现有汇总
-                logger.info("数据无变化且之前生成成功，使用现有汇总")
+                logger.info("[LIFE_DATA] 数据无变化且之前生成成功，使用现有汇总")
                 main_data = self.redis.hgetall(f"life_system:{date_str}")
                 existing_story = main_data.get("summarized_past_micro_experiences_story", "")
                 
                 if not existing_story or existing_story in ["", "没有之前的经历，今天可能才刚刚开始。"]:
                     # 没有有效汇总但状态显示成功，可能是数据丢失，重新生成
-                    logger.info("状态显示成功但未找到有效汇总，重新生成")
+                    logger.info("[LIFE_DATA] 状态显示成功但未找到有效汇总，重新生成")
                     summarized_past_micro_experiences_story = await self._generate_summary_with_status_tracking(
                         all_past_micro_experiences,
                         current_exp_json,
@@ -297,7 +297,7 @@ class LifeDataService:
             # 设置24小时过期时间
             self.redis.expire(redis_key, 86400)
 
-            logger.info(f"生活系统数据已存储到Redis: {redis_key}")
+            logger.info(f"[LIFE_DATA] 生活系统数据已存储到Redis: {redis_key}")
 
             return True
 
@@ -326,7 +326,7 @@ async def main():
     # 执行数据获取和存储
     result = await life_data_service.fetch_and_store_today_data()
     if result:
-        logger.info("✅ 生活系统数据获取和存储成功")
+        logger.info("[LIFE_DATA] ✅ 生活系统数据获取和存储成功")
     else:
         logger.error("❌ 生活系统数据获取和存储失败")
 
@@ -339,7 +339,7 @@ async def main():
     status_data = redis_client.hgetall(status_key)
 
     if stored_data:
-        logger.info(f"🔍 Redis存储的数据 ({redis_key}):")
+        logger.info(f"[LIFE_DATA] 🔍 Redis存储的数据 ({redis_key}):")
         for key, value in stored_data.items():
             # 尝试解析JSON值
             try:
@@ -348,16 +348,16 @@ async def main():
                     f"{key}: {json.dumps(parsed_value, indent=2, ensure_ascii=False)}"
                 )
             except:
-                logger.info(f"{key}: {value}")
+                logger.info(f"[LIFE_DATA] {key}: {value}")
     else:
         logger.warning(f"ℹ️ 未找到Redis键: {redis_key}")
         
     if status_data:
-        logger.info(f"📊 生成状态信息 ({status_key}):")
+        logger.info(f"[LIFE_DATA] 📊 生成状态信息 ({status_key}):")
         for key, value in status_data.items():
-            logger.info(f"{key}: {value}")
+            logger.info(f"[LIFE_DATA] {key}: {value}")
     else:
-        logger.info("📊 未找到生成状态信息")
+        logger.info("[LIFE_DATA] 📊 未找到生成状态信息")
 
 
 if __name__ == "__main__":

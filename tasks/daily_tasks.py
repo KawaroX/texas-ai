@@ -10,6 +10,8 @@ from typing import List, Dict
 import logging
 import shutil
 import os
+from datetime import date, timedelta
+import glob
 
 logger = logging.getLogger(__name__)
 
@@ -151,16 +153,34 @@ def process_chat_batch(chats: List[Dict], collector: MemoryDataCollector, summar
 
 @shared_task
 def clean_generated_content():
-    """每天清空generated_content文件夹"""
+    """
+    删除 generated_content 文件夹中前一天相关的文件（文件名包含前一天日期字符串，格式为 YYYY-MM-DD）。
+    """
     try:
         dir_path = "generated_content"
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-            os.makedirs(dir_path)
-            logger.info(f"✅ 成功清空目录: {dir_path}")
-        return {"status": "success"}
+        if not os.path.exists(dir_path):
+            logger.info(f"目录不存在: {dir_path}")
+            return {"status": "success", "removed": 0}
+        yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+        pattern = os.path.join(dir_path, f"*{yesterday}*")
+        files = glob.glob(pattern)
+        removed_count = 0
+        for file_path in files:
+            try:
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+                    logger.info(f"✅ 已删除文件: {file_path}")
+                    removed_count += 1
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+                    logger.info(f"✅ 已删除文件夹: {file_path}")
+                    removed_count += 1
+            except Exception as file_err:
+                logger.error(f"删除文件失败: {file_path}: {file_err}")
+        logger.info(f"共删除 {removed_count} 个包含日期 {yesterday} 的文件/文件夹。")
+        return {"status": "success", "removed": removed_count}
     except Exception as e:
-        logger.error(f"清空目录失败: {str(e)}")
+        logger.error(f"清理 generated_content 目录失败: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 

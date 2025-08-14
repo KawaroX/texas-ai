@@ -264,7 +264,7 @@ class MemorySummarizer:
         for attempt in range(self.max_retries):
             try:
                 response = requests.post(
-                    self.api_url, headers=self.headers, json=payload, timeout=60
+                    self.api_url, headers=self.headers, json=payload, timeout=300
                 )
                 response.raise_for_status()  # 检查HTTP错误
 
@@ -383,7 +383,7 @@ class MemorySummarizer:
                                 self.api_url,
                                 headers=self.headers,
                                 json=payload,
-                                timeout=60,
+                                timeout=300,
                             )
                             response.raise_for_status()
                             api_response_data = response.json()

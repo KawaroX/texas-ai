@@ -18,8 +18,8 @@ class RedisCleanupService:
             settings.REDIS_URL, decode_responses=True
         )
         self.cleanup_interval = 2 * 60 * 60  # 2小时运行一次清理
-        self.retention_seconds = 8 * 60 * 60  # 8小时保留时间
-        self.min_keep_count = 200  # 无论过期多久都保留的最近记录数量
+        self.retention_seconds = 48 * 60 * 60  # 48小时保留时间
+        self.min_keep_count = 1000  # 无论过期多久都保留的最近记录数量
 
     async def start_cleanup_scheduler(self):
         """启动定期清理任务"""

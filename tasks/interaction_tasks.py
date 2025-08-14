@@ -100,27 +100,6 @@ async def _process_events_async(
         logger.error("❌ 未找到 'kawaro' 用户 ID，无法发送主动交互消息。")
         return
 
-    # 尝试获取或创建与 kawaro 的私聊频道
-    # send_dm_to_kawaro 内部已经包含了创建或获取私聊频道的逻辑
-    # 这里需要一个方法来直接获取 channel_id 而不是发送消息
-    # 可以在 MattermostWebSocketClient 中添加一个 get_dm_channel_id 方法
-
-    # 临时方案：复用 send_dm_to_kawaro 的部分逻辑来获取 channel_id
-    # 更好的做法是 MattermostWebSocketClient 提供一个 create_or_get_direct_channel 方法
-
-    # 假设 MattermostWebSocketClient 已经有一个 create_direct_channel 方法
-    # 或者我们直接调用 send_dm_to_kawaro 的内部逻辑
-
-    # 为了避免重复代码，我们可以在 MattermostWebSocketClient 中添加一个辅助方法
-    # async def _get_kawaro_dm_channel_id(self):
-    #     # ... 提取 send_dm_to_kawaro 中的逻辑 ...
-    #     return channel_id
-
-    # 这里先直接调用 send_dm_to_kawaro，但只为了获取 channel_id，不发送消息
-    # 这是一个临时的、不优雅的解决方案，后续需要优化 MattermostWebSocketClient
-
-    # 优化：直接调用 MattermostWebSocketClient 内部的 create_direct_channel
-    # 假设 MattermostWebSocketClient 已经有这个方法
     try:
         kawaro_dm_channel_id = await ws_client.create_direct_channel(kawaro_user_id)
         if not kawaro_dm_channel_id:
@@ -208,7 +187,7 @@ async def _process_events_async(
                 is_active=True,
             )
 
-            logger.info(f"Context:\n {context[0][:100]}...")
+            # logger.info(f"Context:\n {context[0][:100]}...")
 
             await ws_client.send_ai_generated_message(
                 channel_id=kawaro_dm_channel_id,

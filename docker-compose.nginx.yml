@@ -21,6 +21,8 @@ services:
       - ${CERT_PATH}:/etc/nginx/certs/cert.pem:ro
       - ${KEY_PATH}:/etc/nginx/certs/key.pem:ro
       - shared-webroot:/usr/share/nginx/html:ro
+      - /etc/nginx/ssl/blog.kawaro.space:/etc/nginx/ssl/blog.kawaro.space:ro
+      - /opt/1panel/apps/halo/halo/live2d/live2d_api/model:/srv/live2d/model:ro
     environment:
       # timezone inside container
       - TZ
@@ -41,3 +43,4 @@ volumes:
 networks:
   texas-net:
     external: true
+    name: texas-net

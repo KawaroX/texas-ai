@@ -21,9 +21,9 @@ def _needs_summary(messages_text: str) -> bool:
     """判断消息是否需要跨频道摘要"""
     combined_message = messages_text.strip()
 
-    # 短消息不需要摘要
-    if len(combined_message) < 3:
-        return False
+    # # 短消息不需要摘要
+    # if len(combined_message) < 3:
+    #     return False
 
     # 简单问候语不需要摘要
     simple_greetings = ["在吗", "你好", "hi", "hello", "嗨", "？", "?"]
@@ -158,7 +158,7 @@ def _get_life_system_context() -> str:
 
                         start_ts = int(start_time_dt.timestamp())
                         now_ts = int(datetime.now().timestamp())
-                        logger.info(f"开始时间戳：{start_ts}，现在时间戳：{now_ts}")
+                        logger.debug(f"开始时间戳：{start_ts}，现在时间戳：{now_ts}")
 
                         if start_ts < now_ts:
                             tags = (
@@ -229,16 +229,55 @@ def _get_life_system_context() -> str:
         return ""
 
 
-def _get_mem0_relevant(
-    query: str, user_id: str = "kawaro", limit: int = 5, threshold: int = 0.3
+async def _get_mem0_relevant(
+    query: str,
+    user_id: str = "kawaro",
+    limit: int = 5,
+    threshold: float = 0.3,
+    timeout: float = 3.0,
+    max_retries: int = 2,
 ) -> list:
-    results = mem0.search(
-        query=query, user_id=user_id, limit=limit, threshold=threshold
-    ).get("results", [])
-    for item in results:
-        me = item.get("memory", "")
-        logger.info(f"📋 记忆：{me}")
-    return results
+    """
+    调用 mem0.search，限定每次调用最多等待 `timeout` 秒；若失败或超时，最多重试 `max_retries` 次。
+    任一尝试成功即返回结果；全部失败则返回空列表。
+    """
+    import asyncio
+    from functools import partial
+
+    def _blocking_search():
+        try:
+            return mem0.search(
+                query=query, user_id=user_id, limit=limit, threshold=threshold
+            ).get("results", [])
+        except Exception as e:
+            logger.warning(f"⚠️ mem0.search 异常: {e}")
+            return None
+
+    loop = asyncio.get_running_loop()
+
+    attempt = 0
+    while attempt <= max_retries:
+        try:
+            attempt += 1
+            results = await asyncio.wait_for(
+                loop.run_in_executor(None, _blocking_search),
+                timeout=timeout,
+            )
+            if results is None:  # 出现异常返回了 None，当作失败处理
+                raise RuntimeError("mem0.search 返回 None（内部异常）")
+            for item in results:
+                me = item.get('memory', '')
+                logger.info(f"📋 记忆：{me}")
+            if attempt > 1:
+                logger.info(f"✅ mem0.search 第 {attempt} 次尝试成功")
+            return results
+        except asyncio.TimeoutError:
+            logger.warning(f"⏱️ mem0.search 第 {attempt} 次尝试超过 {timeout}s 超时")
+        except Exception as e:
+            logger.warning(f"⚠️ mem0.search 第 {attempt} 次尝试失败: {e}")
+
+    logger.error(f"❌ mem0.search 共 {max_retries + 1} 次尝试均失败，返回空列表")
+    return []
 
 
 def _format_time_diff(seconds: int) -> str:
@@ -609,7 +648,7 @@ async def merge_context(
                     minutes_diff = int((time_diff.total_seconds() % 3600) // 60)
                     _condemn_message = (  # 将谴责信息赋值给 _condemn_message
                         f"【参考信息】\n"
-                        f"距离Kawaro上次在任何频道（包括当前频道）回复你，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。请根据上下文判断，Kawaro不找你是否是事出有因，还是没有说明原因，是不是忘记你了，然后自行决定是否需要进行适当的抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你，有点像在撒娇的感觉。"
+                        f"距离Kawaro上次回复你，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。请根据上下文判断，Kawaro不找你是否是事出有因，还是没有说明原因，是不是忘记你了，然后自行决定是否需要进行适当的抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你，有点像在撒娇的感觉。"
                     )
                     logger.info(f"✉️ 已添加谴责提示: {_condemn_message}")
 
@@ -638,7 +677,7 @@ async def merge_context(
         logger.info("!!!!!!!!!!!!!!!开始检索记忆！！！！！！！！！！")
         history_text = "\n".join([msg["content"] for msg in processed_messages])
         query = "\n".join([latest_query, history_text if history_text else ""])
-        mem0_result = _get_mem0_relevant(query, limit=5)
+        mem0_result = await _get_mem0_relevant(query, limit=5, timeout=3.0, max_retries=1)
         mem0_memory = mem0_result
     else:
         mem0_memory = []
@@ -718,19 +757,25 @@ async def merge_context(
 
     if is_active:
         # 主动模式：AI想要分享内容
+        if condemn_prefix:
+            condemn_prefix += condemn_prefix + "现在Kawaro还没有给你发消息，但是你决定主动给他发消息。"
         user_query_content = (
             f"{condemn_prefix}"  # 添加谴责消息
-            # f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] "
+            "请注意，现在是你主动向Kawaro发送信息，并非Kawaro发送消息后做出回复。因此请考虑如何正确表达。\n"
             "德克萨斯内心:\n"
-            f"根据【你现在正在做的事情】，我的想法是：{latest_query}我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：\n"
+            f"根据【你现在正在做的事情】，我的想法是：{latest_query}我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：注意只发送此刻的信息，不设计未来的信息：\n"
+            f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] 德克萨斯:"
         )
     else:
         # 被动模式：用户发送了消息
         messages.pop()
         user_query_content = (
             f"{condemn_prefix}"  # 添加谴责消息
-            f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] Kawaro:\n{latest_query}"
-            f"请从这句之后续写这一时刻的消息：\n(距离上一条消息过去了：{texas_time_diff_str}) [{texas_time_str}] 德克萨斯：\n"
+            f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] Kawaro:\n{latest_query}\n\n"
+            "你是德克萨斯，你看完了Kawaro刚刚发来的信息，思考应该如何回复后在聊天框输入了以下信息并发送。注意只回复此刻的信息，不设计未来的回复信息：\n"
+            f"(距离上一条消息过去了：{texas_time_diff_str}) [{texas_time_str}] 德克萨斯：\n\n"
+            "(If you think no reply is necessary right now, simply respond with:\n(no messages)\n\n)"
+            "(Once your message is fully composed and complete, append the word SEND at the end of the message to indicate it's ready to be sent. Make sure to include SEND only once and only after all parts of the message are finalized.)"
         )
 
     messages.append({"role": "user", "content": user_query_content})

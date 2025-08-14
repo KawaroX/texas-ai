@@ -4,6 +4,7 @@ import logging
 import json
 import asyncio
 import re  # Add this import
+import redis.asyncio as redis
 from typing import AsyncGenerator, Optional
 from app.config import Settings
 
@@ -12,15 +13,112 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_API_KEY2 = os.getenv("GEMINI_API_KEY2", "")
-GEMINI_API_URL = os.getenv(
-    "GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta/models"
-)
+GEMINI_API_URL = "https://gemini-v.kawaro.space/v1beta/models"
+
+# os.getenv(
+#     "GEMINI_API_URL", "https://gemini-v.kawaro.space/v1beta/models"
+# )
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
 OPENAI_API_MODEL = "claude-3-7-sonnet-20250219"  # 默认模型改为 claude-3-7-sonnet-20250219
 
+
+
 logger = logging.getLogger(__name__)
+
+# === compact payload logging helpers ===
+def _truncate_for_log(s: str, limit: int = 20) -> str:
+    try:
+        return (s[:limit] + ("…" if len(s) > limit else ""))
+    except Exception:
+        return str(s)[:limit]
+
+
+def _estimate_tokens_simple(s: str) -> int:
+    """
+    Very rough token estimate: ~4 characters per token.
+    Avoids heavy deps like tiktoken while giving an order-of-magnitude view.
+    """
+    try:
+        return max(1, (len(s) + 3) // 4)
+    except Exception:
+        return 1
+
+
+def summarize_payload_for_log(payload: dict, preview_len: int = 20) -> dict:
+    """
+    Recursively summarize a payload:
+    - For every string field, include length, approx token count, and first N chars.
+    - For lists/dicts, preserve structure but replace string leaves with summaries.
+    - Also compute an approx total token count across all string fields.
+    """
+    total_tokens = 0
+
+    def walk(node):
+        nonlocal total_tokens
+        if isinstance(node, str):
+            t = _estimate_tokens_simple(node)
+            total_tokens += t
+            return {
+                "len": len(node),
+                "tokens": t,
+                "preview": _truncate_for_log(node, preview_len),
+            }
+        elif isinstance(node, list):
+            return [walk(x) for x in node]
+        elif isinstance(node, dict):
+            return {k: walk(v) for k, v in node.items()}
+        else:
+            return node
+
+    try:
+        summarized = walk(payload)
+    except Exception as e:
+        summarized = {"error": f"summarize_failed: {type(e).__name__}: {e}"}
+
+    summarized["_approx_total_tokens"] = total_tokens
+    return summarized
+# === end helpers ===
+
+# === Redis-based runtime config for Gemini streaming ===
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_GEMINI_CFG_KEY = os.getenv("REDIS_GEMINI_CFG_KEY", "texas:llm:gemini_cfg")
+_redis = redis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+
+DEFAULT_GEMINI_CFG = {
+    "model": "gemini-2.5-pro",
+    "connect_timeout": 10.0,
+    "read_timeout": 60.0,
+    "write_timeout": 60.0,
+    "pool_timeout": 60.0,
+    "stop_sequences": ["SEND", "NO_REPLY"],
+    "include_thoughts": True,
+    "thinking_budget": 32768,
+    "response_mime_type": "text/plain",
+}
+
+async def load_gemini_cfg() -> dict:
+    """
+    从 Redis 读取一次性配置快照；失败或缺项时使用默认值兜底。
+    """
+    try:
+        raw = await _redis.get(REDIS_GEMINI_CFG_KEY)
+        if not raw:
+            # Redis 无配置时，写入默认值并返回
+            try:
+                await _redis.set(REDIS_GEMINI_CFG_KEY, json.dumps(DEFAULT_GEMINI_CFG, ensure_ascii=False))
+                logger.info(f"🔧 Redis 无配置，已写入默认 Gemini 配置: {DEFAULT_GEMINI_CFG}")
+            except Exception as se:
+                logger.warning(f"⚠️ 写入默认 Gemini 配置到 Redis 失败: {se}")
+            return DEFAULT_GEMINI_CFG
+        user_cfg = json.loads(raw)
+        # 合并默认值，避免缺字段
+        merged = {**DEFAULT_GEMINI_CFG, **(user_cfg or {})}
+        return merged
+    except Exception as e:
+        logger.warning(f"⚠️ 读取 Gemini 配置失败，使用默认值: {e}")
+        return DEFAULT_GEMINI_CFG
 
 
 async def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0):
@@ -173,7 +271,7 @@ async def stream_reply_ai(
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
-    if model == "gemini-2.5-flash":
+    if model == "gemini-2.5-pro":
         payload = {
             "model": model,
             "messages": messages,
@@ -182,15 +280,27 @@ async def stream_reply_ai(
             "temperature": 0.75,
             "presence_penalty": 0.3,
             "top_p": 0.95,
-            "max_tokens": 512,
+            # "max_tokens": 512,
             "extra_body": {
                 "google": {
                     "thinking_config": {
-                        "thinking_budget": 8192,
+                        "thinking_budget": 16384,
                         "include_thoughts": False,
                     }
                 }
             },
+        }
+    if model == "gpt-5-2025-08-07":
+        payload = {
+            "model": model,
+            "messages": messages,
+            "reasoning_effort": "high", 
+            "verbosity": "medium",
+            "stream": True,
+            "frequency_penalty": 0.3,
+            "temperature": 0.75,
+            "presence_penalty": 0.3,
+            "max_tokens": 512,
         }
     else:
         payload = {
@@ -411,157 +521,168 @@ async def stream_reply_ai_by_gemini(
     messages, model="gemini-2.5-pro"
 ) -> AsyncGenerator[str, None]:
     """
-    流式调用 Gemini API (支持 OpenAI 协议)，返回异步生成器。
+    标准流式：逐条从 SSE 读取内容并立刻 yield（不再缓冲到最后）。
     """
-    logger.info(f"🔄 正在使用模型进行 stream_reply_ai_by_gemini(): {model}")
+    cfg = await load_gemini_cfg()  # 从 Redis 获取一次性配置快照
+    model = cfg["model"]
+    max_retries = 1  # 仅重试 1 次（总共 2 次尝试：默认配置一次 + 强制闪电版一次）
+
+    logger.debug(f"🔄 正在使用模型进行 stream_reply_ai_by_gemini(): {model}")
 
     headers = {
         "Content-Type": "application/json",
     }
     if GEMINI_API_KEY2:
-        logger.info("使用 GEMINI_API_KEY2")
+        logger.debug("使用 GEMINI_API_KEY2")
         headers["x-goog-api-key"] = f"{GEMINI_API_KEY},{GEMINI_API_KEY2}"
     else:
         headers["x-goog-api-key"] = GEMINI_API_KEY
 
     # 将 OpenAI 协议的 messages 转换为 Gemini 协议的 contents
+    system_instruction = {}
     gemini_contents = []
     for msg in messages:
-        if msg["role"] == "user":
-            gemini_contents.append(
-                {"role": "user", "parts": [{"text": msg["content"]}]}
-            )
-        elif msg["role"] == "assistant":
-            gemini_contents.append(
-                {"role": "model", "parts": [{"text": msg["content"]}]}
-            )
-        # 其他角色（如 system）在 Gemini API 中可能需要特殊处理或忽略
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role == "system":
+            system_instruction["parts"] = [{"text": content}]
+        elif role == "user":
+            gemini_contents.append({"role": "user", "parts": [{"text": content}]})
+        elif role == "assistant":
+            gemini_contents.append({"role": "model", "parts": [{"text": content}]})
+
     logger.debug(f"转换后的 Gemini contents: {gemini_contents}")
+    system_prompt = (
+        system_instruction.get("parts", [{"text": ""}])[0].get("text", "")[:100]
+    )
+    logger.debug(f"system prompt: {system_prompt}...")
 
     payload = {
+        "system_instruction": system_instruction,
         "contents": gemini_contents,
         "generationConfig": {
-            "temperature": 1.2,
-            # "topP": 0.95,
-            "maxOutputTokens": 1536,
-            "responseMimeType": "text/plain",
-            # "thinkingConfig": {
-            #     "thinkingBudget": 32768,
-            #     "includeThoughts": False,
-            # },
+            "stopSequences": cfg["stop_sequences"],
+            "responseMimeType": cfg["response_mime_type"],
+            "thinkingConfig": {
+                "thinkingBudget": cfg["thinking_budget"],
+                "includeThoughts": cfg["include_thoughts"],
+            },
         },
     }
+    # Compact log: show per-field previews (<=20 chars) and approx token counts
+    _payload_summary = summarize_payload_for_log(payload, preview_len=20)
     logger.debug(
-        f"发送给 Gemini API 的 payload: {json.dumps(payload, indent=2, ensure_ascii=False)}"
+        f"\n发送给 Gemini API 的 payload(摘要): {json.dumps(_payload_summary, indent=2, ensure_ascii=False)}\n"
     )
 
-    async def _stream_request():
-        full_url = f"{GEMINI_API_URL}/{model}:generateContent?alt=sse"
-        logger.info(f"🚀 开始向 Gemini API 发送请求: {full_url}")
-        async with httpx.AsyncClient(timeout=60) as client:
-            # Gemini API 的模型名称在 URL 中
-            async with client.stream(
-                "POST", full_url, headers=headers, json=payload
-            ) as response:
-                logger.info(f"🌐 Gemini API 响应状态码: {response.status_code}")
-                response.raise_for_status()  # 检查HTTP状态码，非2xx会抛出异常
-                async for chunk in response.aiter_lines():
-                    logger.debug(f"接收到原始 chunk: '{chunk}'")
-                    chunk = chunk.strip()
-                    if chunk == "":
-                        continue  # 跳过空行
-                    if chunk.startswith("data:"):
-                        data_part = chunk[5:].strip()
+    # 标准流式：行到达即 yield
+    for retry_count in range(max_retries + 1):
+        yielded_any = False
+        try:
+            # 第二次尝试：强制切换到更快的模型并将思考长度固定为 24576
+            if retry_count == 1:
+                model = "gemini-2.5-flash"
+                # 覆盖思考长度，仅对本次尝试生效，其余配置保持不变
+                payload["generationConfig"]["thinkingConfig"]["thinkingBudget"] = 24576
+                logger.warning("⚙️ 第二次尝试：强制使用 gemini-2.5-flash，thinkingBudget=24576")
+            full_url = f"{GEMINI_API_URL}/{model}:streamGenerateContent?alt=sse"
+            if retry_count > 0:
+                logger.warning(f"🔄 第 {retry_count} 次重试请求: {full_url}")
+            else:
+                logger.debug(f"🚀 开始向 Gemini API 发送请求: {full_url}")
+
+            # 超时：首包严格由 connect 决定；连上后 read 宽松
+            timeout = httpx.Timeout(
+                connect=cfg["connect_timeout"],
+                read=cfg["read_timeout"],
+                write=cfg["write_timeout"],
+                pool=cfg["pool_timeout"],
+            )
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with client.stream(
+                    "POST", full_url, headers=headers, json=payload
+                ) as response:
+                    logger.debug(f"🌐 Gemini API 响应状态码: {response.status_code}")
+                    response.raise_for_status()
+
+                    async for raw_line in response.aiter_lines():
+                        line = (raw_line or "").strip()
+                        if not line:
+                            continue  # 跳过空行
+                        if line.startswith(":"):
+                            continue  # 跳过 SSE 注释
+                        if line.startswith("event:"):
+                            logger.debug(f"跳过事件行: {line}")
+                            continue
+                        if not line.startswith("data:"):
+                            logger.debug(f"跳过未知行: {line}")
+                            continue
+
+                        data_part = line[5:].strip()
                         if data_part == "[DONE]":
                             logger.debug("接收到流结束标记 [DONE]")
                             continue
+
                         try:
                             data = json.loads(data_part)
-                            logger.debug(
-                                f"解析后的数据: {json.dumps(data, ensure_ascii=False)}"
-                            )
-                            if "candidates" in data and data["candidates"]:
-                                # Gemini API 的响应结构不同
-                                for part in data["candidates"][0]["content"]["parts"]:
-                                    if "text" in part:
-                                        yield part["text"]
-                                        logger.debug(
-                                            f"生成器 yielding: '{part['text']}'"
-                                        )
-                            else:
-                                logger.warning(
-                                    f"⚠️ Gemini API 响应中缺少 'candidates' 或为空: {data_part}"
-                                )
                         except json.JSONDecodeError as json_err:
                             logger.error(
-                                f"❌ Gemini流式调用失败: JSON解析错误: {json_err}. 原始数据: '{chunk}'"
+                                f"❌ Gemini 流式解析失败: JSON 解析错误: {json_err}. 原始数据: '{line}'"
                             )
                             continue
-                    elif chunk.startswith("event:"):
-                        logger.debug(f"跳过事件行: {chunk}")
-                        continue
-                    else:
-                        # 跳过未知行，不再记录warning
-                        logger.debug(f"跳过未知行: '{chunk}'")
-                        continue
-        logger.info("✅ Gemini API 流式请求完成")
 
-    # 对于流式请求，我们直接处理重试逻辑，不使用 retry_with_backoff
-    max_retries = 3
-    base_delay = 1.0
+                        # 解析 candidates -> content.parts[].text
+                        candidates = data.get("candidates") or []
+                        if not candidates:
+                            logger.warning(
+                                f"⚠️ Gemini API 响应中缺少 'candidates' 或为空: {data_part}"
+                            )
+                            continue
 
-    for attempt in range(max_retries):
-        logger.info(f"尝试调用 Gemini API (第 {attempt + 1}/{max_retries} 次)")
-        try:
-            async for chunk in _stream_request():
-                yield chunk
-            logger.info("✅ Gemini API 调用成功并完成")
-            return  # 成功完成，退出重试循环
-        except httpx.HTTPStatusError as http_err:
-            status_code = http_err.response.status_code
-            logger.error(f"❌ Gemini流式调用遇到 HTTP 错误: {status_code}")
-            if status_code == 429:
-                logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
-                if attempt < max_retries - 1:
-                    delay = base_delay * (2**attempt)
-                    logger.warning(
-                        f"⚠️ 遇到429错误，等待 {delay} 秒后重试 (第 {attempt + 1}/{max_retries} 次)..."
-                    )
-                    await asyncio.sleep(delay)
+                        content = candidates[0].get("content") or {}
+                        parts = content.get("parts") or []
+                        for part in parts:
+                            # 跳过思考内容
+                            if part.get("thought"):
+                                logger.info(
+                                    f"跳过思考内容: '{part.get('text','')[:50]}...'"
+                                )
+                                continue
+                            text = part.get("text")
+                            if not text:
+                                continue
+                            yielded_any = True
+                            logger.debug(f"生成器 yielding: '{text}'")
+                            yield text
+
+            # 请求完成
+            if not yielded_any:
+                logger.warning(
+                    f"⚠️ 第 {retry_count + 1} 次请求完成，但未产生任何有效 token"
+                )
+                if retry_count < max_retries:
+                    logger.debug(f"🔄 将进行第 {retry_count + 1} 次重试...")
                     continue
                 else:
-                    logger.error(
-                        "❌ Gemini流式调用失败: API调用频率限制 (429 Too Many Requests)，达到最大重试次数。"
-                    )
-                    yield "⚠️ API调用频率限制，请稍后再试。"
-                    return
+                    logger.error(f"❌ 经过 {max_retries + 1} 次尝试后仍未获得有效响应")
+                    raise Exception("Gemini API 返回空响应，重试次数已用尽")
             else:
-                try:
-                    error_content = await http_err.response.aread()
-                    error_text = (
-                        error_content.decode("utf-8") if error_content else "无响应内容"
-                    )
-                except Exception as read_err:
-                    error_text = f"无法读取错误详情: {read_err}"
+                logger.debug("✅ Gemini API 调用成功并已流式输出")
+                break
 
-                logger.error(
-                    f"❌ Gemini流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
-                )
-                yield f"[自动回复] 在忙，有事请留言 ({status_code})"
-                return
         except Exception as e:
-            logger.error(f"❌ Gemini流式调用遇到未知错误: {type(e).__name__}: {e}")
-            if attempt < max_retries - 1:
-                delay = base_delay * (2**attempt)
-                logger.warning(
-                    f"⚠️ 遇到未知错误，等待 {delay} 秒后重试 (第 {attempt + 1}/{max_retries} 次): {e}"
-                )
-                await asyncio.sleep(delay)
+            # 如果已经输出了部分内容，就不再重试，避免重复/拼接混乱
+            if yielded_any:
+                logger.error(f"❌ 流式过程中断，但已产生部分输出，停止重试: {str(e)}")
+                break
+            if retry_count < max_retries:
+                logger.error(f"❌ 第 {retry_count + 1} 次请求失败: {str(e)}，将重试...")
                 continue
             else:
-                logger.error(f"❌ Gemini流式调用失败: 未知错误，达到最大重试次数: {e}")
-                yield ""
+                logger.error(f"❌ 经过 {max_retries + 1} 次尝试后仍然失败: {str(e)}")
                 return
+
+    logger.debug("✅ Gemini API 流式请求完成")
 
 
 async def call_gemini(messages, model="gemini-2.5-flash") -> str:
@@ -591,11 +712,10 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
         "contents": gemini_contents,
         "generationConfig": {
             "temperature": 0.75,
-            "topP": 0.95,
-            "maxOutputTokens": 1536,
+            # "maxOutputTokens": 1536,
             "responseMimeType": "text/plain",
             "thinkingConfig": {
-                "thinkingBudget": 8192,
+                "thinkingBudget": 32768,
                 "includeThoughts": False,
             },
         },
@@ -717,7 +837,7 @@ async def call_ai_summary(prompt: str) -> str:
 # else:
 STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
 STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", OPENAI_API_URL)
-STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-flash")
+STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-pro") # 日程生成
 
 
 async def call_structured_generation(messages: list, max_retries: int = 3) -> dict:
@@ -743,7 +863,7 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
     async def _call_api():
         logger.info(f"🔄 结构化生成调用: {STRUCTURED_API_MODEL}")
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:  # 增加超时到60秒
+            async with httpx.AsyncClient(timeout=360.0) as client:  # 增加超时到360秒
                 response = await client.post(
                     STRUCTURED_API_URL, headers=headers, json=payload
                 )
@@ -1186,7 +1306,7 @@ async def generate_micro_experiences(
 如果需要，交互的内容则是角色（德克萨斯）发送给用户的内容。
 如果德克萨斯认为这件事值得分享给用户，则设置为ture，交互内容是德克萨斯对这件事想要和用户分享的经历和感受。
 而不是指对德克萨斯日程中的伙伴，而是和她只能通过网络进行交流，但是是关系最好的朋友的主动交互。即判断此时德克萨斯是否会想要将当前的经历发送给该好友。
-注意，如果是与早上起床相关的日程，则必须在某一个合适的item中设置need_interaction为true，交互内容是德克萨斯对早上起床的感受和道早安。
+注意，如果是早上起床时的日程，则必须在某一个合适的item中设置need_interaction为true，交互内容是德克萨斯对早上起床的感受和道早安。但只需要在最开始的那一个即可。如果是起床以后则不用。
 主动交互为true大概要占据40%左右，不要过低，至少需要有一个，但不要超过一半。
 
 请严格按照以下JSON格式输出，不要包含任何其他文本：
@@ -1264,10 +1384,10 @@ async def summarize_past_micro_experiences(experiences: list) -> str:
 
     try:
         # 使用非流式调用，获取故事化文本
-        # response = await call_openrouter(
-        #     messages, model="deepseek/deepseek-chat-v3-0324:free"
-        # )
-        response = await call_openai(messages, model="gpt-4o-mini")
+        response = await call_openrouter(
+            messages, model="deepseek/deepseek-r1-0528:free"
+        )
+        # response = await call_openai(messages, model="gpt-4o-mini")
         return response
     except Exception as e:
         logger.error(f"❌ summarize_past_micro_experiences: 调用失败: {e}")
