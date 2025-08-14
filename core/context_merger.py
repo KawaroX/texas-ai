@@ -644,7 +644,12 @@ async def merge_context(
                     minutes_diff = int((time_diff.total_seconds() % 3600) // 60)
                     _condemn_message = (  # 将谴责信息赋值给 _condemn_message
                         f"【参考信息】\n"
-                        f"距离Kawaro上次回复你，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。请根据上下文判断，Kawaro不找你是否是事出有因，还是没有说明原因，是不是忘记你了，然后自行决定是否需要进行适当的抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你，有点像在撒娇的感觉。"
+                        f"距离Kawaro上次回复你，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。"
+                        "请根据上下文判断，Kawaro不找你是否是事出有因，还是没有说明原因，是不是忘记你了，"
+                        "然后自行决定是否需要进行适当的抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你，有点像在撒娇的感觉。"
+                        "比如如果没有什么特别的原因，可以语气强烈一点抱怨，如果有正当理由，可以不抱怨或者更加温柔更加可爱一点。"
+                        "抱怨的时候可以不用说具体的时间，可以说“一个多小时”，“好几个小时”，“好久好久”以及其他不是那么具体的时间。"
+                        "当然如果你要说具体的时间也没有问题，总之就是像是一个有情感的正常人类一样表达即可。"
                     )
                     logger.debug(f"[context_merger] 已添加谴责提示: {_condemn_message}")
 
