@@ -279,6 +279,7 @@ async def stream_reply_ai(
         "Content-Type": "application/json",
     }
     if model == "gemini-2.5-pro":
+        # 注意：使用 elif 链，避免被后续 else 覆盖
         payload = {
             "model": model,
             "messages": messages,
@@ -297,7 +298,7 @@ async def stream_reply_ai(
                 }
             },
         }
-    if model == "gpt-5-2025-08-07":
+    elif model == "gpt-5-2025-08-07":
         payload = {
             "model": model,
             "messages": messages,
@@ -446,30 +447,66 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
 
         while True:
             # 优先按句号、问号、感叹号切分
-            period_index = buffer.find("。")
-            question_index = buffer.find("？")
-            exclamation_index = buffer.find("!")
-
-            indices = [
-                i for i in [period_index, question_index, exclamation_index] if i != -1
-            ]
+            # 同时支持中英文标点：。 ？ ！ 以及 . ? !
+            indices = []
+            for sep in ["。", "？", "！", ".", "?", "!"]:
+                idx = buffer.find(sep)
+                if idx != -1:
+                    indices.append(idx)
 
             if indices:
                 earliest_index = min(indices)
-                segment = buffer[: earliest_index + 1].strip()
+                # 如果句末标点在末尾，暂不切分，等待可能的右引号/右括号等收尾符号到来，避免标点或引号单独一行
+                if earliest_index == len(buffer) - 1:
+                    break
+
+                # 将紧随其后的收尾字符一并包含（如：” ’ 】 」 』 ） 》 〉 以及 ASCII 版本 ） ] ' "）
+                closers = set(
+                    [
+                        "”",
+                        "’",
+                        "】",
+                        "」",
+                        "』",
+                        "）",
+                        "》",
+                        "〉",
+                        ")",
+                        "]",
+                        "'",
+                        '"',
+                    ]
+                )
+                end_index = earliest_index + 1
+                while end_index < len(buffer) and buffer[end_index] in closers:
+                    end_index += 1
+
+                segment = buffer[:end_index].strip()
                 cleaned_segment = clean_segment(segment)
                 if cleaned_segment:
+                    logger.debug(
+                        f"[ai] stream_ai_chat: yield sentence='{cleaned_segment[:50]}'"
+                    )
                     yield cleaned_segment
-                buffer = buffer[earliest_index + 1 :]
-                total_processed += earliest_index + 1
+                buffer = buffer[end_index:]
+                total_processed += end_index
                 continue
 
             # 再尝试按换行符切分
             newline_index = buffer.find("\n")
             if newline_index != -1:
+                # 如果换行符在末尾，暂不切分，等待后续标点或更多内容，避免将后续标点单独作为一条消息发送
+                if newline_index == len(buffer) - 1:
+                    # 去除末尾的换行，但保留已有内容在 buffer 中等待后续
+                    buffer = buffer[:newline_index]
+                    break
+                # 否则换行不在末尾，正常按行切分
                 segment = buffer[:newline_index].strip()
                 cleaned_segment = clean_segment(segment)
                 if cleaned_segment:
+                    logger.debug(
+                        f"[ai] stream_ai_chat: yield line='{cleaned_segment[:50]}'"
+                    )
                     yield cleaned_segment
                 buffer = buffer[newline_index + 1 :]
                 total_processed += newline_index + 1
@@ -482,6 +519,7 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     if buffer.strip():
         final_segment = clean_segment(buffer)
         if final_segment:
+            logger.debug(f"[ai] stream_ai_chat: yield final='{final_segment[:80]}'")
             yield final_segment
 
 
