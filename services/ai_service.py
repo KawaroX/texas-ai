@@ -447,9 +447,9 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
 
         while True:
             # 优先按句号、问号、感叹号切分
-            # 同时支持中英文标点：。 ？ ！ 以及 . ? !
+            # 同时支持中英文标点：。 ？ ！
             indices = []
-            for sep in ["。", "？", "！", ".", "?", "!"]:
+            for sep in ["。", "？", "！"]:
                 idx = buffer.find(sep)
                 if idx != -1:
                     indices.append(idx)
