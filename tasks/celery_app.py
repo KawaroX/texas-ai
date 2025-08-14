@@ -1,10 +1,7 @@
 from celery import Celery
 from celery.schedules import crontab
 from app.config import settings
-from datetime import datetime, timedelta
-from .daily_tasks import generate_daily_life_task
-from .life_data_tasks import fetch_and_store_life_data_task
-from .interaction_tasks import process_scheduled_interactions
+from datetime import timedelta
 
 celery_app = Celery(
     "texas_tasks",

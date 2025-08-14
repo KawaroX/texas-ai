@@ -1,14 +1,10 @@
 import json
 import logging
+from datetime import date, datetime  # 确保 datetime 类被正确导入
 import redis
 from app.config import settings
 from app.life_system import LifeSystemQuery
-import logging
 from services.ai_service import summarize_past_micro_experiences  # 导入新的AI服务
-
-logger = logging.getLogger(__name__)
-
-from datetime import date, datetime  # 确保 datetime 类被正确导入
 
 logger = logging.getLogger(__name__)
 
@@ -382,7 +378,7 @@ async def main():
                 logger.debug(
                     f"{key}: {json.dumps(parsed_value, indent=2, ensure_ascii=False)}"
                 )
-            except:
+            except Exception:
                 logger.debug(f"[LIFE_DATA] {key}: {value}")
     else:
         logger.warning(f"ℹ️ 未找到Redis键: {redis_key}")

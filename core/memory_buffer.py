@@ -1,7 +1,6 @@
 import datetime
 import pytz
 import json
-from datetime import timedelta
 import redis
 from app.config import settings
 from utils.postgres_service import insert_messages

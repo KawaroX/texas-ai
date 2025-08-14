@@ -3,10 +3,15 @@ from fastapi import FastAPI, HTTPException, Depends, Query
 from app.config import settings
 import asyncio
 import json
-import redis.asyncio as redis
 from services.ai_service import _redis, REDIS_GEMINI_CFG_KEY, DEFAULT_GEMINI_CFG
-
 import os
+from app.mattermost_client import MattermostWebSocketClient
+from services.redis_cleanup_service import cleanup_service
+from app.life_system import (
+    generate_and_store_daily_life,
+    collect_interaction_experiences,
+)
+from datetime import date
 
 # 第二套默认 Gemini 配置
 DEFAULT_GEMINI_CFG_2 = {
@@ -27,14 +32,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s:%(funcName)s:%(lineno)d - %(message)s",
 )
-
-from app.mattermost_client import MattermostWebSocketClient
-from services.redis_cleanup_service import start_redis_cleanup
-from app.life_system import (
-    generate_and_store_daily_life,
-    collect_interaction_experiences,
-)
-from datetime import date
 
 app = FastAPI(title=settings.BOT_NAME)
 
@@ -105,9 +102,7 @@ async def replace_gemini_cfg(payload: dict, _=Depends(check_k)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/")
-def read_root():
-    return {"message": f"Welcome to {settings.BOT_NAME}!"}
+# Keep root path returning 404 (not accessible)
 
 
 @app.get("/generate-daily-life")
@@ -147,8 +142,6 @@ async def collect_interactions_endpoint(target_date: str = None):
     else:
         target_date_obj = date.today()
 
-    from app.life_system import collect_interaction_experiences
-
     success = await collect_interaction_experiences(target_date_obj)
 
     if success:
@@ -170,4 +163,4 @@ async def startup_event():
     asyncio.create_task(ws_client.connect())
 
     # 启动 Redis 清理服务
-    asyncio.create_task(start_redis_cleanup())
+    asyncio.create_task(cleanup_service.start_cleanup_scheduler())

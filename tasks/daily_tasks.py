@@ -1,5 +1,4 @@
 import httpx
-import time
 from datetime import datetime, timedelta
 from celery import shared_task
 from app.config import settings
@@ -10,7 +9,7 @@ from typing import List, Dict
 import logging
 import shutil
 import os
-from datetime import date, timedelta
+from datetime import date
 import glob
 
 logger = logging.getLogger(__name__)

@@ -1,10 +1,9 @@
 import asyncio
 import websockets
 import json
-import os
 import logging
 import httpx
-import datetime, time
+import time
 import redis  # 导入 redis
 import random
 from typing import Dict, List, Optional, Tuple
@@ -32,7 +31,7 @@ class MattermostWebSocketClient:
             host = self.http_base_url
 
         self.websocket_url = f"{scheme}://{host}/api/v4/websocket"
-        
+
         self.token = settings.MATTERMOST_TOKEN
         self.user_id = None
         self.chat_engine = ChatEngine()
@@ -340,7 +339,7 @@ class MattermostWebSocketClient:
                 await self.listen()
                 return
             except Exception as e:
-                logging.error(f"❌ 连接失败 {i+1}/{retries}: {e}")
+                logging.error(f"❌ 连接失败 {i + 1}/{retries}: {e}")
                 if i < retries - 1:
                     logging.debug(f"[mm] {delay} 秒后重试连接")
                     await asyncio.sleep(delay)
@@ -403,7 +402,7 @@ class MattermostWebSocketClient:
         headers = {"Authorization": f"Bearer {self.token}"}
         async with httpx.AsyncClient() as client:
             try:
-                response = await client.post(
+                await client.post(
                     f"{self.http_base_url}/api/v4/users/me/typing",
                     json={"channel_id": channel_id},
                     headers=headers,
@@ -415,7 +414,7 @@ class MattermostWebSocketClient:
         self, channel_id: str, message: str, channel_info=None, user_info=None
     ):
         """添加消息到缓冲区并启动智能处理"""
-        current_time = time.time()
+        # current_time 可在需要时用于时间相关逻辑
 
         # 检查是否是简单消息且缓冲区为空
         from core.context_merger import _needs_summary
@@ -427,7 +426,6 @@ class MattermostWebSocketClient:
         if is_simple_message and buffer_is_empty:
             logging.info(f"⚡ 收到简单消息 '{message}'，立即回复。")
             # 立即处理简单消息，不经过缓冲和延迟
-            buffer = ""
             async for segment in self.chat_engine.stream_reply_single(
                 channel_id, message, channel_info, user_info
             ):
@@ -628,7 +626,12 @@ class MattermostWebSocketClient:
 
             # 流式生成回复
             async for segment in self.chat_engine.stream_reply(
-                channel_id, processed_messages, channel_info, user_info, context_info, is_active_interaction
+                channel_id,
+                processed_messages,
+                channel_info,
+                user_info,
+                context_info,
+                is_active_interaction,
             ):
                 if segment.strip():
                     cleaned_segment = segment.strip()
@@ -645,10 +648,14 @@ class MattermostWebSocketClient:
                 self.redis_client.delete(f"channel_buffer:{channel_id}")
                 logging.debug(f"[mm] 清空频道 {channel_id} 的消息缓冲区")
             elif not is_active_interaction and not sent_any:
-                logging.debug(f"[mm] 未生成有效内容，保留频道 {channel_id} 的消息缓冲区")
+                logging.debug(
+                    f"[mm] 未生成有效内容，保留频道 {channel_id} 的消息缓冲区"
+                )
                 # 追加自动回复，但不清空缓冲区
                 try:
-                    await self._send_message_with_typing(channel_id, "[自动回复]在忙，有事请留言")
+                    await self._send_message_with_typing(
+                        channel_id, "[自动回复]在忙，有事请留言"
+                    )
                 except Exception as e:
                     logging.warning(f"⚠️ 自动回复发送失败，频道 {channel_id}: {e}")
 

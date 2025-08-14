@@ -6,7 +6,6 @@ import asyncio
 import re  # Add this import
 import redis.asyncio as redis
 from typing import AsyncGenerator, Optional
-from app.config import Settings
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -116,7 +115,7 @@ async def load_gemini_cfg() -> dict:
                     REDIS_GEMINI_CFG_KEY,
                     json.dumps(DEFAULT_GEMINI_CFG, ensure_ascii=False),
                 )
-                logger.debug(f"[ai] Redis 无配置，写入默认 Gemini 配置")
+                logger.debug("[ai] Redis 无配置，写入默认 Gemini 配置")
             except Exception as se:
                 logger.warning(f"⚠️ 写入默认 Gemini 配置到 Redis 失败: {se}")
             return DEFAULT_GEMINI_CFG
@@ -446,8 +445,6 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
         buffer += chunk
 
         while True:
-            original_buffer_len = len(buffer)
-
             # 优先按句号、问号、感叹号切分
             period_index = buffer.find("。")
             question_index = buffer.find("？")
@@ -651,7 +648,7 @@ async def stream_reply_ai_by_gemini(
                             # 跳过思考内容
                             if part.get("thought"):
                                 logger.debug(
-                                    f"[ai] 跳过思考内容: '{part.get('text','')[:50]}...'"
+                                    f"[ai] 跳过思考内容: '{part.get('text', '')[:50]}...'"
                                 )
                                 continue
                             text = part.get("text")
@@ -922,13 +919,13 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
                         if not isinstance(result, dict):
                             raise ValueError("提取的JSON不是对象")
                         logger.warning(
-                            f"⚠️ 从响应中提取JSON对象 (尝试 {attempt+1}/{max_retries})"
+                            f"⚠️ 从响应中提取JSON对象 (尝试 {attempt + 1}/{max_retries})"
                         )
                         return result
                     else:
                         raise  # 重新抛出异常
             except (json.JSONDecodeError, ValueError) as e:
-                logger.error(f"❌ JSON解析失败 (尝试 {attempt+1}/{max_retries}): {e}")
+                logger.error(f"❌ JSON解析失败 (尝试 {attempt + 1}/{max_retries}): {e}")
 
                 # 最后一次尝试时返回错误
                 if attempt == max_retries - 1:
@@ -947,7 +944,7 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
             status_code = e.response.status_code
             error_msg = f"HTTP错误 {status_code}"
             if status_code == 429:
-                logger.warning(f"⚠️ 速率限制 (尝试 {attempt+1}/{max_retries})")
+                logger.warning(f"⚠️ 速率限制 (尝试 {attempt + 1}/{max_retries})")
                 await asyncio.sleep(2**attempt)  # 指数退避
                 continue
             else:
@@ -957,7 +954,7 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
         except Exception as e:
             error_type = type(e).__name__
             logger.error(
-                f"❌ 未知错误 (尝试 {attempt+1}/{max_retries}): {error_type}: {str(e)}"
+                f"❌ 未知错误 (尝试 {attempt + 1}/{max_retries}): {error_type}: {str(e)}"
             )
             if attempt == max_retries - 1:
                 return {"error": f"调用失败: {error_type}: {str(e)}"}
@@ -1110,9 +1107,9 @@ async def generate_daily_schedule(
 
 ## 当前情况
 - 日期: {date}
-- 日期类型: {day_type} ({'工作日' if day_type == 'weekday' else '周末'})
+- 日期类型: {day_type} ({"工作日" if day_type == "weekday" else "周末"})
 - 天气状况: {weather}
-- 是否处于大事件中: {'是' if is_in_major_event else '否'}"""
+- 是否处于大事件中: {"是" if is_in_major_event else "否"}"""
 
     if is_in_major_event and major_event_context:
         prompt += (
@@ -1189,7 +1186,6 @@ async def generate_major_event(
     功能：生成大事件
     """
     import uuid
-    from datetime import datetime, timedelta
 
     # 构建详细的背景信息和Prompt
     prompt = f"""你是德克萨斯AI生活系统的核心模块，负责为明日方舟世界中的德克萨斯生成重要的生活事件。
@@ -1278,7 +1274,6 @@ async def generate_micro_experiences(
     功能：为单个日程项目生成多个微观经历项（5-30分钟颗粒度）
     """
     import uuid
-    from datetime import datetime, timedelta
 
     # 构建详细的背景信息和Prompt
     prompt = f"""你是德克萨斯AI生活系统的微观经历生成模块，负责为明日方舟世界中的德克萨斯生成真实、细腻的生活片段。
@@ -1288,12 +1283,12 @@ async def generate_micro_experiences(
 
 ## 当前情况
 - 当前日期: {current_date}
-- 日程项目: {schedule_item.get('title', '未知活动')}
-- 项目开始时间: {schedule_item.get('start_time', '未知')}
-- 项目结束时间: {schedule_item.get('end_time', '未知')}
-- 活动地点: {schedule_item.get('location', '未知地点')}
-- 活动描述: {schedule_item.get('description', '无描述')}
-- 同伴: {', '.join(schedule_item.get('companions', [])) if schedule_item.get('companions') else '独自一人'}"""
+- 日程项目: {schedule_item.get("title", "未知活动")}
+- 项目开始时间: {schedule_item.get("start_time", "未知")}
+- 项目结束时间: {schedule_item.get("end_time", "未知")}
+- 活动地点: {schedule_item.get("location", "未知地点")}
+- 活动描述: {schedule_item.get("description", "无描述")}
+- 同伴: {", ".join(schedule_item.get("companions", [])) if schedule_item.get("companions") else "独自一人"}"""
 
     if previous_experiences:
         prompt += f"\n- 之前的经历摘要: {json.dumps(previous_experiences, ensure_ascii=False)}"
@@ -1322,7 +1317,7 @@ async def generate_micro_experiences(
 请严格按照以下JSON格式输出，不要包含任何其他文本：
 {{
   "date": "{current_date}",
-  "schedule_item_id": "{schedule_item.get('id', '')}",
+  "schedule_item_id": "{schedule_item.get("id", "")}",
   "items": [
     {{
       "start_time": "HH:MM",
@@ -1359,7 +1354,7 @@ async def generate_micro_experiences(
 
         return response["items"]
     except json.JSONDecodeError:
-        logger.error(f"❌ generate_micro_experiences: AI返回的不是有效的JSON")
+        logger.error("❌ generate_micro_experiences: AI返回的不是有效的JSON")
         return [{"error": "AI返回格式错误"}]
     except Exception as e:
         logger.error(f"❌ generate_micro_experiences: 调用失败: {e}")

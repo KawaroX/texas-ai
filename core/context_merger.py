@@ -242,7 +242,6 @@ async def _get_mem0_relevant(
     任一尝试成功即返回结果；全部失败则返回空列表。
     """
     import asyncio
-    from functools import partial
 
     def _blocking_search():
         try:
@@ -555,9 +554,9 @@ async def merge_context(
             time_diff = current_time - latest_overall_message_time
 
             if len(all_latest_timestamps) == 1:
-                logger.debug(f"[context_merger] 仅使用当前频道消息进行时间差判断")
+                logger.debug("[context_merger] 仅使用当前频道消息进行时间差判断")
             else:
-                logger.debug(f"[context_merger] 使用所有频道最新消息进行时间差判断")
+                logger.debug("[context_merger] 使用所有频道最新消息进行时间差判断")
 
             logger.debug(
                 f"[context_merger] 时间差: 最后={latest_overall_message_time} 当前={current_time} 差={time_diff}"
@@ -605,7 +604,7 @@ async def merge_context(
                 # 精确计算睡眠时间重叠
                 total_sleep_overlap_seconds = 0
                 current_check_time = latest_overall_message_time
-                logger.debug(f"💤 精确计算睡眠时间重叠")
+                logger.debug("💤 精确计算睡眠时间重叠")
 
                 while current_check_time < current_time:
                     # 初始化当前小时的重叠秒数
@@ -690,7 +689,7 @@ async def merge_context(
         system_parts.append(life_system_context)
 
     if summary_notes:
-        system_parts.append(f"【其他渠道聊天参考资料】\n" + "\n\n".join(summary_notes))
+        system_parts.append("【其他渠道聊天参考资料】\n" + "\n\n".join(summary_notes))
 
     if mem0_memory:
         system_parts.append("【相关记忆】")
@@ -713,7 +712,7 @@ async def merge_context(
             if isinstance(tags, str):
                 try:
                     tags = json.loads(tags)
-                except:
+                except Exception:
                     tags = [tags]
 
             memory_content = item["memory"].replace("请记住这个信息: ", "", 1)

@@ -5,10 +5,8 @@ from datetime import date, timedelta
 import logging
 import uuid
 from typing import Optional
-from datetime import datetime, date
+from datetime import datetime
 import redis  # 添加 Redis 支持
-
-logger = logging.getLogger(__name__)
 
 from services.ai_service import (
     get_weather_info,
@@ -20,17 +18,14 @@ from utils.postgres_service import (
     insert_daily_schedule,
     get_daily_schedule_by_date,
     update_daily_schedule,
-    delete_daily_schedule,
     insert_major_event,
-    get_major_event_by_id,
     get_major_event_by_date,  # 新增
-    update_major_event,
-    delete_major_event,
     insert_micro_experience,
     get_micro_experiences_by_daily_schedule_id,
     get_micro_experiences_by_related_item_id,  # 新增
-    delete_micro_experience,
 )
+
+logger = logging.getLogger(__name__)
 
 # 定义生成内容存储的文件夹
 GENERATED_CONTENT_DIR = "generated_content"
@@ -71,22 +66,15 @@ async def generate_and_store_daily_life(target_date: date):
     # 如果没有大事件，则根据0.028概率决定是否生成新的大事件
     if not is_in_major_event:
         import random
-        from collections import Counter
 
         gen_prob = 0.028  # 0.028
         rand_val = random.random()
         logger.debug(
-            f"[daily_life] 评估是否生成新大事件: 概率={gen_prob*100}%, 随机值={rand_val:.4f}"
+            f"[daily_life] 评估是否生成新大事件: 概率={gen_prob * 100}%, 随机值={rand_val:.4f}"
         )
 
         if rand_val < gen_prob:  # 0.028概率生成大事件
             # 正态分布生成持续天数 (μ=4, σ=2)，范围1-7天
-            results = []
-            # for _ in range(1000):
-            #     val = max(1, min(7, int(random.gauss(4, 2))))
-            #     results.append(val)
-
-            # logger.info(f"随机1000次结果：{Counter(results)}\n\n")
 
             duration_days = max(1, min(7, int(random.gauss(4, 2))))
             logger.debug(f"[daily_life] 大事件持续天数: {duration_days}天 (μ=4, σ=2)")
@@ -202,11 +190,10 @@ async def generate_and_store_daily_life(target_date: date):
         previous_experiences_summary = None
 
         for index, item in enumerate(daily_schedule_data["schedule_items"]):
-            # 设置当前时间为项目开始时间
-            current_time = item["start_time"]
+            # 设置当前时间为项目开始时间（如需使用可在后续逻辑中引用）
 
             logger.debug(
-                f"[daily_life] 生成微观经历项 [{index+1}/{len(daily_schedule_data['schedule_items'])}]: {item['title']}"
+                f"[daily_life] 生成微观经历项 [{index + 1}/{len(daily_schedule_data['schedule_items'])}]: {item['title']}"
             )
             micro_experiences = await generate_and_store_micro_experiences(
                 schedule_item=item,
@@ -405,7 +392,7 @@ async def generate_and_store_major_event(
     except Exception as e:
         logger.error(f"❌ 保存大事件到文件失败: {e}")
 
-    logger.info(f"[major_event] 大事件生成与存储完成")
+    logger.info("[major_event] 大事件生成与存储完成")
     return major_event_data
 
 
@@ -482,7 +469,7 @@ async def generate_and_store_micro_experiences(
     except Exception as e:
         logger.error(f"❌ 保存微观经历项到文件失败: {e}")
 
-    logger.info(f"[micro_exp] 微观经历项生成与存储完成")
+    logger.info("[micro_exp] 微观经历项生成与存储完成")
     return micro_experiences
 
 

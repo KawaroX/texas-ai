@@ -5,7 +5,6 @@ import json
 import datetime
 import pytz
 from app.config import settings
-from utils.postgres_service import insert_messages
 
 # 日志配置由应用主入口统一设置
 
@@ -18,7 +17,7 @@ class RedisCleanupService:
             settings.REDIS_URL, decode_responses=True
         )
         self.cleanup_interval = 2 * 60 * 60  # 2小时运行一次清理
-        self.retention_seconds = 48 * 60 * 60  # 48小时保留时间
+        self.retention_seconds = 48 * 60 * 60  # 48 小时保留时间
         self.min_keep_count = 1000  # 无论过期多久都保留的最近记录数量
 
     async def start_cleanup_scheduler(self):
@@ -66,7 +65,7 @@ class RedisCleanupService:
             logging.error(f"❌ 清理过期消息时出错: {e}")
 
     async def cleanup_channel_messages(self, channel_id: str):
-        """清理指定频道的过期消息，但始终保留最近的25条记录"""
+        """清理指定频道的过期消息，但始终保留最近的 1000 条记录"""
         try:
             # 使用东八区时间
             tz = pytz.timezone("Asia/Shanghai")
@@ -97,14 +96,14 @@ class RedisCleanupService:
                 )
                 return 0, 0
 
-            # 确定要保留的消息（最新的25条）
-            messages_to_keep = all_messages[: self.min_keep_count]
+            # 确定要保留的消息（最新的 1000 条）
+            # 最新的 self.min_keep_count 条消息将被保留
 
-            # 找出需要删除的过期消息（超过8小时且不在最新25条中）
+            # 找出需要删除的过期消息（超过 48 小时且不在最新 1000 条中）
             messages_to_delete = []
             for message_json, timestamp in all_messages[
                 self.min_keep_count :
-            ]:  # 从第26条开始检查
+            ]:  # 从第1001条开始检查
                 if timestamp < retention_cutoff_timestamp:
                     messages_to_delete.append((message_json, timestamp))
 
@@ -130,7 +129,7 @@ class RedisCleanupService:
                         logging.debug(
                             f"删除消息: {msg_time} - {msg_data.get('role', 'unknown')}"
                         )
-                    except:
+                    except Exception:
                         pass  # 忽略JSON解析错误
 
             if deleted_count > 0:

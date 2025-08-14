@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import redis
@@ -8,7 +7,6 @@ from celery import shared_task
 from app.config import settings
 from app.mattermost_client import MattermostWebSocketClient
 from core.context_merger import merge_context
-from core.memory_buffer import get_channel_memory  # 假设需要记录主动交互的聊天记录
 
 logger = logging.getLogger(__name__)
 

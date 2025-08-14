@@ -4,14 +4,12 @@
 用于测试整个主动交互流程，包括数据生成、Redis存储、Celery任务执行等
 """
 
-import os
 import sys
 import json
 import redis
 import asyncio
 import logging
-from datetime import datetime, timedelta, date
-from typing import List, Dict, Any
+from datetime import datetime, timedelta
 import uuid
 
 # 添加项目根目录到Python路径
@@ -22,10 +20,8 @@ from utils.postgres_service import (
     insert_daily_schedule,
     insert_micro_experience,
     get_daily_schedule_by_date,
-    get_micro_experiences_by_daily_schedule_id,
 )
 from app.life_system import collect_interaction_experiences
-from tasks.interaction_tasks import process_scheduled_interactions
 
 # 配置日志
 logging.basicConfig(
@@ -46,9 +42,9 @@ class ActiveInteractionTester:
 
     def print_section(self, title: str):
         """打印测试章节标题"""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  {title}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     def print_step(self, step: str):
         """打印测试步骤"""
@@ -252,25 +248,27 @@ class ActiveInteractionTester:
             # 模拟Celery任务的逻辑，但直接调用异步函数
             from app.mattermost_client import MattermostWebSocketClient
             from tasks.interaction_tasks import _process_events_async
-            
+
             current_timestamp = datetime.now().timestamp()
             today_key = f"interaction_needed:{self.test_date_str}"
-            
+
             # 获取到期事件
-            expired_events = self.redis_client.zrangebyscore(today_key, 0, current_timestamp)
-            
+            expired_events = self.redis_client.zrangebyscore(
+                today_key, 0, current_timestamp
+            )
+
             if not expired_events:
                 self.print_info("没有找到到期的事件")
                 return True
-                
+
             self.print_info(f"找到 {len(expired_events)} 个到期事件")
-            
+
             # 实例化 MattermostWebSocketClient
             ws_client = MattermostWebSocketClient()
-            
+
             # 直接调用异步处理函数
             await _process_events_async(ws_client, today_key, expired_events)
-            
+
             self.print_success("成功调用主动交互处理逻辑")
 
             # 检查交互记录
@@ -290,6 +288,7 @@ class ActiveInteractionTester:
         except Exception as e:
             self.print_error(f"手动测试Celery任务失败: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -330,7 +329,7 @@ class ActiveInteractionTester:
                         f"结束时间: {event_time.strftime('%H:%M:%S')} | "
                         f"状态: {status}"
                     )
-                except:
+                except Exception:
                     self.print_error("解析事件数据失败")
 
         except Exception as e:

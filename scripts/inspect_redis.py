@@ -34,7 +34,7 @@ def inspect_life_data():
             try:
                 parsed = json.loads(value)
                 print(json.dumps(parsed, indent=2, ensure_ascii=False))
-            except:
+            except Exception:
                 print(value)
         else:
             print("无数据")

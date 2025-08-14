@@ -580,7 +580,6 @@ class RAGDecisionMaker:
         """更新累积分数 - 增强版"""
         current_time = time.time()
 
-        prev_accumulated = self._context.accumulated_score
         prev_time = self._context.last_update_time
 
         # 更新连续查询计数
@@ -949,14 +948,14 @@ def example_usage():
         print("-" * 60)
 
     # 显示优化效果统计
-    print(f"\n📊 测试结果统计:")
+    print("\n📊 测试结果统计:")
     print(f"总消息数: {len(test_messages)}")
     print(f"触发搜索: {trigger_count} 次")
-    print(f"触发率: {trigger_count/len(test_messages):.1%}")
+    print(f"触发率: {trigger_count / len(test_messages):.1%}")
 
     # 显示性能指标
     metrics = rag_decision.get_performance_metrics()
-    print(f"\n📈 性能指标:")
+    print("\n📈 性能指标:")
     for key, value in metrics.items():
         if isinstance(value, dict):
             print(f"{key}:")
@@ -965,7 +964,7 @@ def example_usage():
         else:
             print(f"  - {key}: {value}")
 
-    print(f"\n💡 优化说明:")
+    print("\n💡 优化说明:")
     print("1. 扩展了关键词库，增加了更多触发词汇")
     print("2. 提高了各类评分的权重和上限")
     print("3. 增加了连续查询加成机制")
