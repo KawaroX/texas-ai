@@ -21,16 +21,18 @@ GEMINI_API_URL = "https://gemini-v.kawaro.space/v1beta/models"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
-OPENAI_API_MODEL = "claude-3-7-sonnet-20250219"  # 默认模型改为 claude-3-7-sonnet-20250219
-
+OPENAI_API_MODEL = (
+    "claude-3-7-sonnet-20250219"  # 默认模型改为 claude-3-7-sonnet-20250219
+)
 
 
 logger = logging.getLogger(__name__)
 
+
 # === compact payload logging helpers ===
 def _truncate_for_log(s: str, limit: int = 20) -> str:
     try:
-        return (s[:limit] + ("…" if len(s) > limit else ""))
+        return s[:limit] + ("…" if len(s) > limit else "")
     except Exception:
         return str(s)[:limit]
 
@@ -79,6 +81,8 @@ def summarize_payload_for_log(payload: dict, preview_len: int = 20) -> dict:
 
     summarized["_approx_total_tokens"] = total_tokens
     return summarized
+
+
 # === end helpers ===
 
 # === Redis-based runtime config for Gemini streaming ===
@@ -98,6 +102,7 @@ DEFAULT_GEMINI_CFG = {
     "response_mime_type": "text/plain",
 }
 
+
 async def load_gemini_cfg() -> dict:
     """
     从 Redis 读取一次性配置快照；失败或缺项时使用默认值兜底。
@@ -107,7 +112,10 @@ async def load_gemini_cfg() -> dict:
         if not raw:
             # Redis 无配置时，写入默认值并返回
             try:
-                await _redis.set(REDIS_GEMINI_CFG_KEY, json.dumps(DEFAULT_GEMINI_CFG, ensure_ascii=False))
+                await _redis.set(
+                    REDIS_GEMINI_CFG_KEY,
+                    json.dumps(DEFAULT_GEMINI_CFG, ensure_ascii=False),
+                )
                 logger.debug(f"[ai] Redis 无配置，写入默认 Gemini 配置")
             except Exception as se:
                 logger.warning(f"⚠️ 写入默认 Gemini 配置到 Redis 失败: {se}")
@@ -294,7 +302,7 @@ async def stream_reply_ai(
         payload = {
             "model": model,
             "messages": messages,
-            "reasoning_effort": "high", 
+            "reasoning_effort": "high",
             "verbosity": "medium",
             "stream": True,
             "frequency_penalty": 0.3,
@@ -433,30 +441,32 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
 
     buffer = ""
     total_processed = 0  # 跟踪已处理的字符数
-    
+
     async for chunk in stream_func(messages, model=actual_model):
         buffer += chunk
 
         while True:
             original_buffer_len = len(buffer)
-            
+
             # 优先按句号、问号、感叹号切分
             period_index = buffer.find("。")
-            question_index = buffer.find("？") 
+            question_index = buffer.find("？")
             exclamation_index = buffer.find("!")
 
-            indices = [i for i in [period_index, question_index, exclamation_index] if i != -1]
-            
+            indices = [
+                i for i in [period_index, question_index, exclamation_index] if i != -1
+            ]
+
             if indices:
                 earliest_index = min(indices)
-                segment = buffer[:earliest_index + 1].strip()
+                segment = buffer[: earliest_index + 1].strip()
                 cleaned_segment = clean_segment(segment)
                 if cleaned_segment:
                     yield cleaned_segment
-                buffer = buffer[earliest_index + 1:]
+                buffer = buffer[earliest_index + 1 :]
                 total_processed += earliest_index + 1
                 continue
-                
+
             # 再尝试按换行符切分
             newline_index = buffer.find("\n")
             if newline_index != -1:
@@ -464,10 +474,10 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
                 cleaned_segment = clean_segment(segment)
                 if cleaned_segment:
                     yield cleaned_segment
-                buffer = buffer[newline_index + 1:]
+                buffer = buffer[newline_index + 1 :]
                 total_processed += newline_index + 1
                 continue
-                
+
             # 如果没有找到分割点，跳出循环
             break
 
@@ -525,7 +535,9 @@ async def stream_reply_ai_by_gemini(
     """
     cfg = await load_gemini_cfg()  # 从 Redis 获取一次性配置快照
     model = cfg["model"]
-    max_retries = 1  # 仅重试 1 次（总共 2 次尝试：默认配置一次 + 强制闪电版一次）
+    # 调整策略：仅尝试一次 Gemini 流式
+    # 若失败或无有效输出，则回退调用 stream_reply_ai(gemini-2.5-pro)
+    max_retries = 0
 
     logger.debug(f"🔄 正在使用模型进行 stream_reply_ai_by_gemini(): {model}")
 
@@ -552,9 +564,9 @@ async def stream_reply_ai_by_gemini(
             gemini_contents.append({"role": "model", "parts": [{"text": content}]})
 
     logger.debug(f"转换后的 Gemini contents: {gemini_contents}")
-    system_prompt = (
-        system_instruction.get("parts", [{"text": ""}])[0].get("text", "")[:100]
-    )
+    system_prompt = system_instruction.get("parts", [{"text": ""}])[0].get("text", "")[
+        :100
+    ]
     logger.debug(f"system prompt: {system_prompt}...")
 
     payload = {
@@ -579,12 +591,9 @@ async def stream_reply_ai_by_gemini(
     for retry_count in range(max_retries + 1):
         yielded_any = False
         try:
-            # 第二次尝试：强制切换到更快的模型并将思考长度固定为 24576
-            if retry_count == 1:
-                model = "gemini-2.5-flash"
-                # 覆盖思考长度，仅对本次尝试生效，其余配置保持不变
-                payload["generationConfig"]["thinkingConfig"]["thinkingBudget"] = 24576
-                logger.warning("⚙️ 第二次尝试：强制使用 gemini-2.5-flash，thinkingBudget=24576")
+            # ===== 测试用：强制触发错误以验证回退逻辑（测试完成后删除以下两行） =====
+            raise RuntimeError("测试: 强制触发Gemini流式失败，验证回退到stream_reply_ai")
+            # ====================================================================
             full_url = f"{GEMINI_API_URL}/{model}:streamGenerateContent?alt=sse"
             if retry_count > 0:
                 logger.warning(f"🔄 第 {retry_count} 次重试请求: {full_url}")
@@ -658,14 +667,12 @@ async def stream_reply_ai_by_gemini(
             # 请求完成
             if not yielded_any:
                 logger.warning(
-                    f"⚠️ 第 {retry_count + 1} 次请求完成，但未产生任何有效 token"
+                    f"⚠️ 第 {retry_count + 1} 次请求完成，但未产生任何有效 token，回退到 stream_reply_ai(gemini-2.5-pro)"
                 )
-                if retry_count < max_retries:
-                    logger.debug(f"🔄 将进行第 {retry_count + 1} 次重试...")
-                    continue
-                else:
-                    logger.error(f"❌ 经过 {max_retries + 1} 次尝试后仍未获得有效响应")
-                    raise Exception("Gemini API 返回空响应，重试次数已用尽")
+                # 回退：使用 OpenAI 协议的 stream_reply_ai，模型保持 gemini-2.5-pro
+                async for seg in stream_reply_ai(messages, model="gemini-2.5-pro"):
+                    yield seg
+                return
             else:
                 logger.debug("✅ Gemini API 调用成功并已流式输出")
                 break
@@ -679,7 +686,11 @@ async def stream_reply_ai_by_gemini(
                 logger.error(f"❌ 第 {retry_count + 1} 次请求失败: {str(e)}，将重试...")
                 continue
             else:
-                logger.error(f"❌ 经过 {max_retries + 1} 次尝试后仍然失败: {str(e)}")
+                logger.error(
+                    f"❌ 经过 {max_retries + 1} 次尝试后仍然失败: {str(e)}，回退到 stream_reply_ai(gemini-2.5-pro)"
+                )
+                async for seg in stream_reply_ai(messages, model="gemini-2.5-pro"):
+                    yield seg
                 return
 
     logger.debug("✅ Gemini API 流式请求完成")
@@ -837,7 +848,9 @@ async def call_ai_summary(prompt: str) -> str:
 # else:
 STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
 STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", OPENAI_API_URL)
-STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-pro") # 日程生成
+STRUCTURED_API_MODEL = os.getenv(
+    "STRUCTURED_API_MODEL", "claude-3-7-sonnet-20250219"
+)  # 日程生成
 
 
 async def call_structured_generation(messages: list, max_retries: int = 3) -> dict:
