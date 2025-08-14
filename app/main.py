@@ -15,7 +15,7 @@ DEFAULT_GEMINI_CFG_2 = {
     "read_timeout": 60.0,
     "write_timeout": 60.0,
     "pool_timeout": 60.0,
-    "stop_sequences": ["SEND", "NO_REPLY"],
+    "stop_sequences": ["NO_REPLY"],
     "include_thoughts": True,
     "thinking_budget": 24576,
     "response_mime_type": "text/plain",
@@ -38,13 +38,17 @@ from datetime import date
 
 app = FastAPI(title=settings.BOT_NAME)
 
+
 @app.get("/")
 def root():
     raise HTTPException(status_code=404, detail="Not Found")
 
+
 # === Lightweight query param auth for /llm-config/* ===
 # Set ADMIN_K to a long random string; if empty, auth is disabled.
 ADMIN_K = os.getenv("ADMIN_K", "k8yyjSAVsbavobY92oTGcN7brVLUAD")
+
+
 def check_k(k: str = Query(default="")):
     if ADMIN_K and k != ADMIN_K:
         raise HTTPException(status_code=401, detail="unauthorized")
@@ -52,10 +56,12 @@ def check_k(k: str = Query(default="")):
 
 # ===== LLM Gemini 配置管理接口 =====
 
+
 @app.get("/llm-config/gemini")
 async def get_gemini_cfg(_=Depends(check_k)):
     raw = await _redis.get(REDIS_GEMINI_CFG_KEY)
     return json.loads(raw) if raw else DEFAULT_GEMINI_CFG
+
 
 @app.post("/llm-config/gemini/reset/{which}")
 async def reset_gemini_cfg(which: int, _=Depends(check_k)):
@@ -68,12 +74,14 @@ async def reset_gemini_cfg(which: int, _=Depends(check_k)):
     await _redis.set(REDIS_GEMINI_CFG_KEY, json.dumps(cfg, ensure_ascii=False))
     return {"ok": True, "config": cfg}
 
+
 def _filter_and_merge(base: dict, patch: dict) -> dict:
     if not isinstance(patch, dict):
         raise ValueError("payload 必须是 JSON 对象")
     clean = {k: v for k, v in patch.items() if k in ALLOWED_KEYS}
     merged = {**base, **clean}
     return merged
+
 
 @app.patch("/llm-config/gemini")
 async def patch_gemini_cfg(payload: dict, _=Depends(check_k)):
@@ -86,6 +94,7 @@ async def patch_gemini_cfg(payload: dict, _=Depends(check_k)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.put("/llm-config/gemini")
 async def replace_gemini_cfg(payload: dict, _=Depends(check_k)):
     try:
@@ -94,6 +103,7 @@ async def replace_gemini_cfg(payload: dict, _=Depends(check_k)):
         return {"ok": True, "config": new_cfg}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.get("/")
 def read_root():

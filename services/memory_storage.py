@@ -391,7 +391,9 @@ class MemoryStorage:
                                 "[MemoryStorage] Successfully added dict content to Mem0. Result: %s",
                                 str(result)[:200] if result else "None",
                             )
-            logger.info("[MemoryStorage] 记忆处理完成 count=%d", len(memories))
+                            logger.info(
+                                "[MemoryStorage] 记忆处理完成 count=%d", len(memories)
+                            )
                             logger.debug(
                                 "[MemoryStorage] Full result from Mem0: %s", result
                             )

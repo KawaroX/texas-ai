@@ -96,7 +96,7 @@ DEFAULT_GEMINI_CFG = {
     "read_timeout": 60.0,
     "write_timeout": 60.0,
     "pool_timeout": 60.0,
-    "stop_sequences": ["SEND", "NO_REPLY"],
+    "stop_sequences": ["NO_REPLY"],
     "include_thoughts": True,
     "thinking_budget": 32768,
     "response_mime_type": "text/plain",
@@ -292,7 +292,7 @@ async def stream_reply_ai(
             "extra_body": {
                 "google": {
                     "thinking_config": {
-                        "thinking_budget": 16384,
+                        "thinking_budget": 32768,
                         "include_thoughts": False,
                     }
                 }
@@ -591,9 +591,6 @@ async def stream_reply_ai_by_gemini(
     for retry_count in range(max_retries + 1):
         yielded_any = False
         try:
-            # ===== 测试用：强制触发错误以验证回退逻辑（测试完成后删除以下两行） =====
-            raise RuntimeError("测试: 强制触发Gemini流式失败，验证回退到stream_reply_ai")
-            # ====================================================================
             full_url = f"{GEMINI_API_URL}/{model}:streamGenerateContent?alt=sse"
             if retry_count > 0:
                 logger.warning(f"🔄 第 {retry_count} 次重试请求: {full_url}")

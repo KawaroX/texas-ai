@@ -106,7 +106,9 @@ async def generate_and_store_daily_life(target_date: date):
                 target_date, end_date, event_type
             )
             is_in_major_event = True
-            logger.debug(f"[daily_life] 新大事件生成完成: {event_type}, 持续{duration_days}天")
+            logger.debug(
+                f"[daily_life] 新大事件生成完成: {event_type}, 持续{duration_days}天"
+            )
 
     # 如果处于大事件中，但未获取上下文，尝试从数据库获取
     if is_in_major_event and not major_event_context:
@@ -268,7 +270,9 @@ async def collect_interaction_experiences(target_date: date):
                 if exp.get("need_interaction") is True:
                     interaction_needed.append(exp)
 
-        logger.debug(f"[interactions] 需要交互的微观经历条数: {len(interaction_needed)}")
+        logger.debug(
+            f"[interactions] 需要交互的微观经历条数: {len(interaction_needed)}"
+        )
 
         # 存储到 Redis
         r = redis.Redis.from_url(os.getenv("REDIS_URL"))
@@ -450,7 +454,9 @@ async def generate_and_store_micro_experiences(
         logger.error(f"❌ 存储微观经历失败: {e}")
         successful_items = 0
 
-    logger.debug(f"[micro_exp] 成功存储 {successful_items}/{len(micro_experiences)} 个微观经历项")
+    logger.debug(
+        f"[micro_exp] 成功存储 {successful_items}/{len(micro_experiences)} 个微观经历项"
+    )
 
     # 3. 存储到文件
     logger.debug("[micro_exp] 存储微观经历到文件")

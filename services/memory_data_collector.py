@@ -2,14 +2,17 @@ import os
 from datetime import datetime, timedelta
 import pytz
 from typing import List, Dict
-import utils.postgres_service as pg_service # 导入为别名
+import utils.postgres_service as pg_service  # 导入为别名
+
 
 class MemoryDataCollector:
     def __init__(self):
         # 不再需要实例化PostgresService，直接调用pg_service中的函数
         pass
 
-    def get_unembedded_chats(self, start_time: datetime = None, end_time: datetime = None) -> List[Dict]:
+    def get_unembedded_chats(
+        self, start_time: datetime = None, end_time: datetime = None
+    ) -> List[Dict]:
         """获取未嵌入的聊天记录"""
         conn = pg_service.get_db_connection()
         try:
@@ -20,7 +23,7 @@ class MemoryDataCollector:
                     FROM messages 
                     WHERE is_embedded = FALSE
                 """
-                
+
                 # 如果提供了时间范围，添加时间条件
                 params = []
                 if start_time:
@@ -29,19 +32,21 @@ class MemoryDataCollector:
                 if end_time:
                     query += " AND created_at < %s"
                     params.append(end_time)
-                
+
                 query += " ORDER BY created_at"
-                
+
                 cur.execute(query, params)
                 columns = [desc[0] for desc in cur.description]
                 results = []
                 for row in cur.fetchall():
                     item = dict(zip(columns, row))
-                    if 'created_at' in item and isinstance(item['created_at'], datetime):
-                        item['created_at'] = item['created_at'].isoformat()
+                    if "created_at" in item and isinstance(
+                        item["created_at"], datetime
+                    ):
+                        item["created_at"] = item["created_at"].isoformat()
                     # 如果没有role字段，设置默认值为user
-                    if 'role' not in item or item['role'] is None:
-                        item['role'] = 'user'
+                    if "role" not in item or item["role"] is None:
+                        item["role"] = "user"
                     results.append(item)
                 return results
         finally:
@@ -49,7 +54,9 @@ class MemoryDataCollector:
 
     def get_yesterday_schedule_experiences(self) -> List[Dict]:
         """获取前一天的日程和微观经历，并关联大事件信息"""
-        yesterday = (datetime.now(pytz.timezone('Asia/Shanghai')) - timedelta(days=1)).date()
+        yesterday = (
+            datetime.now(pytz.timezone("Asia/Shanghai")) - timedelta(days=1)
+        ).date()
         conn = pg_service.get_db_connection()
         try:
             with conn.cursor() as cur:
@@ -69,16 +76,20 @@ class MemoryDataCollector:
                 results = []
                 for row in cur.fetchall():
                     item = dict(zip(columns, row))
-                    
+
                     # 处理 datetime 对象
-                    if 'created_at' in item and isinstance(item['created_at'], datetime):
-                        item['created_at'] = item['created_at'].isoformat()
-                    
+                    if "created_at" in item and isinstance(
+                        item["created_at"], datetime
+                    ):
+                        item["created_at"] = item["created_at"].isoformat()
+
                     # 如果日程在大事件中，获取大事件信息
-                    if item.get('is_in_major_event') and item.get('major_event_id'):
-                        major_event_info = pg_service.get_major_event_by_id(item['major_event_id'])
+                    if item.get("is_in_major_event") and item.get("major_event_id"):
+                        major_event_info = pg_service.get_major_event_by_id(
+                            item["major_event_id"]
+                        )
                         if major_event_info:
-                            item['major_event_details'] = major_event_info
+                            item["major_event_details"] = major_event_info
                     results.append(item)
                 return results
         finally:
@@ -86,7 +97,9 @@ class MemoryDataCollector:
 
     def get_major_events(self) -> List[Dict]:
         """检测和获取已结束的大事件数据"""
-        yesterday = (datetime.now(pytz.timezone('Asia/Shanghai')) - timedelta(days=1)).date() # 使用上海时区
+        yesterday = (
+            datetime.now(pytz.timezone("Asia/Shanghai")) - timedelta(days=1)
+        ).date()  # 使用上海时区
         conn = pg_service.get_db_connection()
         try:
             with conn.cursor() as cur:
@@ -100,12 +113,16 @@ class MemoryDataCollector:
                 results = []
                 for row in cur.fetchall():
                     item = dict(zip(columns, row))
-                    if 'start_date' in item and isinstance(item['start_date'], datetime):
-                        item['start_date'] = item['start_date'].isoformat()
-                    if 'end_date' in item and isinstance(item['end_date'], datetime):
-                        item['end_date'] = item['end_date'].isoformat()
-                    if 'created_at' in item and isinstance(item['created_at'], datetime):
-                        item['created_at'] = item['created_at'].isoformat()
+                    if "start_date" in item and isinstance(
+                        item["start_date"], datetime
+                    ):
+                        item["start_date"] = item["start_date"].isoformat()
+                    if "end_date" in item and isinstance(item["end_date"], datetime):
+                        item["end_date"] = item["end_date"].isoformat()
+                    if "created_at" in item and isinstance(
+                        item["created_at"], datetime
+                    ):
+                        item["created_at"] = item["created_at"].isoformat()
                     results.append(item)
                 return results
         finally:

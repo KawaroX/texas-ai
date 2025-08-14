@@ -3,6 +3,7 @@ import json
 from psycopg2 import sql
 from app.config import settings
 
+
 def get_db_connection():
     """
     获取数据库连接
@@ -21,6 +22,7 @@ def get_db_connection():
         print(f"数据库连接失败: {e}")
         raise
 
+
 def insert_messages(messages):
     """
     messages: List of tuples (channel_id, role, content, timestamp)
@@ -38,8 +40,15 @@ def insert_messages(messages):
     finally:
         conn.close()
 
+
 # --- daily_schedules 表操作 ---
-def insert_daily_schedule(date: str, schedule_data: dict, weather: str, is_in_major_event: bool = False, major_event_id: str = None):
+def insert_daily_schedule(
+    date: str,
+    schedule_data: dict,
+    weather: str,
+    is_in_major_event: bool = False,
+    major_event_id: str = None,
+):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -61,6 +70,7 @@ def insert_daily_schedule(date: str, schedule_data: dict, weather: str, is_in_ma
     finally:
         conn.close()
 
+
 def get_daily_schedule_by_date(date: str):
     conn = get_db_connection()
     try:
@@ -71,7 +81,7 @@ def get_daily_schedule_by_date(date: str):
                 FROM daily_schedules
                 WHERE date = %s;
                 """,
-                (date,)
+                (date,),
             )
             row = cur.fetchone()
             if row:
@@ -89,7 +99,14 @@ def get_daily_schedule_by_date(date: str):
     finally:
         conn.close()
 
-def update_daily_schedule(schedule_id: str, schedule_data: dict = None, weather: str = None, is_in_major_event: bool = None, major_event_id: str = None):
+
+def update_daily_schedule(
+    schedule_id: str,
+    schedule_data: dict = None,
+    weather: str = None,
+    is_in_major_event: bool = None,
+    major_event_id: str = None,
+):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -109,7 +126,7 @@ def update_daily_schedule(schedule_id: str, schedule_data: dict = None, weather:
                 params.append(major_event_id)
 
             if not updates:
-                return False # No updates to perform
+                return False  # No updates to perform
 
             params.append(schedule_id)
             query = sql.SQL("UPDATE daily_schedules SET {} WHERE id = %s;").format(
@@ -120,6 +137,7 @@ def update_daily_schedule(schedule_id: str, schedule_data: dict = None, weather:
     finally:
         conn.close()
 
+
 def delete_daily_schedule(schedule_id: str):
     conn = get_db_connection()
     try:
@@ -129,14 +147,23 @@ def delete_daily_schedule(schedule_id: str):
                 DELETE FROM daily_schedules
                 WHERE id = %s;
                 """,
-                (schedule_id,)
+                (schedule_id,),
             )
             return cur.rowcount > 0
     finally:
         conn.close()
 
+
 # --- major_events 表操作 ---
-def insert_major_event(start_date: str, end_date: str, duration_days: int, main_content: str, daily_summaries: dict, event_type: str, status: str = 'planned'):
+def insert_major_event(
+    start_date: str,
+    end_date: str,
+    duration_days: int,
+    main_content: str,
+    daily_summaries: dict,
+    event_type: str,
+    status: str = "planned",
+):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -160,6 +187,7 @@ def insert_major_event(start_date: str, end_date: str, duration_days: int, main_
     finally:
         conn.close()
 
+
 def get_major_event_by_id(event_id: str):
     conn = get_db_connection()
     try:
@@ -170,7 +198,7 @@ def get_major_event_by_id(event_id: str):
                 FROM major_events
                 WHERE id = %s;
                 """,
-                (event_id,)
+                (event_id,),
             )
             row = cur.fetchone()
             if row:
@@ -188,6 +216,7 @@ def get_major_event_by_id(event_id: str):
             return None
     finally:
         conn.close()
+
 
 def get_major_event_by_date(target_date: str):
     conn = get_db_connection()
@@ -199,7 +228,7 @@ def get_major_event_by_date(target_date: str):
                 FROM major_events
                 WHERE %s BETWEEN start_date AND end_date;
                 """,
-                (target_date,)
+                (target_date,),
             )
             row = cur.fetchone()
             if row:
@@ -218,7 +247,14 @@ def get_major_event_by_date(target_date: str):
     finally:
         conn.close()
 
-def update_major_event(event_id: str, main_content: str = None, daily_summaries: dict = None, event_type: str = None, status: str = None):
+
+def update_major_event(
+    event_id: str,
+    main_content: str = None,
+    daily_summaries: dict = None,
+    event_type: str = None,
+    status: str = None,
+):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -236,7 +272,7 @@ def update_major_event(event_id: str, main_content: str = None, daily_summaries:
             if status is not None:
                 updates.append("status = %s")
                 params.append(status)
-            
+
             if not updates:
                 return False
 
@@ -249,6 +285,7 @@ def update_major_event(event_id: str, main_content: str = None, daily_summaries:
     finally:
         conn.close()
 
+
 def delete_major_event(event_id: str):
     conn = get_db_connection()
     try:
@@ -258,18 +295,16 @@ def delete_major_event(event_id: str):
                 DELETE FROM major_events
                 WHERE id = %s;
                 """,
-                (event_id,)
+                (event_id,),
             )
             return cur.rowcount > 0
     finally:
         conn.close()
 
+
 # --- micro_experiences 表操作 (新结构) ---
 def insert_micro_experience(
-    date: str, 
-    daily_schedule_id: str, 
-    experiences: list,
-    related_item_id: str = None
+    date: str, daily_schedule_id: str, experiences: list, related_item_id: str = None
 ):
     """
     插入微观经历项 (新结构)
@@ -295,6 +330,7 @@ def insert_micro_experience(
     finally:
         conn.close()
 
+
 def get_micro_experiences_by_daily_schedule_id(daily_schedule_id: str):
     conn = get_db_connection()
     try:
@@ -305,22 +341,25 @@ def get_micro_experiences_by_daily_schedule_id(daily_schedule_id: str):
                 FROM micro_experiences
                 WHERE daily_schedule_id = %s;
                 """,
-                (daily_schedule_id,)
+                (daily_schedule_id,),
             )
             rows = cur.fetchall()
             results = []
             for row in rows:
-                results.append({
-                    "id": row[0],
-                    "date": row[1].strftime("%Y-%m-%d"),
-                    "daily_schedule_id": row[2],
-                    "related_item_id": row[3],
-                    "experiences": row[4],
-                    "created_at": row[5].isoformat(),
-                })
+                results.append(
+                    {
+                        "id": row[0],
+                        "date": row[1].strftime("%Y-%m-%d"),
+                        "daily_schedule_id": row[2],
+                        "related_item_id": row[3],
+                        "experiences": row[4],
+                        "created_at": row[5].isoformat(),
+                    }
+                )
             return results
     finally:
         conn.close()
+
 
 def get_micro_experiences_by_related_item_id(related_item_id: str):
     conn = get_db_connection()
@@ -332,22 +371,26 @@ def get_micro_experiences_by_related_item_id(related_item_id: str):
                 FROM micro_experiences
                 WHERE related_item_id = %s;
                 """,
-                (related_item_id,)
+                (related_item_id,),
             )
             rows = cur.fetchall()
             results = []
             for row in rows:
-                results.append({
-                    "id": row[0],
-                    "date": row[1].strftime("%Y-%m-%d"),
-                    "daily_schedule_id": row[2],
-                    "related_item_id": row[3],
-                    "experiences": row[4],
-                    "created_at": row[5].isoformat(),
-                })
+                results.append(
+                    {
+                        "id": row[0],
+                        "date": row[1].strftime("%Y-%m-%d"),
+                        "daily_schedule_id": row[2],
+                        "related_item_id": row[3],
+                        "experiences": row[4],
+                        "created_at": row[5].isoformat(),
+                    }
+                )
             return results
     finally:
         conn.close()
+
+
 def delete_micro_experience(experience_id: str):
     conn = get_db_connection()
     try:
@@ -357,7 +400,7 @@ def delete_micro_experience(experience_id: str):
                 DELETE FROM micro_experiences
                 WHERE id = %s;
                 """,
-                (experience_id,)
+                (experience_id,),
             )
             return cur.rowcount > 0
     finally:

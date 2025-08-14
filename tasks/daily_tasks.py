@@ -73,29 +73,31 @@ def generate_chat_memories():
 
         # 获取所有未嵌入的聊天记录
         all_chats = collector.get_unembedded_chats()
-        
+
         if not all_chats:
             logger.debug("[daily_tasks] 没有未嵌入的聊天记录需要处理")
             return
 
         # 按时间分段处理（如果时间跨度超过3小时）
         # 获取最早和最晚的聊天记录时间
-        earliest_time = min(chat['created_at'] for chat in all_chats)
-        latest_time = max(chat['created_at'] for chat in all_chats)
-        
+        earliest_time = min(chat["created_at"] for chat in all_chats)
+        latest_time = max(chat["created_at"] for chat in all_chats)
+
         # 如果是字符串格式的时间，转换为datetime对象
         if isinstance(earliest_time, str):
-            earliest_time = datetime.fromisoformat(earliest_time.replace('Z', '+00:00'))
+            earliest_time = datetime.fromisoformat(earliest_time.replace("Z", "+00:00"))
         if isinstance(latest_time, str):
-            latest_time = datetime.fromisoformat(latest_time.replace('Z', '+00:00'))
-        
+            latest_time = datetime.fromisoformat(latest_time.replace("Z", "+00:00"))
+
         # 计算时间跨度
         time_span = latest_time - earliest_time
-        
+
         # 如果时间跨度超过3小时，则分段处理
         if time_span > timedelta(hours=3):
-            logger.debug(f"[daily_tasks] 聊天记录时间跨度超过3小时 ({time_span})，分段处理")
-            
+            logger.debug(
+                f"[daily_tasks] 聊天记录时间跨度超过3小时 ({time_span})，分段处理"
+            )
+
             # 按3小时分段处理
             current_start = earliest_time
             while current_start < latest_time:
@@ -103,24 +105,35 @@ def generate_chat_memories():
                 # 确保不超出最晚时间
                 if current_end > latest_time:
                     current_end = latest_time
-                    
+
                 # 获取当前时间段的聊天记录
                 chats_in_period = [
-                    chat for chat in all_chats 
-                    if datetime.fromisoformat(chat['created_at'].replace('Z', '+00:00')) >= current_start 
-                    and datetime.fromisoformat(chat['created_at'].replace('Z', '+00:00')) < current_end
+                    chat
+                    for chat in all_chats
+                    if datetime.fromisoformat(chat["created_at"].replace("Z", "+00:00"))
+                    >= current_start
+                    and datetime.fromisoformat(
+                        chat["created_at"].replace("Z", "+00:00")
+                    )
+                    < current_end
                 ]
-                
+
                 if chats_in_period:
-                    logger.debug(f"[daily_tasks] 处理时间段 {current_start}~{current_end} 聊天记录 {len(chats_in_period)} 条")
+                    logger.debug(
+                        f"[daily_tasks] 处理时间段 {current_start}~{current_end} 聊天记录 {len(chats_in_period)} 条"
+                    )
                     process_chat_batch(chats_in_period, collector, summarizer, storage)
                 else:
-                    logger.debug(f"[daily_tasks] 时间段 {current_start}~{current_end} 没有聊天记录")
-                
+                    logger.debug(
+                        f"[daily_tasks] 时间段 {current_start}~{current_end} 没有聊天记录"
+                    )
+
                 current_start = current_end
         else:
             # 时间跨度不超过3小时，一次性处理
-            logger.debug(f"[daily_tasks] 聊天记录时间跨度未超过3小时 ({time_span})，一次性处理")
+            logger.debug(
+                f"[daily_tasks] 聊天记录时间跨度未超过3小时 ({time_span})，一次性处理"
+            )
             process_chat_batch(all_chats, collector, summarizer, storage)
 
     except Exception as e:
@@ -130,25 +143,32 @@ def generate_chat_memories():
     logger.info("[daily_tasks] 聊天记录记忆生成任务完成")
 
 
-def process_chat_batch(chats: List[Dict], collector: MemoryDataCollector, summarizer: MemorySummarizer, storage: MemoryStorage):
+def process_chat_batch(
+    chats: List[Dict],
+    collector: MemoryDataCollector,
+    summarizer: MemorySummarizer,
+    storage: MemoryStorage,
+):
     """处理一批聊天记录"""
     if not chats:
         return
-        
+
     # 提取ID用于后续标记
     ids = [item["id"] for item in chats]
-    
+
     # 生成记忆
     memories = summarizer.summarize("chat", chats)
     # 确保memories是列表形式
     if not isinstance(memories, list):
         memories = [memories]
     storage.store_memory(memories)
-    
+
     # 标记数据为已嵌入
     collector.mark_chats_embedded(ids)
-    
-    logger.debug(f"[daily_tasks] 已处理聊天记录 {len(chats)} 条，生成记忆 {len(memories)} 条")
+
+    logger.debug(
+        f"[daily_tasks] 已处理聊天记录 {len(chats)} 条，生成记忆 {len(memories)} 条"
+    )
 
 
 @shared_task
@@ -177,7 +197,9 @@ def clean_generated_content():
                     removed_count += 1
             except Exception as file_err:
                 logger.error(f"删除文件失败: {file_path}: {file_err}")
-        logger.info(f"[daily_tasks] 清理完成，删除 {removed_count} 个包含日期 {yesterday} 的项")
+        logger.info(
+            f"[daily_tasks] 清理完成，删除 {removed_count} 个包含日期 {yesterday} 的项"
+        )
         return {"status": "success", "removed": removed_count}
     except Exception as e:
         logger.error(f"清理 generated_content 目录失败: {str(e)}")

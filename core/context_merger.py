@@ -266,7 +266,7 @@ async def _get_mem0_relevant(
             if results is None:  # 出现异常返回了 None，当作失败处理
                 raise RuntimeError("mem0.search 返回 None（内部异常）")
             for item in results:
-                me = item.get('memory', '')
+                me = item.get("memory", "")
                 logger.debug(f"[context_merger] mem0.search 命中记忆：{me}")
             if attempt > 1:
                 logger.debug(f"[context_merger] mem0.search 第 {attempt} 次尝试成功")
@@ -661,7 +661,9 @@ async def merge_context(
 
     # 3. 获取生活系统信息
     life_system_context = _get_life_system_context()
-    logger.debug(f"[context_merger] Life system context 长度: {len(life_system_context)}")
+    logger.debug(
+        f"[context_merger] Life system context 长度: {len(life_system_context)}"
+    )
 
     # 4. 获取记忆信息
     from core.rag_decision_system import RAGDecisionMaker
@@ -671,10 +673,12 @@ async def merge_context(
     _needs_rag = rag_decision.should_search(latest_query)
 
     if _needs_rag:
-    logger.debug("[context_merger] 开始检索记忆")
+        logger.debug("[context_merger] 开始检索记忆")
         history_text = "\n".join([msg["content"] for msg in processed_messages])
         query = "\n".join([latest_query, history_text if history_text else ""])
-        mem0_result = await _get_mem0_relevant(query, limit=5, timeout=3.0, max_retries=1)
+        mem0_result = await _get_mem0_relevant(
+            query, limit=5, timeout=3.0, max_retries=1
+        )
         mem0_memory = mem0_result
     else:
         mem0_memory = []
@@ -755,7 +759,10 @@ async def merge_context(
     if is_active:
         # 主动模式：AI想要分享内容
         if condemn_prefix:
-            condemn_prefix += condemn_prefix + "现在Kawaro还没有给你发消息，但是你决定主动给他发消息。"
+            condemn_prefix += (
+                condemn_prefix
+                + "现在Kawaro还没有给你发消息，但是你决定主动给他发消息。"
+            )
         user_query_content = (
             f"{condemn_prefix}"  # 添加谴责消息
             "请注意，现在是你主动向Kawaro发送信息，并非Kawaro发送消息后做出回复。因此请考虑如何正确表达。\n"

@@ -39,7 +39,7 @@
 ./tasks/interaction_tasks.py:72:    logger.info("[interactions] 定时主动交互任务完成")
 ./tasks/interaction_tasks.py:85:            logger.error("❌ 无法获取 BOT user ID，跳过主动交互事件处理。")
 ./tasks/interaction_tasks.py:100:        logger.error("❌ 未找到 'kawaro' 用户 ID，无法发送主动交互消息。")
-./tasks/interaction_tasks.py:106:            logger.error(f"❌ 无法获取或创建与 'kawaro' 的私聊频道。")
+./tasks/interaction_tasks.py:106:            logger.error("❌ 无法获取或创建与 'kawaro' 的私聊频道。")
 ./tasks/interaction_tasks.py:109:        logger.error(f"❌ 获取 'kawaro' 私聊频道时发生错误: {e}")
 ./tasks/interaction_tasks.py:112:    logger.debug(f"[interactions] 已获取 'kawaro' 私聊频道 ID: {kawaro_dm_channel_id}")
 ./tasks/interaction_tasks.py:128:            logger.debug(f"[interactions] Processing interaction content: {interaction_content}")

@@ -73,7 +73,9 @@ class ChatEngine:
                 context_messages = context_info.get("messages", [])
             else:
                 # 兼容旧格式：context_info 是单一字符串
-                logger.warning("[chat_engine] context_info 使用旧格式，建议更新调用方式")
+                logger.warning(
+                    "[chat_engine] context_info 使用旧格式，建议更新调用方式"
+                )
                 bg_info = ""  # 无法从旧格式中提取背景信息
                 # 将旧格式转换为消息格式
                 context_messages = [{"role": "user", "content": context_info}]
@@ -120,9 +122,9 @@ class ChatEngine:
         #         f"Content length: {len(m['content'])} characters\n\n"
         #     )
         #     logger.info(l_i)
-            # logger.info(f"Message {i+1} - Role: {m['role']}")
-            # logger.info(f"Content: {m['content']}")
-            # logger.info(f"Content length: {len(m['content'])} characters\n")
+        # logger.info(f"Message {i+1} - Role: {m['role']}")
+        # logger.info(f"Content: {m['content']}")
+        # logger.info(f"Content length: {len(m['content'])} characters\n")
 
         # 4. 流式调用 AI 模型
         async for segment in stream_ai_chat(prompt_messages, "gemini-api"):

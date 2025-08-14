@@ -21,30 +21,38 @@ class LifeDataService:
         self.redis = redis_client
 
     async def _generate_summary_with_status_tracking(
-        self, 
-        all_past_micro_experiences, 
+        self,
+        all_past_micro_experiences,
         current_exp_json,
         prev_past_micro_experiences_key,
         summary_generation_status_key,
-        date_str
+        date_str,
     ):
         """生成汇总并跟踪状态"""
         logger.info("[LIFE_DATA] 开始生成微观经历汇总")
-        
+
         # 记录开始尝试的状态
         attempt_status = {
             "last_attempt_time": datetime.now().isoformat(),
             "last_attempt_data": current_exp_json,
             "last_success": "false",
-            "attempt_count": str(int(self.redis.hget(summary_generation_status_key, "attempt_count") or "0") + 1)
+            "attempt_count": str(
+                int(
+                    self.redis.hget(summary_generation_status_key, "attempt_count")
+                    or "0"
+                )
+                + 1
+            ),
         }
         self.redis.hset(summary_generation_status_key, mapping=attempt_status)
         self.redis.expire(summary_generation_status_key, 86400)
-        
+
         try:
             # 汇总过去的微观经历
-            summarized_story = await summarize_past_micro_experiences(all_past_micro_experiences)
-            
+            summarized_story = await summarize_past_micro_experiences(
+                all_past_micro_experiences
+            )
+
             # 验证生成结果
             if not summarized_story or summarized_story.strip() == "":
                 logger.warning("⚠️ AI汇总生成结果为空，保持重试状态")
@@ -52,7 +60,7 @@ class LifeDataService:
                 failure_status = {
                     "last_success": "false",
                     "last_error": "生成结果为空",
-                    "last_failure_time": datetime.now().isoformat()
+                    "last_failure_time": datetime.now().isoformat(),
                 }
                 self.redis.hset(summary_generation_status_key, mapping=failure_status)
                 return "汇总生成中，请稍候..."
@@ -62,21 +70,23 @@ class LifeDataService:
                 success_status = {
                     "last_success": "true",
                     "last_success_time": datetime.now().isoformat(),
-                    "last_error": ""  # 清除错误信息
+                    "last_error": "",  # 清除错误信息
                 }
                 self.redis.hset(summary_generation_status_key, mapping=success_status)
-                
+
                 # 只有在成功生成后才更新比较基准
-                self.redis.set(prev_past_micro_experiences_key, current_exp_json, ex=86400)
+                self.redis.set(
+                    prev_past_micro_experiences_key, current_exp_json, ex=86400
+                )
                 return summarized_story
-                
+
         except Exception as e:
             logger.error(f"❌ AI汇总生成失败: {str(e)}")
             # 记录失败状态，但不更新数据基准
             failure_status = {
-                "last_success": "false", 
+                "last_success": "false",
                 "last_error": str(e),
-                "last_failure_time": datetime.now().isoformat()
+                "last_failure_time": datetime.now().isoformat(),
             }
             self.redis.hset(summary_generation_status_key, mapping=failure_status)
             return f"汇总生成失败，将在下次重试 (错误: {str(e)[:50]}...)"
@@ -114,7 +124,9 @@ class LifeDataService:
             ):
                 logger.debug("[LIFE_DATA] 遍历日程项")
                 for item in daily_schedule["schedule_data"]["schedule_items"]:
-                    logger.debug(f"[LIFE_DATA] 日程项开始时间: {item.get('start_time')}")
+                    logger.debug(
+                        f"[LIFE_DATA] 日程项开始时间: {item.get('start_time')}"
+                    )
                     logger.debug(f"[LIFE_DATA] 日程项结束时间: {item.get('end_time')}")
                     item_start_time = item["start_time"]
                     item_end_time = item["end_time"]
@@ -180,11 +192,15 @@ class LifeDataService:
                                                 )
 
             # Redis 键定义
-            prev_past_micro_experiences_key = f"life_system:prev_past_micro_experiences:{date_str}"
+            prev_past_micro_experiences_key = (
+                f"life_system:prev_past_micro_experiences:{date_str}"
+            )
             summary_generation_status_key = f"life_system:summary_status:{date_str}"
-            
+
             # 获取之前存储的数据和状态
-            prev_past_micro_experiences = self.redis.get(prev_past_micro_experiences_key)
+            prev_past_micro_experiences = self.redis.get(
+                prev_past_micro_experiences_key
+            )
             summary_status = self.redis.hgetall(summary_generation_status_key)
 
             # 序列化当前经历用于比较
@@ -196,65 +212,84 @@ class LifeDataService:
                 else ""
             )
 
-            logger.debug(f"[LIFE_DATA] prev: ...{prev_past_micro_experiences[-100:] if prev_past_micro_experiences else 'None'}")
+            logger.debug(
+                f"[LIFE_DATA] prev: ...{prev_past_micro_experiences[-100:] if prev_past_micro_experiences else 'None'}"
+            )
             logger.debug(f"[LIFE_DATA] curr: ...{current_exp_json[-100:]}")
             logger.debug(f"[LIFE_DATA] summary_status: {summary_status}")
 
             # 检查是否需要重新生成汇总
             data_changed = prev_past_micro_experiences != current_exp_json
-            last_generation_success = summary_status.get("last_success", "false") == "true"
+            last_generation_success = (
+                summary_status.get("last_success", "false") == "true"
+            )
             last_attempt_data = summary_status.get("last_attempt_data", "")
-            
+
             if not current_exp_json:
                 # 没有当前经历数据
                 summarized_past_micro_experiences_story = ""
                 # 清理状态
                 self.redis.delete(summary_generation_status_key)
-                self.redis.set(prev_past_micro_experiences_key, current_exp_json, ex=86400)
-                
+                self.redis.set(
+                    prev_past_micro_experiences_key, current_exp_json, ex=86400
+                )
+
             elif data_changed:
                 # 数据有变化，无论之前是否成功都需要重新生成
                 logger.debug("[LIFE_DATA] 发现数据差异，需要重新生成汇总")
-                summarized_past_micro_experiences_story = await self._generate_summary_with_status_tracking(
-                    all_past_micro_experiences, 
-                    current_exp_json,
-                    prev_past_micro_experiences_key,
-                    summary_generation_status_key,
-                    date_str
+                summarized_past_micro_experiences_story = (
+                    await self._generate_summary_with_status_tracking(
+                        all_past_micro_experiences,
+                        current_exp_json,
+                        prev_past_micro_experiences_key,
+                        summary_generation_status_key,
+                        date_str,
+                    )
                 )
-                
+
             elif not last_generation_success and last_attempt_data == current_exp_json:
                 # 数据没变但上次生成失败，需要重试
                 logger.debug("[LIFE_DATA] 数据未变化但上次生成失败，进行重试")
-                summarized_past_micro_experiences_story = await self._generate_summary_with_status_tracking(
-                    all_past_micro_experiences,
-                    current_exp_json, 
-                    prev_past_micro_experiences_key,
-                    summary_generation_status_key,
-                    date_str
+                summarized_past_micro_experiences_story = (
+                    await self._generate_summary_with_status_tracking(
+                        all_past_micro_experiences,
+                        current_exp_json,
+                        prev_past_micro_experiences_key,
+                        summary_generation_status_key,
+                        date_str,
+                    )
                 )
-                
+
             else:
                 # 数据没变化且之前生成成功，使用现有汇总
                 logger.debug("[LIFE_DATA] 数据无变化且之前生成成功，使用现有汇总")
                 main_data = self.redis.hgetall(f"life_system:{date_str}")
-                existing_story = main_data.get("summarized_past_micro_experiences_story", "")
-                
-                if not existing_story or existing_story in ["", "没有之前的经历，今天可能才刚刚开始。"]:
+                existing_story = main_data.get(
+                    "summarized_past_micro_experiences_story", ""
+                )
+
+                if not existing_story or existing_story in [
+                    "",
+                    "没有之前的经历，今天可能才刚刚开始。",
+                ]:
                     # 没有有效汇总但状态显示成功，可能是数据丢失，重新生成
                     logger.debug("[LIFE_DATA] 状态显示成功但未找到有效汇总，重新生成")
-                    summarized_past_micro_experiences_story = await self._generate_summary_with_status_tracking(
-                        all_past_micro_experiences,
-                        current_exp_json,
-                        prev_past_micro_experiences_key, 
-                        summary_generation_status_key,
-                        date_str
+                    summarized_past_micro_experiences_story = (
+                        await self._generate_summary_with_status_tracking(
+                            all_past_micro_experiences,
+                            current_exp_json,
+                            prev_past_micro_experiences_key,
+                            summary_generation_status_key,
+                            date_str,
+                        )
                     )
                 else:
                     # 解析现有汇总
                     if existing_story.startswith('"'):
                         try:
-                            summarized_past_micro_experiences_story = json.loads(existing_story)
+                            summarized_past_micro_experiences_story = json.loads(
+                                existing_story
+                            )
                         except json.JSONDecodeError:
                             summarized_past_micro_experiences_story = existing_story
                     else:
@@ -334,7 +369,7 @@ async def main():
     today = datetime.date.today().strftime("%Y-%m-%d")
     redis_key = f"life_system:{today}"
     status_key = f"life_system:summary_status:{today}"
-    
+
     stored_data = redis_client.hgetall(redis_key)
     status_data = redis_client.hgetall(status_key)
 
@@ -351,7 +386,7 @@ async def main():
                 logger.debug(f"[LIFE_DATA] {key}: {value}")
     else:
         logger.warning(f"ℹ️ 未找到Redis键: {redis_key}")
-        
+
     if status_data:
         logger.debug(f"[LIFE_DATA] 📊 生成状态信息 ({status_key}):")
         for key, value in status_data.items():
@@ -364,4 +399,3 @@ if __name__ == "__main__":
     import asyncio
 
     asyncio.run(main())
-    

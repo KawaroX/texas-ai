@@ -103,7 +103,7 @@ async def _process_events_async(
     try:
         kawaro_dm_channel_id = await ws_client.create_direct_channel(kawaro_user_id)
         if not kawaro_dm_channel_id:
-            logger.error(f"❌ 无法获取或创建与 'kawaro' 的私聊频道。")
+            logger.error("❌ 无法获取或创建与 'kawaro' 的私聊频道。")
             return
     except Exception as e:
         logger.error(f"❌ 获取 'kawaro' 私聊频道时发生错误: {e}")
@@ -125,7 +125,9 @@ async def _process_events_async(
         try:
             event_data = json.loads(event_json_str)
             interaction_content = event_data.get("interaction_content")
-            logger.debug(f"[interactions] Processing interaction content: {interaction_content}")
+            logger.debug(
+                f"[interactions] Processing interaction content: {interaction_content}"
+            )
 
             experience_id = event_data.get("id")  # 使用微观经历的唯一ID
             start_time_str = event_data.get("start_time")

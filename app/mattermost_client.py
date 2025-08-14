@@ -434,6 +434,9 @@ class MattermostWebSocketClient:
                 if segment.strip():
                     cleaned_segment = segment.strip()
                     await self._send_message_with_typing(channel_id, cleaned_segment)
+                    # 若遇到 'SEND'，立即停止后续发送
+                    if "SEND" in cleaned_segment:
+                        break
             return  # 简单消息处理完毕，直接返回
 
         # 否则，消息进入正常缓冲流程
@@ -633,6 +636,9 @@ class MattermostWebSocketClient:
                     # if cleaned_segment.endswith((".", "。")):
                     #     cleaned_segment = cleaned_segment[:-1]
                     await self._send_message_with_typing(channel_id, cleaned_segment)
+                    # 若遇到 'SEND'，立即停止后续发送
+                    if "SEND" in cleaned_segment:
+                        break
 
             # 如果是被动回复且确实发出了内容，才清空 Redis 缓冲区
             if not is_active_interaction and sent_any:
@@ -688,6 +694,16 @@ class MattermostWebSocketClient:
 
     async def _send_message_with_typing(self, channel_id: str, text: str):
         """在发送消息时持续发送打字指示器"""
+        # 快速路径：如果包含 'SEND'，仅发送其之前的内容，丢弃 'SEND' 及其后续
+        if "SEND" in text:
+            prefix = text.split("SEND", 1)[0].strip()
+            if prefix:
+                await self.send_message(channel_id, prefix)
+            else:
+                logging.debug("[mm] 'SEND' 出现但前缀为空，跳过发送。")
+            # 不发送 typing，不等待，直接结束，进入完成状态
+            return
+
         typing_task = None
         try:
             # 启动一个后台任务，每隔一段时间发送一次打字指示器
