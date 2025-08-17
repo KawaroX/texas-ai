@@ -104,7 +104,7 @@ async def get_image_description(
             "stopSequences": [],
             "thinkingConfig": {
                 "includeThoughts": True,
-                "thinkingBudget": 32768,
+                "thinkingBudget": 24576,
             },
         },
         "safetySettings": [
