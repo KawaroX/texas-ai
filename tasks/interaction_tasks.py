@@ -1,6 +1,7 @@
 import json
 import logging
 import redis
+import os
 from datetime import datetime
 from typing import List
 from celery import shared_task

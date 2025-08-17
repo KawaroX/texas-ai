@@ -11,6 +11,7 @@ celery_app = Celery(
         "tasks.daily_tasks",
         "tasks.life_data_tasks",
         "tasks.interaction_tasks",
+        "tasks.image_generation_tasks",
     ],
 )
 
@@ -27,6 +28,10 @@ celery_app.conf.update(
         "generate-daily-life": {
             "task": "tasks.daily_tasks.generate_daily_life_task",
             "schedule": crontab(hour=4, minute=0),  # 每天4点触发
+        },
+        "prepare-proactive-images": {
+            "task": "tasks.image_generation_tasks.prepare_images_for_proactive_interactions",
+            "schedule": crontab(hour=4, minute=5),  # 每天4:05触发，在生成日程之后
         },
         "generate-daily-memories": {
             "task": "tasks.daily_tasks.generate_daily_memories",
