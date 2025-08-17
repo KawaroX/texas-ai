@@ -11,7 +11,9 @@ WORKDIR /app
 COPY ./requirements.txt /app/requirements.txt
 
 # 安装 Python 依赖
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install -U pip && \
+    pip install --prefer-binary -r requirements.txt
 
 # 拷贝项目代码（由 docker-compose 的 volume 挂载为主）
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

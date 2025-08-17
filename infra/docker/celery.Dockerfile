@@ -8,6 +8,9 @@ WORKDIR /app
 
 COPY ./requirements.txt /app/requirements.txt
 
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# 安装 Python 依赖
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install -U pip && \
+    pip install --prefer-binary -r requirements.txt
 
 CMD ["celery", "-A", "celery_app", "worker", "--loglevel=info"]
