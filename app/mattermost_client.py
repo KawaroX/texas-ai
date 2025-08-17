@@ -813,7 +813,7 @@ class MattermostWebSocketClient:
                     pass
 
     async def send_message(self, channel_id, text):
-        clean_text = text.replace(" সন", "").strip()
+        clean_text = text.replace("。", "").strip()
         if "距离上一条消息过去了" in clean_text:
             clean_text = clean_text.split("\n")[-1].strip()
         if "\n" in clean_text:
