@@ -7,6 +7,11 @@ celery_app = Celery(
     "texas_tasks",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
+    include=[
+        "tasks.daily_tasks",
+        "tasks.life_data_tasks",
+        "tasks.interaction_tasks",
+    ],
 )
 
 celery_app.conf.update(
