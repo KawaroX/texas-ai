@@ -157,7 +157,17 @@ async def get_image_description(
                     return f"图片描述生成失败，内容可能不安全。原因: {reason}, 详情: {safety_ratings}"
                 return "图片描述生成失败，API未返回有效内容。"
 
-            return response_json["candidates"][0]["content"]["parts"][0]["text"]
+            # API 响应的 'parts' 数组可能同时包含思考过程和最终答案。
+            # 我们需要正确地提取最终的文本答案，它通常是最后一个文本部分。
+            parts = response_json["candidates"][0]["content"]["parts"]
+            text_parts = [part.get("text") for part in parts if part.get("text")]
+
+            if not text_parts:
+                logger.error(f"❌ API 响应中没有找到文本内容。Parts: {parts}")
+                return "图片描述生成失败，API未返回文本内容。"
+
+            # 最终答案通常是最后一个文本部分
+            return text_parts[-1]
 
     try:
         return await retry_with_backoff(_call_request)

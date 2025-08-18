@@ -374,16 +374,24 @@ class MattermostWebSocketClient:
                 message_to_process = original_message
 
                 if file_ids:
-                    logging.info(f'[mm] 消息 {post_data["id"]} 包含 {len(file_ids)} 个文件，开始处理')
+                    logging.info(
+                        f'[mm] 消息 {post_data["id"]} 包含 {len(file_ids)} 个文件，开始处理'
+                    )
                     tasks = [self._process_image_file(file_id) for file_id in file_ids]
                     descriptions = await asyncio.gather(*tasks)
-                    
+
                     valid_descriptions = [desc for desc in descriptions if desc]
-                    
+
                     if valid_descriptions:
-                        formatted_descriptions = "\n\n[图片内容摘要：\n- " + "\n- ".join(valid_descriptions) + "]"
+                        formatted_descriptions = (
+                            "\n\n[图片内容摘要：\n- "
+                            + "\n- ".join(valid_descriptions)
+                            + "]"
+                        )
                         message_to_process += formatted_descriptions
-                        logging.debug(f"[mm] 追加图片描述后的消息: {message_to_process}")
+                        logging.debug(
+                            f"[mm] 追加图片描述后的消息: {message_to_process}"
+                        )
                 # --- 图片处理逻辑结束 ---
 
                 # 更新频道活动状态
@@ -428,7 +436,9 @@ class MattermostWebSocketClient:
 
             mime_type = file_info.get("mime_type", "")
             if not mime_type.startswith("image/"):
-                logging.info(f"[mm] 文件 {file_id} 不是图片 (MIME: {mime_type})，跳过处理。 সন")
+                logging.info(
+                    f"[mm] 文件 {file_id} 不是图片 (MIME: {mime_type})，跳过处理。 সন"
+                )
                 return None
 
             logging.info(f"[mm] 下载图片文件 {file_id} ({mime_type})")
@@ -439,17 +449,19 @@ class MattermostWebSocketClient:
             # --- 图片缩放逻辑 ---
             try:
                 img = Image.open(io.BytesIO(image_data))
-                
+
                 # 定义最大尺寸，例如2048x2048
                 max_size = (2048, 2048)
                 img.thumbnail(max_size, Image.Resampling.LANCZOS)
-                
+
                 # 将缩放后的图片保存到内存中的字节流
                 output_buffer = io.BytesIO()
                 # 统一保存为JPEG以提高效率，对于描述任务通常足够
-                img.save(output_buffer, format='JPEG', quality=85) # quality参数可以调整
+                img.save(
+                    output_buffer, format="JPEG", quality=85
+                )  # quality参数可以调整
                 processed_image_data = output_buffer.getvalue()
-                processed_mime_type = 'image/jpeg'
+                processed_mime_type = "image/jpeg"
 
                 original_size_kb = len(image_data) / 1024
                 processed_size_kb = len(processed_image_data) / 1024
@@ -460,14 +472,18 @@ class MattermostWebSocketClient:
                 )
 
             except Exception as img_err:
-                logging.error(f"❌ 图片 {file_id} 缩放失败: {img_err}。将尝试使用原图。 সন")
+                logging.error(
+                    f"❌ 图片 {file_id} 缩放失败: {img_err}。将尝试使用原图。 সন"
+                )
                 # 如果缩放出错，则退回使用原图
                 processed_image_data = image_data
                 processed_mime_type = mime_type
             # --- 图片缩放逻辑结束 ---
 
             logging.info(f"[mm] 为图片 {file_id} 生成描述...")
-            description = await get_image_description(processed_image_data, processed_mime_type)
+            description = await get_image_description(
+                processed_image_data, processed_mime_type
+            )
             logging.info(f"[mm] 图片 {file_id} 描述生成结果: {description}")
             return description
 
@@ -822,7 +838,7 @@ class MattermostWebSocketClient:
                     pass
 
     async def send_message(self, channel_id, text):
-        clean_text = text.replace(" সন", "").strip()
+        clean_text = text.replace("。", "").strip()
         if "距离上一条消息过去了" in clean_text:
             clean_text = clean_text.split("\n")[-1].strip()
         if "\n" in clean_text:
@@ -848,7 +864,9 @@ class MattermostWebSocketClient:
                 f"❌ Failed to send message: {response.status_code} - {response.text}"
             )
 
-    async def post_message_with_image(self, channel_id: str, message: str, image_path: str):
+    async def post_message_with_image(
+        self, channel_id: str, message: str, image_path: str
+    ):
         """
         发送带有图片的消息。
         1. 上传图片文件到 Mattermost。
@@ -857,12 +875,12 @@ class MattermostWebSocketClient:
         # --- 1. 上传文件 ---
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            with open(image_path, 'rb') as f:
+            with open(image_path, "rb") as f:
                 files = {
-                    'files': (os.path.basename(image_path), f.read()),
+                    "files": (os.path.basename(image_path), f.read()),
                 }
-                data = {'channel_id': channel_id}
-                
+                data = {"channel_id": channel_id}
+
                 file_id = None
                 async with httpx.AsyncClient() as client:
                     upload_resp = await client.post(
@@ -878,7 +896,7 @@ class MattermostWebSocketClient:
                     logging.info(f"[mm] 图片上传成功，File ID: {file_id}")
         except FileNotFoundError:
             logging.error(f"❌ 图片文件未找到: {image_path}")
-            await self.send_message(channel_id, message) #降级发送纯文本
+            await self.send_message(channel_id, message)  # 降级发送纯文本
             return
         except Exception as e:
             logging.error(f"❌ 图片上传失败: {e}")
@@ -896,14 +914,21 @@ class MattermostWebSocketClient:
             async with httpx.AsyncClient() as client:
                 post_resp = await client.post(
                     f"{self.http_base_url}/api/v4/posts",
-                    headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+                    headers={
+                        "Authorization": f"Bearer {self.token}",
+                        "Content-Type": "application/json",
+                    },
                     json=payload,
                 )
                 if post_resp.status_code == 201:
                     logging.info(f"[mm] 已发送带图片的消息: {message}")
-                    get_channel_memory(channel_id).add_message("assistant", f'{message} [图片已发送]')
+                    get_channel_memory(channel_id).add_message(
+                        "assistant", f"{message} [图片已发送]"
+                    )
                 else:
-                    logging.error(f"❌ 发送带图片的消息失败: {post_resp.status_code} - {post_resp.text}")
+                    logging.error(
+                        f"❌ 发送带图片的消息失败: {post_resp.status_code} - {post_resp.text}"
+                    )
 
     async def send_dm_to_kawaro(
         self,
@@ -996,7 +1021,6 @@ class MattermostWebSocketClient:
             "channel_id": channel_id,
             "channel_info": channel_info,
         }
-
 
     async def _get_file_info(self, file_id: str) -> Optional[Dict]:
         """获取 Mattermost 文件的元数据。"""

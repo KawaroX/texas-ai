@@ -31,7 +31,7 @@ celery_app.conf.update(
         },
         "prepare-proactive-images": {
             "task": "tasks.image_generation_tasks.prepare_images_for_proactive_interactions",
-            "schedule": crontab(hour=4, minute=5),  # 每天4:05触发，在生成日程之后
+            "schedule": crontab(hour=4, minute=50),  # 每天4:50触发，在生成日程之后
         },
         "generate-daily-memories": {
             "task": "tasks.daily_tasks.generate_daily_memories",
