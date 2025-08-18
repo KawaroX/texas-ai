@@ -767,13 +767,23 @@ async def merge_context(
                 condemn_prefix
                 + "现在Kawaro还没有给你发消息，但是你决定主动给他发消息。"
             )
-        user_query_content = (
-            f"{condemn_prefix}"  # 添加谴责消息
-            "请注意，现在是你主动向Kawaro发送信息，并非Kawaro发送消息后做出回复。因此请考虑如何正确表达。\n"
-            "德克萨斯内心:\n"
-            f"根据【你现在正在做的事情】，我的想法是：{latest_query}我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：注意只发送此刻的信息，不设计未来的信息：\n"
-            f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] 德克萨斯:"
-        )
+            user_query_content = (
+                f"{condemn_prefix}"  # 添加谴责消息
+                "请注意，现在是你主动向Kawaro发送信息，Kawaro并没有给你发送消息，但是你决定主动给他发消息。因此请考虑如何正确表达。\n"
+                "德克萨斯内心:\n"
+                f"根据【你现在正在做的事情】，我的想法是：{latest_query}我想把这些分享给Kawaro。"
+                "还有 Kawaro 怎么那么久没发消息？要不要问问他怎么了？或者他是不是正在忙？问多了会不会烦？看情况问一下吧..."
+                "我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：注意只发送此刻的信息，不设计未来的信息：\n"
+                f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] 德克萨斯:"
+            )
+        else:
+            user_query_content = (
+                "请注意，现在是你主动向Kawaro发送信息，Kawaro并没有给你发送消息，但是你决定主动给他发消息。"
+                "因此请考虑如何正确表达。\n"
+                "德克萨斯内心:\n"
+                f"根据【你现在正在做的事情】，我的想法是：{latest_query}我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：注意只发送此刻的信息，不设计未来的信息：\n"
+                f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] 德克萨斯:"
+            )
     else:
         # 被动模式：用户发送了消息
         messages.pop()
