@@ -128,7 +128,7 @@ services:
 
   mattermost:
     platform: linux/amd64
-    image: ccr.ccs.tencentyun.com/kawaro/${MATTERMOST_IMAGE}:latest
+    image: mattermost/${MATTERMOST_IMAGE}:10.11.1
     container_name: mattermost
     restart: always
     logging:
