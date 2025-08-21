@@ -701,8 +701,10 @@ async def stream_reply_ai_by_gemini(
                 logger.warning(
                     f"⚠️ 第 {retry_count + 1} 次请求完成，但未产生任何有效 token，回退到 stream_reply_ai(gemini-2.5-pro)"
                 )
-                # 回退：使用 OpenAI 协议的 stream_reply_ai，模型保持 gemini-2.5-pro
-                async for seg in stream_reply_ai(messages, model="gemini-2.5-pro"):
+                # 回退：使用 OpenAI 协议的 stream_reply_ai，模型选择 claude-3-7-sonnet-20250219
+                async for seg in stream_reply_ai(
+                    messages, model="claude-3-7-sonnet-20250219"
+                ):
                     yield seg
                 return
             else:
@@ -719,9 +721,11 @@ async def stream_reply_ai_by_gemini(
                 continue
             else:
                 logger.error(
-                    f"❌ 经过 {max_retries + 1} 次尝试后仍然失败: {str(e)}，回退到 stream_reply_ai(gemini-2.5-pro)"
+                    f"❌ 经过 {max_retries + 1} 次尝试后仍然失败: {str(e)}，回退到 stream_reply_ai(claude-3-7-sonnet-20250219)"
                 )
-                async for seg in stream_reply_ai(messages, model="gemini-2.5-pro"):
+                async for seg in stream_reply_ai(
+                    messages, model="claude-3-7-sonnet-20250219"
+                ):
                     yield seg
                 return
 
