@@ -93,3 +93,41 @@ def prepare_images_for_proactive_interactions():
             logger.error(f"❌ 处理事件 {event_json_str[:100]}... 时发生未知错误: {e}")
 
     logger.info("[image_gen] 主动交互图片预生成任务完成。")
+
+
+@shared_task
+def cleanup_expired_proactive_images():
+    """
+    Celery 任务：清理过期的主动交互图片映射。
+    仅清理Redis中文件不存在的映射关系，图片文件永久保留。
+    """
+    logger.info("[image_gen] 启动主动交互图片映射清理任务（图片文件永久保留）")
+    
+    try:
+        # 获取所有图片映射
+        all_mappings = redis_client.hgetall(PROACTIVE_IMAGES_KEY)
+        if not all_mappings:
+            logger.info("[image_gen] 没有需要清理的图片映射")
+            return
+        
+        cleaned_count = 0
+        preserved_count = 0
+        
+        for experience_id, image_path in all_mappings.items():
+            if not image_path:
+                # 清理空路径的映射
+                redis_client.hdel(PROACTIVE_IMAGES_KEY, experience_id)
+                cleaned_count += 1
+                logger.debug(f"[image_gen] 清理空路径映射: {experience_id}")
+            elif not os.path.exists(image_path):
+                # 文件不存在但不删除映射，只记录日志
+                logger.debug(f"[image_gen] 文件不存在但保留映射: {experience_id} -> {image_path}")
+                preserved_count += 1
+            else:
+                # 文件存在，保留映射
+                preserved_count += 1
+        
+        logger.info(f"[image_gen] 图片映射清理完成 - 清理: {cleaned_count}, 保留: {preserved_count}")
+        
+    except Exception as e:
+        logger.error(f"❌ 清理主动交互图片映射时发生错误: {e}")

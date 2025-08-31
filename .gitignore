@@ -26,3 +26,4 @@ scripts/prebuild_script.sh
 scripts/scp_update_script.sh
 dev.yml
 nginx
+CLAUDE.md

@@ -174,6 +174,7 @@ def process_chat_batch(
 def clean_generated_content():
     """
     删除 generated_content 文件夹中前一天相关的文件（文件名包含前一天日期字符串，格式为 YYYY-MM-DD）。
+    注意：跳过 images 目录，图片文件永久保留。
     """
     try:
         dir_path = "generated_content"
@@ -186,6 +187,11 @@ def clean_generated_content():
         removed_count = 0
         for file_path in files:
             try:
+                # 跳过 images 目录和其中的文件
+                if "images" in file_path:
+                    logger.debug(f"[daily_tasks] 跳过图片文件（永久保留）: {file_path}")
+                    continue
+                    
                 if os.path.isfile(file_path):
                     os.remove(file_path)
                     logger.debug(f"[daily_tasks] 已删除文件: {file_path}")
@@ -197,7 +203,7 @@ def clean_generated_content():
             except Exception as file_err:
                 logger.error(f"删除文件失败: {file_path}: {file_err}")
         logger.info(
-            f"[daily_tasks] 清理完成，删除 {removed_count} 个包含日期 {yesterday} 的项"
+            f"[daily_tasks] 清理完成，删除 {removed_count} 个包含日期 {yesterday} 的项（已跳过images目录）"
         )
         return {"status": "success", "removed": removed_count}
     except Exception as e:

@@ -53,5 +53,9 @@ celery_app.conf.update(
             "task": "tasks.daily_tasks.clean_generated_content",
             "schedule": crontab(hour=3, minute=0),  # 每天3点触发
         },
+        "cleanup-expired-proactive-images": {
+            "task": "tasks.image_generation_tasks.cleanup_expired_proactive_images",
+            "schedule": crontab(hour=2, minute=30),  # 每天2:30触发，清理过期图片映射
+        },
     },
 )
