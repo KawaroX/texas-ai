@@ -761,16 +761,19 @@ async def merge_context(
     texas_time_str = now.strftime("%H:%M:%S")
 
     if is_active:
+
+        texas_reply_template = ""
+
         # 主动模式：AI想要分享内容
         if condemn_prefix:
             condemn_prefix = (
-                "请注意，现在Kawaro并没有给你发送消息，是你决定**主动**给他发消息。因此请考虑如何正确表达。\n\n"
+                "[系统提示开始]请注意，现在Kawaro并没有给你发送消息，是你决定**主动**给他发消息。因此请考虑如何正确表达。\n\n"
                 f"距离Kawaro上次回复你，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。"
                 "现在Kawaro还没有给你发消息，但是你决定主动给他发消息。"
                 "你可以思考一下Kawaro不找你是否是事出有因，还是没有说明原因，是不是忘记你了，"
                 "然后自行决定是否需要进行适当的抱怨或“谴责”。抱怨Kawaro怎么那么久不来找你，有点像在撒娇的感觉。"
                 "抱怨的时候可以不用说具体的时间，可以说“一个多小时”，“好几个小时”，“好久好久”以及其他不是那么具体的时间。"
-                "当然如果你要说具体的时间也没有问题，总之就是像是一个有情感的正常人类一样表达即可。"
+                "当然如果你要说具体的时间也没有问题，总之就是像是一个有情感的正常人类一样表达即可。[系统提示结束]（Kawaro 长时间未发送消息）"
             )
             user_query_content = (
                 f"{condemn_prefix}"  # 添加谴责消息
@@ -778,18 +781,20 @@ async def merge_context(
                 f"根据【你现在正在做的事情】，我的想法是：{latest_query}我想把这些分享给Kawaro。"
                 "还有 Kawaro 怎么那么久没发消息？要不要问问他怎么了？或者他是不是正在忙？问多了会不会烦？看情况问一下吧..."
                 "我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：注意只发送此刻的信息，不设计未来的信息：\n"
-                f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] 德克萨斯:"
+                f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] 德克萨斯:(注意不要重复之前说过的话，除非你认为作为一个真正的人类，这时候会选择重复)"
             )
         else:
             user_query_content = (
-                "请注意，现在Kawaro并没有给你发送消息，但是你决定**主动**给他发消息。"
+                "请注意，现在Kawaro并没有给你发送消息，但是你决定**主动**给他发消息。不要使用“还以为”等会让人误会他已经向你发送消息的词语，因为此时他还并没有发送任何消息"
                 "因此请考虑如何正确表达。\n"
                 "德克萨斯内心:\n"
                 f"根据【你现在正在做的事情】，我的想法是：{latest_query}我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：注意只发送此刻的信息，不设计未来的信息：\n"
-                f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] 德克萨斯:"
+                f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] 德克萨斯:(注意不要重复之前说过的话，除非你认为作为一个真正的人类，这时候会选择重复)"
             )
     else:
         # 被动模式：用户发送了消息
+        user_query_content = ""
+
         messages.pop()
         user_query_content = (
             f"{condemn_prefix}"  # 添加谴责消息
@@ -798,6 +803,7 @@ async def merge_context(
             f"(距离上一条消息过去了：{texas_time_diff_str}) [{texas_time_str}] 德克萨斯：\n\n"
             "(If you think no reply is necessary right now, simply respond with:\n(no messages)\n\n)"
             "(Once your message is fully composed and complete, append the word SEND at the end of the message to indicate it's ready to be sent. Make sure to include SEND only once and only after all parts of the message are finalized.)"
+            "消息务必使用中文。(注意不要重复之前说过的话，除非你认为作为一个真正的人类，这时候会选择重复)"
         )
 
     messages.append({"role": "user", "content": user_query_content})

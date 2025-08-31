@@ -6,9 +6,32 @@ import asyncio
 import re  # Add this import
 import redis.asyncio as redis
 from typing import AsyncGenerator, Optional
+import urllib.parse  # Add this import
+
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+BARK_BASE_URL = "https://api.day.app/h9F6jTtz4QYaZjkvFo7SxQ/"
+
+
+async def send_bark_notification(
+    title: str, content: str, group: str = "AI_Service_Alerts"
+):
+    try:
+        encoded_title = urllib.parse.quote(title)
+        encoded_content = urllib.parse.quote(content)
+        encoded_group = urllib.parse.quote(group)
+        full_url = (
+            f"{BARK_BASE_URL}{encoded_title}/{encoded_content}?group={encoded_group}"
+        )
+        async with httpx.AsyncClient(timeout=5) as client:
+            response = await client.get(full_url)
+            response.raise_for_status()
+            logger.info(f"✅ Bark notification sent: {title}")
+    except Exception as bark_e:
+        logger.error(f"❌ Failed to send Bark notification: {bark_e}")
+
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_API_KEY2 = os.getenv("GEMINI_API_KEY2", "")
@@ -418,7 +441,7 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     修复重复发送问题。
     """
     # 模型选择逻辑保持不变...
-    if model is None or model == "deepseek-v3-250324":
+    if model is None or model == "deep seek-v3-250324":
         logger.info(f"[ai] 开始 stream_ai_chat 渠道=ReplyAI 模型={OPENAI_API_MODEL}")
         stream_func = stream_reply_ai
         actual_model = OPENAI_API_MODEL
@@ -698,13 +721,17 @@ async def stream_reply_ai_by_gemini(
 
             # 请求完成
             if not yielded_any:
-                logger.warning(
-                    f"⚠️ 第 {retry_count + 1} 次请求完成，但未产生任何有效 token，回退到 stream_reply_ai(gemini-2.5-pro)"
+                fallback_message = f"⚠️ 第 {retry_count + 1} 次请求完成，但未产生任何有效 token，回退到 stream_reply_ai(gemini-2.5-pro)"  # $#$
+                logger.warning(fallback_message)
+                await send_bark_notification(
+                    title="Gemini API 无输出回退",
+                    content=fallback_message,
+                    group="AI_Service_Alerts",
                 )
-                # 回退：使用 OpenAI 协议的 stream_reply_ai，模型选择 claude-3-7-sonnet-20250219
+                # 回退：使用 OpenAI 协议的 stream_reply_ai，模型选择 gemini-2.5-pro #$#$
                 async for seg in stream_reply_ai(
-                    messages, model="claude-3-7-sonnet-20250219"
-                ):
+                    messages, model="gemini-2.5-pro"
+                ):  # $#$
                     yield seg
                 return
             else:
@@ -720,12 +747,16 @@ async def stream_reply_ai_by_gemini(
                 logger.error(f"❌ 第 {retry_count + 1} 次请求失败: {str(e)}，将重试...")
                 continue
             else:
-                logger.error(
-                    f"❌ 经过 {max_retries + 1} 次尝试后仍然失败: {str(e)}，回退到 stream_reply_ai(claude-3-7-sonnet-20250219)"
+                fallback_message = f"❌ 经过 {max_retries + 1} 次尝试后仍然失败: {str(e)}，回退到 stream_reply_ai(gemini-2.5-pro)"  # $#$
+                logger.error(fallback_message)
+                await send_bark_notification(
+                    title="Gemini API 错误回退",
+                    content=fallback_message,
+                    group="AI_Service_Alerts",
                 )
                 async for seg in stream_reply_ai(
-                    messages, model="claude-3-7-sonnet-20250219"
-                ):
+                    messages, model="gemini-2.5-pro"
+                ):  # $#$
                     yield seg
                 return
 
@@ -884,9 +915,7 @@ async def call_ai_summary(prompt: str) -> str:
 # else:
 STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
 STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", OPENAI_API_URL)
-STRUCTURED_API_MODEL = os.getenv(
-    "STRUCTURED_API_MODEL", "claude-3-7-sonnet-20250219"
-)  # 日程生成
+STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-pro")  # 日程生成
 
 
 async def call_structured_generation(messages: list, max_retries: int = 3) -> dict:
