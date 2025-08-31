@@ -202,19 +202,25 @@ async def _process_events_async(
                 
                 try:
                     # 先生成AI回复内容
-                    from services.ai_service import AIService
+                    from services.ai_service import stream_ai_chat
                     from core.persona import PersonaManager
                     
-                    ai_service = AIService()
                     persona_manager = PersonaManager()
                     
-                    # 生成回复内容
-                    ai_response = await ai_service.get_chat_response(
-                        messages=[{"role": "user", "content": interaction_content}],
-                        context_info=context,
-                        channel_info=kawaro_channel_info,
-                        user_info=kawaro_user_info,
-                    )
+                    # 使用现有的AI服务生成回复
+                    messages = [{"role": "user", "content": interaction_content}]
+                    # 如果有上下文信息，添加到系统消息中
+                    if context:
+                        system_prompt, chat_messages = context
+                        if system_prompt:
+                            messages.insert(0, {"role": "system", "content": system_prompt})
+                        messages.extend(chat_messages)
+                    
+                    # 使用流式API生成内容并拼接
+                    ai_response_parts = []
+                    async for chunk in stream_ai_chat(messages):
+                        ai_response_parts.append(chunk)
+                    ai_response = "".join(ai_response_parts)
                     
                     if ai_response and ai_response.strip():
                         # 应用persona过滤

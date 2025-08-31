@@ -22,6 +22,11 @@ class ImageGenerationService:
         self.api_key = settings.OPENAI_API_KEY
         self.generation_url = "https://yunwu.ai/v1/images/generations"
         self.edit_url = "https://yunwu.ai/v1/images/edits"
+        
+        # 超时配置 (秒)
+        self.generation_timeout = 120  # 场景图生成超时
+        self.selfie_timeout = 180     # 自拍生成超时  
+        self.download_timeout = 30    # 图片下载超时
         self.selfie_base_urls = [
             "https://media.prts.wiki/6/65/%E7%AB%8B%E7%BB%98_%E7%BC%84%E9%BB%98%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_1.png?image_process=format,webp/quality,Q_90",
             "https://inf.moei.xyz/file/images/sign/fdba305f99405a1e418e5b61fa07e8bb/item/b9bc7380a3bf1f7aa2e0b15011140d01.jpg",
@@ -85,7 +90,7 @@ class ImageGenerationService:
         """下载图片内容"""
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, follow_redirects=True, timeout=30)
+                response = await client.get(url, follow_redirects=True, timeout=self.download_timeout)
                 response.raise_for_status()
                 return response.content
         except httpx.HTTPStatusError as e:
@@ -123,7 +128,7 @@ class ImageGenerationService:
 
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(self.generation_url, headers=headers, json=payload, timeout=120)
+                response = await client.post(self.generation_url, headers=headers, json=payload, timeout=self.generation_timeout)
                 response.raise_for_status()
                 result = response.json()
                 image_url = result.get("data", [{}])[0].get("url")
@@ -174,7 +179,7 @@ class ImageGenerationService:
 
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(self.edit_url, headers=headers, data=data, files=files, timeout=180)
+                response = await client.post(self.edit_url, headers=headers, data=data, files=files, timeout=self.selfie_timeout)
                 response.raise_for_status()
                 result = response.json()
                 image_url = result.get("data", [{}])[0].get("url")

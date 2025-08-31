@@ -3,6 +3,8 @@ import logging
 import random
 import json
 import redis
+import os
+import asyncio
 from datetime import datetime
 from celery import shared_task
 from app.config import settings
@@ -24,6 +26,30 @@ def prepare_images_for_proactive_interactions():
     """
     logger.info("[image_gen] 启动主动交互图片预生成任务")
     
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    # 运行异步逻辑
+    return loop.run_until_complete(_async_prepare_images())
+
+
+async def _async_prepare_images():
+    """异步执行图片预生成逻辑"""
+    try:
+        # 整体任务超时30分钟
+        await asyncio.wait_for(_do_image_generation(), timeout=1800.0)
+    except asyncio.TimeoutError:
+        logger.error("⏱️ 整体图片生成任务超时（30分钟），部分图片可能未生成完成")
+    except Exception as e:
+        logger.error(f"❌ 图片生成任务发生未知错误: {e}")
+
+
+async def _do_image_generation():
+    """执行具体的图片生成逻辑"""
     today_key = f"interaction_needed:{datetime.now().strftime('%Y-%m-%d')}"
     if not redis_client.exists(today_key):
         logger.warning(f"⚠️ Redis 中不存在 key: {today_key}，无法为主动交互生成图片。")
@@ -36,13 +62,6 @@ def prepare_images_for_proactive_interactions():
         return
 
     logger.info(f"[image_gen] 发现 {len(events)} 个潜在的交互事件需要处理图片生成。")
-
-    import asyncio
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
 
     for event_json_str in events:
         try:
@@ -67,16 +86,27 @@ def prepare_images_for_proactive_interactions():
                 is_selfie = random.random() < 0.4
                 
                 image_path = None
-                if is_selfie:
-                    logger.info(f"[image_gen] 📸 尝试为事件 {experience_id} 生成自拍。")
-                    image_path = loop.run_until_complete(
-                        image_generation_service.generate_selfie(interaction_content)
-                    )
-                else:
-                    logger.info(f"[image_gen] 🎨 尝试为事件 {experience_id} 生成场景图片。")
-                    image_path = loop.run_until_complete(
-                        image_generation_service.generate_image_from_prompt(interaction_content)
-                    )
+                try:
+                    if is_selfie:
+                        logger.info(f"[image_gen] 📸 尝试为事件 {experience_id} 生成自拍。")
+                        # 为自拍生成设置更长的超时时间（5分钟）
+                        image_path = await asyncio.wait_for(
+                            image_generation_service.generate_selfie(interaction_content),
+                            timeout=300.0
+                        )
+                    else:
+                        logger.info(f"[image_gen] 🎨 尝试为事件 {experience_id} 生成场景图片。")
+                        # 为场景图设置超时时间（3分钟）
+                        image_path = await asyncio.wait_for(
+                            image_generation_service.generate_image_from_prompt(interaction_content),
+                            timeout=180.0
+                        )
+                except asyncio.TimeoutError:
+                    logger.error(f"⏱️ 事件 {experience_id} 图片生成超时")
+                    image_path = None
+                except Exception as e:
+                    logger.error(f"❌ 事件 {experience_id} 图片生成失败: {e}")
+                    image_path = None
                 
                 if image_path:
                     # 将 experience_id 和 image_path 存入 Redis Hash
