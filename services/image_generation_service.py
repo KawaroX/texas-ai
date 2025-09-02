@@ -64,12 +64,12 @@ class ImageGenerationService:
             # 获取今天的天气信息
             today = datetime.now().strftime('%Y-%m-%d')
             weather_key = f"life_system:{today}"
-            life_data_str = self.redis_client.get(weather_key)
+            daily_schedule_str = self.redis_client.hget(weather_key, "daily_schedule")
             
-            if life_data_str:
+            if daily_schedule_str:
                 import json, re
-                life_data = json.loads(life_data_str)
-                weather_str = life_data.get('weather', '')
+                daily_data = json.loads(daily_schedule_str)
+                weather_str = daily_data.get('weather', '')
                 
                 # 解析温度范围，例如 "28°C~33°C"
                 temp_match = re.search(r'气温(\d+)°C~(\d+)°C', weather_str)
