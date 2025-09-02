@@ -133,16 +133,32 @@ class ImageGenerationService:
                 response = await client.post(self.generation_url, headers=headers, json=payload, timeout=self.generation_timeout)
                 response.raise_for_status()
                 result = response.json()
-                image_url = result.get("data", [{}])[0].get("url")
-                if not image_url:
-                    logger.error(f"❌ 图片生成API未返回有效的URL: {result}")
-                    await bark_notifier.send_notification("德克萨斯AI-生成场景图失败", f"错误: API未返回URL。响应: {str(result)[:50]}...", "TexasAIPics")
-                    return None
-                image_data = await self._download_image(image_url)
-                if image_data:
-                    filepath = self._save_image(image_data)
-                    await bark_notifier.send_notification("德克萨斯AI-生成场景图成功", f"图片已保存到 {filepath}", "TexasAIPics", image_url=image_url)
-                    return filepath
+                data_item = result.get("data", [{}])[0]
+                
+                # 优先处理URL格式
+                image_url = data_item.get("url")
+                if image_url:
+                    image_data = await self._download_image(image_url)
+                    if image_data:
+                        filepath = self._save_image(image_data)
+                        await bark_notifier.send_notification("德克萨斯AI-生成场景图成功", f"图片已保存到 {filepath}", "TexasAIPics", image_url=image_url)
+                        return filepath
+                
+                # 处理base64格式
+                b64_json = data_item.get("b64_json")
+                if b64_json:
+                    import base64
+                    try:
+                        image_data = base64.b64decode(b64_json)
+                        filepath = self._save_image(image_data)
+                        await bark_notifier.send_notification("德克萨斯AI-生成场景图成功", f"图片已保存到 {filepath}", "TexasAIPics")
+                        return filepath
+                    except Exception as decode_error:
+                        logger.error(f"❌ base64解码失败: {decode_error}")
+                
+                # 如果两种格式都没有
+                logger.error(f"❌ 图片生成API未返回有效的图片数据: {result}")
+                await bark_notifier.send_notification("德克萨斯AI-生成场景图失败", f"错误: API未返回有效数据。响应: {str(result)[:50]}...", "TexasAIPics")
                 return None
         except Exception as e:
             logger.error(f"❌ 调用图片生成API时发生未知异常: {e}")
@@ -184,16 +200,32 @@ class ImageGenerationService:
                 response = await client.post(self.edit_url, headers=headers, data=data, files=files, timeout=self.selfie_timeout)
                 response.raise_for_status()
                 result = response.json()
-                image_url = result.get("data", [{}])[0].get("url")
-                if not image_url:
-                    logger.error(f"❌ 自拍生成API未返回有效的URL: {result}")
-                    await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", f"错误: API未返回URL。响应: {str(result)[:50]}...", "TexasAIPics")
-                    return None
-                generated_image_data = await self._download_image(image_url)
-                if generated_image_data:
-                    filepath = self._save_image(generated_image_data)
-                    await bark_notifier.send_notification("德克萨斯AI-生成自拍成功", f"图片已保存到 {filepath}", "TexasAIPics", image_url=image_url)
-                    return filepath
+                data_item = result.get("data", [{}])[0]
+                
+                # 优先处理URL格式
+                image_url = data_item.get("url")
+                if image_url:
+                    generated_image_data = await self._download_image(image_url)
+                    if generated_image_data:
+                        filepath = self._save_image(generated_image_data)
+                        await bark_notifier.send_notification("德克萨斯AI-生成自拍成功", f"图片已保存到 {filepath}", "TexasAIPics", image_url=image_url)
+                        return filepath
+                
+                # 处理base64格式
+                b64_json = data_item.get("b64_json")
+                if b64_json:
+                    import base64
+                    try:
+                        generated_image_data = base64.b64decode(b64_json)
+                        filepath = self._save_image(generated_image_data)
+                        await bark_notifier.send_notification("德克萨斯AI-生成自拍成功", f"图片已保存到 {filepath}", "TexasAIPics")
+                        return filepath
+                    except Exception as decode_error:
+                        logger.error(f"❌ 自拍base64解码失败: {decode_error}")
+                
+                # 如果两种格式都没有
+                logger.error(f"❌ 自拍生成API未返回有效的图片数据: {result}")
+                await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", f"错误: API未返回有效数据。响应: {str(result)[:50]}...", "TexasAIPics")
                 return None
         except Exception as e:
             logger.error(f"❌ 调用自拍生成API时发生未知异常: {e}")
