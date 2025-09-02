@@ -130,42 +130,54 @@ class ImageGenerationService:
 
     async def _build_multipart_data(self, image_data: bytes, prompt: str) -> Dict:
         """构建multipart/form-data格式的请求体，参考API最佳实践"""
-        # 生成boundary
-        boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
+        import uuid
+        # 生成boundary，使用更简单的格式
+        boundary = f"wL36Yn{uuid.uuid4().hex[:12]}SA4n1v9T"
         
-        # 构建body部分
-        body = b''
+        # 按示例格式构建dataList
+        dataList = []
         
         # 图片部分
-        body += f'--{boundary}\r\n'.encode('utf-8')
-        body += b'Content-Disposition: form-data; name="image"; filename="base_image.png"\r\n'
-        body += b'Content-Type: image/png\r\n\r\n'
-        body += image_data
-        body += b'\r\n'
+        dataList.append(f'--{boundary}'.encode('utf-8'))
+        dataList.append('Content-Disposition: form-data; name=image; filename=base_image.png'.encode('utf-8'))
+        dataList.append('Content-Type: image/png'.encode('utf-8'))
+        dataList.append(b'')
+        dataList.append(image_data)
         
         # prompt部分
-        body += f'--{boundary}\r\n'.encode('utf-8')
-        body += b'Content-Disposition: form-data; name="prompt"\r\n\r\n'
-        body += prompt.encode('utf-8')
-        body += b'\r\n'
+        dataList.append(f'--{boundary}'.encode('utf-8'))
+        dataList.append('Content-Disposition: form-data; name=prompt;'.encode('utf-8'))
+        dataList.append('Content-Type: text/plain'.encode('utf-8'))
+        dataList.append(b'')
+        dataList.append(prompt.encode('utf-8'))
         
         # model部分
-        body += f'--{boundary}\r\n'.encode('utf-8')
-        body += b'Content-Disposition: form-data; name="model"\r\n\r\n'
-        body += b'gpt-image-1-all\r\n'
+        dataList.append(f'--{boundary}'.encode('utf-8'))
+        dataList.append('Content-Disposition: form-data; name=model;'.encode('utf-8'))
+        dataList.append('Content-Type: text/plain'.encode('utf-8'))
+        dataList.append(b'')
+        dataList.append('gpt-image-1-all'.encode('utf-8'))
         
         # n部分
-        body += f'--{boundary}\r\n'.encode('utf-8')
-        body += b'Content-Disposition: form-data; name="n"\r\n\r\n'
-        body += b'1\r\n'
+        dataList.append(f'--{boundary}'.encode('utf-8'))
+        dataList.append('Content-Disposition: form-data; name=n;'.encode('utf-8'))
+        dataList.append('Content-Type: text/plain'.encode('utf-8'))
+        dataList.append(b'')
+        dataList.append('1'.encode('utf-8'))
         
         # size部分
-        body += f'--{boundary}\r\n'.encode('utf-8')
-        body += b'Content-Disposition: form-data; name="size"\r\n\r\n'
-        body += b'1024x1536\r\n'
+        dataList.append(f'--{boundary}'.encode('utf-8'))
+        dataList.append('Content-Disposition: form-data; name=size;'.encode('utf-8'))
+        dataList.append('Content-Type: text/plain'.encode('utf-8'))
+        dataList.append(b'')
+        dataList.append('1024x1536'.encode('utf-8'))
         
         # 结束boundary
-        body += f'--{boundary}--\r\n'.encode('utf-8')
+        dataList.append(f'--{boundary}--'.encode('utf-8'))
+        dataList.append(b'')
+        
+        # 组合body
+        body = b'\r\n'.join(dataList)
         
         return {
             "body": body,
