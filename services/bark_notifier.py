@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 class BarkNotifier:
     def __init__(self):
         self.base_url = f"https://api.day.app/h9F6jTtz4QYaZjkvFo7SxQ"
+        # Bark不需要单独的API key，URL中已包含设备token
+        self.api_key = True  # 设置为True表示启用通知
 
     async def send_notification(
         self, title: str, body: str, group: str, image_url: str = None
