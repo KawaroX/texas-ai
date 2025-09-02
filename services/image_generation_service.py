@@ -29,6 +29,7 @@ class ImageGenerationService:
         # 超时配置 (秒)
         self.generation_timeout = 120  # 场景图生成超时
         self.selfie_timeout = 180     # 自拍生成超时  
+        self.multi_character_timeout = 300  # 多角色场景生成超时（更长）
         self.download_timeout = 30    # 图片下载超时
         self.redis_client = redis.StrictRedis.from_url(
             settings.REDIS_URL, decode_responses=True
@@ -321,7 +322,7 @@ class ImageGenerationService:
                     self.edit_url,  # 使用edit端点，类似自拍
                     headers=headers_multipart,
                     content=multipart_data["body"],
-                    timeout=self.generation_timeout
+                    timeout=self.multi_character_timeout  # 使用更长的超时时间
                 )
                 response.raise_for_status()
                 result = response.json()
