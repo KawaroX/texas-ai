@@ -19,9 +19,11 @@ os.makedirs(IMAGE_SAVE_DIR, exist_ok=True)
 
 class ImageGenerationService:
     def __init__(self):
-        self.api_key = settings.OPENAI_API_KEY
-        self.generation_url = "https://yunwu.ai/v1/images/generations"
-        self.edit_url = "https://yunwu.ai/v1/images/edits"
+        # 使用专用的图片生成API Key
+        self.api_key = settings.IMAGE_GENERATION_API_KEY
+        base_url = settings.IMAGE_GENERATION_API_URL
+        self.generation_url = f"{base_url}/generations"
+        self.edit_url = f"{base_url}/edits"
         
         # 超时配置 (秒)
         self.generation_timeout = 120  # 场景图生成超时
