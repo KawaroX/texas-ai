@@ -363,11 +363,11 @@ class ImageGenerationService:
         
         # 角色特征描述
         character_traits = {
-            "能天使": "活泼开朗的天使族女孩，金色头发，头顶有光圈，白色羽毛翅膀，活力四射",
-            "可颂": "温和有礼的企鹅物流成员，棕色长发，戴眼镜，知性优雅的气质",
-            "空": "沉默寡言的狼族干员，银灰色头发，狼耳朵，冷静专业的表情",
-            "拉普兰德": "狂野不羁的狼族干员，白色头发带黄色挑染，狼耳朵，危险的笑容",
-            "大帝": "威严的企鹅物流老板，成熟男性，深色头发，严肃的表情和专业的着装"
+            "能天使": "活泼开朗的天使族女孩，红色头发，头顶有光圈，多个长三角形组成的光翼，充满活力",
+            "可颂": "乐观开朗活泼的企鹅物流成员，橙色头发",
+            "空": "活泼开朗的干员，黄色头发，明快的表情",
+            "拉普兰德": "过于开朗特别活泼的狼族干员，白色头发，狼耳朵，古灵精怪略带病娇的笑容",
+            "大帝": "喜欢说唱的帝企鹅，戴着墨镜和大金链子，西海岸嘻哈风格，企鹅形态而非人形"
         }
         
         descriptions.append(f"主要角色：{main_character}（{character_traits.get(main_character, '明日方舟角色')}）")
@@ -403,11 +403,28 @@ class ImageGenerationService:
             return None
 
         clothing_prompt = await self._get_weather_based_clothing_prompt()
+        
+        # 检测场景中是否包含其他角色
+        detected_characters = character_manager.detect_characters_in_text(experience_description)
+        other_characters_desc = ""
+        if detected_characters:
+            logger.info(f"🔍 自拍场景中检测到其他角色: {detected_characters}")
+            character_traits = {
+                "能天使": "活泼开朗的天使族女孩，红色头发，头顶有光圈，多个长三角形组成的光翼，充满活力",
+                "可颂": "乐观开朗活泼的企鹅物流成员，橙色头发",
+                "空": "活泼开朗的干员，黄色头发，明快的表情",
+                "拉普兰德": "过于开朗特别活泼的狼族干员，白色头发，狼耳朵，古灵精怪略带病娇的笑容",
+                "大帝": "喜欢说唱的帝企鹅，戴着墨镜和大金链子，西海岸嘻哈风格，企鹅形态而非人形"
+            }
+            char_descriptions = [f"{char}（{character_traits.get(char, '明日方舟角色')}）" for char in detected_characters]
+            other_characters_desc = f"场景中的其他角色：{', '.join(char_descriptions)}。"
+        
         prompt = (
             f"请将这张人物图片作为基础，根据以下场景描述，生成一张人物在该场景下的高质量二次元风格自拍照片。"
             f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格。"
-            f"角色特征要求：人物必须保持独特的渐变色眼眸，BOTH EYES must have gradient colors from blue (top) to orange (bottom)，两只眼睛都是从蓝色（上半部分）渐变到橙色（下半部分），这是区别于其他角色的重要特征。"
-            f"人物的面部特征、银白色发型和整体风格需要与原图保持高度一致。"
+            f"主角特征要求：德克萨斯（黑色头发，兽耳），必须保持独特的渐变色眼眸，BOTH EYES must have gradient colors from blue (top) to orange (bottom)，两只眼睛都是从蓝色（上半部分）渐变到橙色（下半部分），这是区别于其他角色的重要特征。"
+            f"人物的面部特征、黑色发型和整体风格需要与原图保持高度一致。"
+            f"{other_characters_desc}"
             f"性格表情要求：德克萨斯性格高冷内敛，通常表情淡漠不苟言笑。但面对信任的人时会微妙地放下防备，可能会有极其细微的笑意或温和神情，但绝不是明显的笑容。表情应该体现这种微妙的情感变化。"
             f"服装设计要求：{clothing_prompt}"
             f"构图要求：Selfie pose with one arm extended holding phone (but don't show the phone/camera in frame)，一只手臂自然伸出做自拍手势但画面中不要显示手机或相机设备。"
