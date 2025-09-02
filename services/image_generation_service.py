@@ -206,8 +206,9 @@ class ImageGenerationService:
 
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "Accept": "application/json"}
         prompt = (
-            f"请根据下面的体验和想法或者经历, 生成一张符合这个场景的图片。"
-            f"风格请偏向于日本动漫风格, 色彩明亮, 构图富有故事感。场景描述: {experience_description}"
+            f"请根据下面的体验和想法或者经历，生成一张符合这个场景的高质量图片。"
+            f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格，色彩明亮，构图富有故事感。"
+            f"场景描述: {experience_description}"
         )
         payload = {"size": "1024x1536", "prompt": prompt, "model": "gpt-image-1", "n": 1}
 
