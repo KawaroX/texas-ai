@@ -10,6 +10,7 @@ from app.config import settings
 # 修正：导入新的 Bark 推送服务
 from .bark_notifier import bark_notifier
 from .selfie_base_image_manager import selfie_manager
+from .character_manager import character_manager
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,18 @@ class ImageGenerationService:
             await bark_notifier.send_notification("德克萨斯AI-生成场景图失败", "错误: 未配置OPENAI_API_KEY", "TexasAIPics")
             return None
 
+        # 检测场景中是否包含其他角色
+        detected_characters = character_manager.detect_characters_in_text(experience_description)
+        logger.info(f"🔍 检测到场景中的角色: {detected_characters}")
+        
+        # 如果检测到角色，尝试使用角色图片增强生成
+        if detected_characters:
+            return await self._generate_scene_with_characters(experience_description, detected_characters)
+        else:
+            return await self._generate_scene_without_characters(experience_description)
+    
+    async def _generate_scene_without_characters(self, experience_description: str) -> Optional[str]:
+        """生成不包含特定角色的场景图"""
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "Accept": "application/json"}
         prompt = (
             f"请根据下面的体验和想法或者经历，生成一张符合这个场景的高质量图片。"
@@ -248,6 +261,110 @@ class ImageGenerationService:
             logger.error(f"❌ 调用图片生成API时发生未知异常: {e}")
             await bark_notifier.send_notification("德克萨斯AI-生成场景图异常", f"错误: {str(e)[:100]}...", "TexasAIPics")
             return None
+    
+    async def _generate_scene_with_characters(self, experience_description: str, detected_characters: List[str]) -> Optional[str]:
+        """生成包含特定角色的场景图"""
+        logger.info(f"🎭 使用角色增强生成场景图: {detected_characters}")
+        
+        # 选择主要角色作为base图片（选择第一个检测到的角色）
+        main_character = detected_characters[0]
+        character_image_path = character_manager.get_character_image_path(main_character)
+        
+        if not character_image_path:
+            logger.warning(f"❌ 未找到角色 {main_character} 的本地图片，回退到普通场景生成")
+            return await self._generate_scene_without_characters(experience_description)
+        
+        # 读取角色图片
+        try:
+            with open(character_image_path, 'rb') as f:
+                character_image_data = f.read()
+            logger.info(f"✅ 成功读取角色图片: {main_character} -> {character_image_path}")
+        except Exception as e:
+            logger.error(f"❌ 无法读取角色图片: {e}")
+            return await self._generate_scene_without_characters(experience_description)
+        
+        # 构建包含所有角色信息的提示词
+        character_descriptions = self._build_character_descriptions(detected_characters, main_character)
+        
+        prompt = (
+            f"请将这张角色图片作为基础，根据以下场景描述，生成一张高质量的二次元风格场景图片。"
+            f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格，色彩明亮，构图富有故事感。"
+            f"角色信息：{character_descriptions}"
+            f"场景要求：确保所有提到的角色都出现在画面中，保持角色特征的一致性。"
+            f"场景描述: {experience_description}"
+        )
+        
+        try:
+            # 使用类似自拍的multipart上传方式
+            multipart_data = await self._build_multipart_data(character_image_data, prompt)
+            
+            headers_multipart = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Accept": "application/json", 
+                "Content-Type": multipart_data["content_type"]
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.edit_url,  # 使用edit端点，类似自拍
+                    headers=headers_multipart,
+                    content=multipart_data["body"],
+                    timeout=self.generation_timeout
+                )
+                response.raise_for_status()
+                result = response.json()
+                data_item = result.get("data", [{}])[0]
+                
+                # 处理生成结果
+                image_url = data_item.get("url")
+                if image_url:
+                    generated_image_data = await self._download_image(image_url)
+                    if generated_image_data:
+                        filepath = self._save_image(generated_image_data)
+                        await bark_notifier.send_notification("德克萨斯AI-多角色场景图成功", f"包含角色: {', '.join(detected_characters)}", "TexasAIPics")
+                        return filepath
+                
+                # 处理base64格式
+                b64_json = data_item.get("b64_json")
+                if b64_json:
+                    import base64
+                    try:
+                        image_data = base64.b64decode(b64_json)
+                        filepath = self._save_image(image_data)
+                        await bark_notifier.send_notification("德克萨斯AI-多角色场景图成功", f"包含角色: {', '.join(detected_characters)}", "TexasAIPics")
+                        return filepath
+                    except Exception as decode_error:
+                        logger.error(f"❌ base64解码失败: {decode_error}")
+                
+                logger.error(f"❌ 多角色场景图生成API未返回有效数据: {result}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ 多角色场景图生成异常: {e}")
+            await bark_notifier.send_notification("德克萨斯AI-多角色场景图失败", f"错误: {str(e)[:100]}...", "TexasAIPics")
+            return None
+    
+    def _build_character_descriptions(self, characters: List[str], main_character: str) -> str:
+        """构建角色描述信息"""
+        descriptions = []
+        
+        # 角色特征描述
+        character_traits = {
+            "能天使": "活泼开朗的天使族女孩，金色头发，头顶有光圈，白色羽毛翅膀，活力四射",
+            "可颂": "温和有礼的企鹅物流成员，棕色长发，戴眼镜，知性优雅的气质",
+            "空": "沉默寡言的狼族干员，银灰色头发，狼耳朵，冷静专业的表情",
+            "拉普兰德": "狂野不羁的狼族干员，白色头发带黄色挑染，狼耳朵，危险的笑容",
+            "大帝": "威严的企鹅物流老板，成熟男性，深色头发，严肃的表情和专业的着装"
+        }
+        
+        descriptions.append(f"主要角色：{main_character}（{character_traits.get(main_character, '明日方舟角色')}）")
+        
+        if len(characters) > 1:
+            other_chars = [char for char in characters if char != main_character]
+            other_descriptions = [f"{char}（{character_traits.get(char, '明日方舟角色')}）" for char in other_chars]
+            descriptions.append(f"其他角色：{', '.join(other_descriptions)}")
+        
+        return " ".join(descriptions)
 
     async def generate_selfie(self, experience_description: str) -> Optional[str]:
         """根据经历描述和每日基础图片生成自拍，并加入季节性服装要求。"""
