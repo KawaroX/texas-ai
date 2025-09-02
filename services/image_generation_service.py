@@ -58,28 +58,74 @@ class ImageGenerationService:
             )
             return new_path
 
-    def _get_dynamic_clothing_prompt(self) -> str:
-        """根据季节和星期动态生成服装建议。"""
-        month = datetime.now().month
-        weekday = datetime.now().weekday() # Monday is 0 and Sunday is 6
-
-        # 季节判断
-        if month in [12, 1, 2]:
-            seasonal_suggestion = "穿着暖和的冬装，比如厚外套、毛衣或围巾。"
-        elif month in [3, 4, 5]:
-            seasonal_suggestion = "穿着舒适的春季服装，比如夹克或长袖衫。"
-        elif month in [6, 7, 8]:
-            seasonal_suggestion = "穿着清凉的夏日服装，比如T恤、短袖或连衣裙。"
-        else: # 9, 10, 11
-            seasonal_suggestion = "穿着时尚的秋季服装，比如风衣或薄毛衣。"
-
+    async def _get_weather_based_clothing_prompt(self) -> str:
+        """根据实际天气和星期动态生成服装建议。"""
+        try:
+            # 获取今天的天气信息
+            today = datetime.now().strftime('%Y-%m-%d')
+            weather_key = f"life_system:{today}"
+            life_data_str = self.redis_client.get(weather_key)
+            
+            if life_data_str:
+                import json, re
+                life_data = json.loads(life_data_str)
+                weather_str = life_data.get('weather', '')
+                
+                # 解析温度范围，例如 "28°C~33°C"
+                temp_match = re.search(r'气温(\d+)°C~(\d+)°C', weather_str)
+                if temp_match:
+                    min_temp = int(temp_match.group(1))
+                    max_temp = int(temp_match.group(2))
+                    avg_temp = (min_temp + max_temp) // 2
+                else:
+                    avg_temp = 25  # 默认温度
+                
+                # 根据平均温度决定服装
+                if avg_temp >= 28:
+                    temp_suggestion = "穿着清凉舒适的夏日服装，比如薄T恤、短袖衫或轻薄连衣裙。"
+                elif avg_temp >= 22:
+                    temp_suggestion = "穿着舒适的轻便服装，比如薄长袖、衬衫或轻薄外套。"
+                elif avg_temp >= 15:
+                    temp_suggestion = "穿着适中的秋季服装，比如毛衣、薄外套或长袖衫。"
+                elif avg_temp >= 7.5:
+                    temp_suggestion = "穿着保暖的冬季服装，比如厚外套、毛衣或围巾。"
+                else:
+                    temp_suggestion = "穿着厚实的严寒服装，比如羽绒服、厚围巾和手套。"
+                
+                # 根据天气状况调整
+                if '雨' in weather_str or '雷' in weather_str:
+                    weather_suggestion = "考虑到雨天，可以搭配雨具或选择不易湿透的服装。"
+                elif '雪' in weather_str:
+                    weather_suggestion = "考虑到雪天，选择防寒保暖的服装。"
+                elif '多云' in weather_str:
+                    weather_suggestion = "天气较为温和，适合多种服装搭配。"
+                else:
+                    weather_suggestion = ""
+                    
+                clothing_prompt = f"{temp_suggestion} {weather_suggestion}".strip()
+            else:
+                # 没有天气数据时使用默认逻辑
+                month = datetime.now().month
+                if month in [12, 1, 2]:
+                    clothing_prompt = "穿着保暖的冬季服装，比如厚外套、毛衣或围巾。"
+                elif month in [3, 4, 5]:
+                    clothing_prompt = "穿着舒适的春季服装，比如衬衫或轻薄外套。"
+                elif month in [6, 7, 8]:
+                    clothing_prompt = "穿着清凉的夏日服装，比如T恤、短袖或连衣裙。"
+                else: # 9, 10, 11
+                    clothing_prompt = "穿着舒适的秋季服装，比如薄毛衣或轻便外套。"
+        except Exception as e:
+            logger.warning(f"获取天气信息失败，使用默认服装建议: {e}")
+            clothing_prompt = "穿着舒适得体的日常服装。"
+        
         # 星期判断
+        weekday = datetime.now().weekday() # Monday is 0 and Sunday is 6
         if weekday >= 5: # Saturday or Sunday
             style_suggestion = "可以是时尚漂亮的周末私服，风格可以大胆一些。"
         else:
             style_suggestion = "请设计成一套合身得体的日常便服。"
         
-        return f"{seasonal_suggestion} {style_suggestion}"
+        return f"{clothing_prompt} {style_suggestion}"
 
     async def _build_multipart_data(self, image_data: bytes, prompt: str) -> Dict:
         """构建multipart/form-data格式的请求体，参考API最佳实践"""
@@ -225,12 +271,15 @@ class ImageGenerationService:
             await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", f"错误: 无法读取底图文件 {base_image_path}", "TexasAIPics")
             return None
 
-        clothing_prompt = self._get_dynamic_clothing_prompt()
+        clothing_prompt = await self._get_weather_based_clothing_prompt()
         prompt = (
-            f"请将这张人物图片作为基础, 根据以下场景描述, 生成一张人物在那个场景下的高质量自拍照。"
-            f"重要：请为人物重新设计一套符合场景和季节的服装。{clothing_prompt}"
-            f"人物的面部特征、发型和风格需要与原图保持高度一致, 但姿势、表情、特别是服装和背景需要完全融入新的场景。"
-            f"风格需要自然, 就像手机自拍一样。场景描述: {experience_description}"
+            f"请将这张人物图片作为基础, 根据以下场景描述, 生成一张人物在那个场景下的高质量二次元风格自拍照。"
+            f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格。"
+            f"角色特征要求：人物必须保持独特的渐变色眼眸（上半部分是蓝色，下半部分是橙色，两只眼睛都是这样的渐变），这是区别于其他角色的重要特征。"
+            f"人物的面部特征、银白色发型和整体风格需要与原图保持高度一致。"
+            f"服装设计要求：{clothing_prompt}"
+            f"场景融合：姿势、表情和背景需要完全融入新的场景，风格自然如手机自拍。"
+            f"场景描述: {experience_description}"
         )
 
         try:
