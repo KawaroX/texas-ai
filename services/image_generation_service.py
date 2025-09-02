@@ -1,15 +1,15 @@
 import httpx
 import logging
 import os
-import random
 import uuid
 import redis
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from app.config import settings
 # 修正：导入新的 Bark 推送服务
 from .bark_notifier import bark_notifier
+from .selfie_base_image_manager import selfie_manager
 
 logger = logging.getLogger(__name__)
 
@@ -29,41 +29,34 @@ class ImageGenerationService:
         self.generation_timeout = 120  # 场景图生成超时
         self.selfie_timeout = 180     # 自拍生成超时  
         self.download_timeout = 30    # 图片下载超时
-        self.selfie_base_urls = [
-            "https://media.prts.wiki/6/65/%E7%AB%8B%E7%BB%98_%E7%BC%84%E9%BB%98%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_1.png?image_process=format,webp/quality,Q_90",
-            "https://inf.moei.xyz/file/images/sign/fdba305f99405a1e418e5b61fa07e8bb/item/b9bc7380a3bf1f7aa2e0b15011140d01.jpg",
-            "https://media.prts.wiki/f/fc/%E7%AB%8B%E7%BB%98_%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_1.png?image_process=format,webp/quality,Q_90",
-            "https://media.prts.wiki/1/1f/%E7%AB%8B%E7%BB%98_%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_skin1.png?image_process=format,webp/quality,Q_90",
-            "https://media.prts.wiki/2/2b/%E7%AB%8B%E7%BB%98_%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_skin2.png?image_process=format,webp/quality,Q_90"
-        ]
         self.redis_client = redis.StrictRedis.from_url(
             settings.REDIS_URL, decode_responses=True
         )
 
-    async def _get_daily_base_image_url(self) -> Optional[str]:
-        """获取当天的基础自拍图片URL，如果未选定则随机选择并存入Redis。"""
-        if not self.selfie_base_urls:
-            logger.warning("⚠️ 未配置 TEXAS_SELFIE_BASE_URLS，无法生成自拍。")
-            return None
-
+    async def _get_daily_base_image_path(self) -> Optional[str]:
+        """获取当天的基础自拍图片本地路径，如果未选定则随机选择并存入Redis。"""
         today = datetime.now().strftime("%Y-%m-%d")
-        redis_key = f"daily_selfie_base_url:{today}"
+        redis_key = f"daily_selfie_base_path:{today}"
 
-        cached_url = self.redis_client.get(redis_key)
-        if cached_url:
-            logger.info(f"📸 从Redis缓存中获取到今天的自拍底图: {cached_url}")
-            return cached_url
+        cached_path = self.redis_client.get(redis_key)
+        if cached_path:
+            logger.info(f"📸 从Redis缓存中获取到今天的自拍底图路径: {cached_path}")
+            return cached_path
         else:
-            new_url = random.choice(self.selfie_base_urls)
-            self.redis_client.set(redis_key, new_url, ex=90000)  # 25小时过期
-            logger.info(f"📸 今天首次生成自拍，已选定新的底图并存入Redis: {new_url}")
+            # 使用本地图片管理器随机选择底图
+            new_path = selfie_manager.get_random_local_image()
+            if not new_path:
+                logger.error("❌ 没有可用的本地自拍底图")
+                return None
+            
+            self.redis_client.set(redis_key, new_path, ex=90000)  # 25小时过期
+            logger.info(f"📸 今天首次生成自拍，已选定新的底图路径: {new_path}")
             await bark_notifier.send_notification(
                 title="德克萨斯AI-每日自拍底图已选定",
-                body=f"今日用于自拍的基础图片已选定，URL为: {new_url}",
-                group="TexasAIPics",
-                image_url=new_url
+                body=f"今日用于自拍的基础图片已选定: {os.path.basename(new_path)}",
+                group="TexasAIPics"
             )
-            return new_url
+            return new_path
 
     def _get_dynamic_clothing_prompt(self) -> str:
         """根据季节和星期动态生成服装建议。"""
@@ -87,6 +80,50 @@ class ImageGenerationService:
             style_suggestion = "请设计成一套合身得体的日常便服。"
         
         return f"{seasonal_suggestion} {style_suggestion}"
+
+    async def _build_multipart_data(self, image_data: bytes, prompt: str) -> Dict:
+        """构建multipart/form-data格式的请求体，参考API最佳实践"""
+        # 生成boundary
+        boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
+        
+        # 构建body部分
+        body = b''
+        
+        # 图片部分
+        body += f'--{boundary}\r\n'.encode('utf-8')
+        body += b'Content-Disposition: form-data; name="image"; filename="base_image.png"\r\n'
+        body += b'Content-Type: image/png\r\n\r\n'
+        body += image_data
+        body += b'\r\n'
+        
+        # prompt部分
+        body += f'--{boundary}\r\n'.encode('utf-8')
+        body += b'Content-Disposition: form-data; name="prompt"\r\n\r\n'
+        body += prompt.encode('utf-8')
+        body += b'\r\n'
+        
+        # model部分
+        body += f'--{boundary}\r\n'.encode('utf-8')
+        body += b'Content-Disposition: form-data; name="model"\r\n\r\n'
+        body += b'gpt-image-1-all\r\n'
+        
+        # n部分
+        body += f'--{boundary}\r\n'.encode('utf-8')
+        body += b'Content-Disposition: form-data; name="n"\r\n\r\n'
+        body += b'1\r\n'
+        
+        # size部分
+        body += f'--{boundary}\r\n'.encode('utf-8')
+        body += b'Content-Disposition: form-data; name="size"\r\n\r\n'
+        body += b'1024x1536\r\n'
+        
+        # 结束boundary
+        body += f'--{boundary}--\r\n'.encode('utf-8')
+        
+        return {
+            "body": body,
+            "content_type": f"multipart/form-data; boundary={boundary}"
+        }
 
     async def _download_image(self, url: str) -> Optional[bytes]:
         """下载图片内容"""
@@ -173,15 +210,19 @@ class ImageGenerationService:
             await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", "错误: 未配置OPENAI_API_KEY", "TexasAIPics")
             return None
 
-        base_image_url = await self._get_daily_base_image_url()
-        if not base_image_url:
-            await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", "错误: 未配置或无法获取自拍底图URL", "TexasAIPics")
+        base_image_path = await self._get_daily_base_image_path()
+        if not base_image_path:
+            await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", "错误: 无法获取本地自拍底图", "TexasAIPics")
             return None
 
-        base_image_data = await self._download_image(base_image_url)
-        if not base_image_data:
-            logger.error("❌ 无法下载每日基础自拍图片，取消生成。")
-            await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", f"错误: 无法下载底图 {base_image_url}", "TexasAIPics")
+        # 读取本地底图文件
+        try:
+            with open(base_image_path, 'rb') as f:
+                base_image_data = f.read()
+            logger.info(f"✅ 成功读取本地底图: {base_image_path}")
+        except Exception as e:
+            logger.error(f"❌ 无法读取本地基础自拍图片: {e}")
+            await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", f"错误: 无法读取底图文件 {base_image_path}", "TexasAIPics")
             return None
 
         clothing_prompt = self._get_dynamic_clothing_prompt()
@@ -191,13 +232,24 @@ class ImageGenerationService:
             f"人物的面部特征、发型和风格需要与原图保持高度一致, 但姿势、表情、特别是服装和背景需要完全融入新的场景。"
             f"风格需要自然, 就像手机自拍一样。场景描述: {experience_description}"
         )
-        headers = {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
-        files = {"image": ("base_image.png", base_image_data, "image/png")}
-        data = {"prompt": prompt, "model": "gpt-image-1-all", "n": 1, "size": "1024x1536"}
 
         try:
+            # 使用优化的multipart上传方式，参考API最佳实践
+            multipart_data = await self._build_multipart_data(base_image_data, prompt)
+            
+            headers_multipart = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Accept": "application/json",
+                "Content-Type": multipart_data["content_type"]
+            }
+            
             async with httpx.AsyncClient() as client:
-                response = await client.post(self.edit_url, headers=headers, data=data, files=files, timeout=self.selfie_timeout)
+                response = await client.post(
+                    self.edit_url, 
+                    headers=headers_multipart, 
+                    content=multipart_data["body"], 
+                    timeout=self.selfie_timeout
+                )
                 response.raise_for_status()
                 result = response.json()
                 data_item = result.get("data", [{}])[0]
