@@ -203,9 +203,6 @@ async def _process_events_async(
                 try:
                     # 先生成AI回复内容
                     from services.ai_service import stream_ai_chat
-                    from core.persona import PersonaManager
-                    
-                    persona_manager = PersonaManager()
                     
                     # 使用现有的AI服务生成回复
                     messages = [{"role": "user", "content": interaction_content}]
@@ -223,14 +220,11 @@ async def _process_events_async(
                     ai_response = "".join(ai_response_parts)
                     
                     if ai_response and ai_response.strip():
-                        # 应用persona过滤
-                        filtered_response = persona_manager.apply_persona_filter(ai_response)
-                        
                         try:
                             # 尝试发送带图片的消息
                             await ws_client.post_message_with_image(
                                 channel_id=kawaro_dm_channel_id,
-                                message=filtered_response,
+                                message=ai_response,
                                 image_path=image_path
                             )
                             
@@ -241,7 +235,7 @@ async def _process_events_async(
                         except Exception as img_send_error:
                             logger.error(f"❌ 发送图片消息失败，降级为纯文本消息: {img_send_error}")
                             # 降级处理：发送纯文本消息
-                            await ws_client.send_message(kawaro_dm_channel_id, filtered_response)
+                            await ws_client.send_message(kawaro_dm_channel_id, ai_response)
                             # 清理无效的图片映射
                             redis_client.hdel(PROACTIVE_IMAGES_KEY, experience_id)
                             logger.info(f"[interactions] 📝 降级发送纯文本消息成功，已清理图片映射: {experience_id}")
