@@ -18,6 +18,12 @@ class BarkNotifier:
         if not self.api_key:
             return
 
+        # 限制长度以防止URL过长
+        # title 20字符，body 100字符，group 20字符
+        title = title[:20] if title else "通知"
+        body = body[:100] if body else ""
+        group = group[:20] if group else "default"
+
         # URL编码标题和内容，防止特殊字符中断URL
         encoded_title = quote(title)
         encoded_body = quote(body)

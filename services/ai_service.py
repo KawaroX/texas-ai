@@ -19,6 +19,12 @@ async def send_bark_notification(
     title: str, content: str, group: str = "AI_Service_Alerts"
 ):
     try:
+        # 限制长度以防止URL过长
+        # title 20字符，content 100字符，group 20字符
+        title = title[:20] if title else "通知"
+        content = content[:100] if content else ""
+        group = group[:20] if group else "AI_Service_Alerts"
+
         encoded_title = urllib.parse.quote(title)
         encoded_content = urllib.parse.quote(content)
         encoded_group = urllib.parse.quote(group)
@@ -188,7 +194,7 @@ async def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0
 
 
 async def stream_openrouter(
-    messages, model="deepseek/deepseek-chat-v3-0324:free"
+    messages, model="z-ai/glm-4.5-air:free"
 ) -> AsyncGenerator[str, None]:
     """
     流式调用OpenRouter API，返回异步生成器。
@@ -910,7 +916,7 @@ async def call_ai_summary(prompt: str) -> str:
 #     STRUCTURED_API_KEY = os.getenv("GEMINI_API_KEY", OPENROUTER_API_KEY)
 #     STRUCTURED_API_URL = os.getenv("GEMINI_API_URL", OPENROUTER_API_URL)
 #     STRUCTURED_API_MODEL = os.getenv(
-#         "GEMINI_MODEL", "deepseek/deepseek-r1-0528:free"
+#         "GEMINI_MODEL", "z-ai/glm-4.5-air:free"
 #     )
 # else:
 STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
@@ -1460,9 +1466,7 @@ async def summarize_past_micro_experiences(experiences: list) -> str:
 
     try:
         # 使用非流式调用，获取故事化文本
-        response = await call_openrouter(
-            messages, model="deepseek/deepseek-r1-0528:free"
-        )
+        response = await call_openrouter(messages, model="z-ai/glm-4.5-air:free")
         # response = await call_openai(messages, model="gpt-4o-mini")
         return response
     except Exception as e:
