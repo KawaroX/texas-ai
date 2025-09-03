@@ -80,10 +80,10 @@ async def send_analysis_notification(
 *🔧 请检查API密钥配置和网络连接*"""
 
         # 发送消息到Mattermost
-        mattermost_url = f"{settings.MATTERMOST_HOST}/api/v4/posts"
+        mattermost_url = "https://prts.kawaro.space/api/v4/posts"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {settings.MATTERMOST_TOKEN}"
+            "Authorization": "Bearer 8or4yqexc3r6brji6s4acp1ycr"
         }
         
         payload = {
