@@ -338,6 +338,22 @@ async def _do_image_generation():
                     # 将 experience_id 和 image_path 存入 Redis Hash
                     redis_client.hset(PROACTIVE_IMAGES_KEY, experience_id, image_path)
                     logger.info(f"[image_gen] ✅ 成功关联图片 {image_path} 到事件 {experience_id}")
+                    
+                    # 🆕 尝试分析图片内容（失败不影响主流程）
+                    try:
+                        from services.image_content_analyzer import analyze_generated_image
+                        
+                        logger.info(f"[image_gen] 🔍 开始分析图片内容: {os.path.basename(image_path)}")
+                        description = await analyze_generated_image(image_path)
+                        
+                        if description:
+                            logger.info(f"[image_gen] ✅ 图片内容分析成功: {description[:50]}...")
+                        else:
+                            logger.info("[image_gen] 📝 图片内容分析未返回结果，将使用默认占位符")
+                            
+                    except Exception as analyzer_error:
+                        logger.warning(f"⚠️ [image_gen] 图片内容分析失败（不影响主流程）: {analyzer_error}")
+                        
                 else:
                     logger.error(f"❌ 未能为事件 {experience_id} 生成图片。")
             else:

@@ -945,8 +945,25 @@ class MattermostWebSocketClient:
                 )
                 if post_resp.status_code == 201:
                     logging.info(f"[mm] 已发送带图片的消息: {message}")
+                    
+                    # 🆕 尝试获取图片描述，用于智能占位符
+                    placeholder = "[图片已发送]"  # 默认占位符
+                    
+                    try:
+                        from services.image_content_analyzer import get_image_description_by_path
+                        description = await get_image_description_by_path(image_path)
+                        
+                        if description:
+                            placeholder = f"[图片: {description}]"
+                            logging.debug(f"[mm] 使用智能图片占位符: {description[:30]}...")
+                        else:
+                            logging.debug("[mm] 未找到图片描述，使用默认占位符")
+                            
+                    except Exception as e:
+                        logging.warning(f"⚠️ [mm] 获取图片描述失败（不影响消息发送）: {e}")
+                    
                     get_channel_memory(channel_id).add_message(
-                        "assistant", f"{message} [图片已发送]"
+                        "assistant", f"{message} {placeholder}"
                     )
                 else:
                     logging.error(
