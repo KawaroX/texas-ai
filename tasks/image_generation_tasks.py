@@ -11,6 +11,52 @@ from app.config import settings
 from services.image_generation_service import image_generation_service
 from services.image_generation_monitor import image_generation_monitor
 
+class ProcessTracker:
+    """
+    🚀 图片生成过程追踪器
+    用于收集增强功能的详细使用情况，失败不影响主流程
+    """
+    def __init__(self):
+        self.tracking_key_prefix = "image_generation_process_tracking"
+        
+    def track_event(self, event_type: str, target_date: str = None):
+        """追踪单个事件（失败不影响主流程）"""
+        try:
+            if target_date is None:
+                target_date = datetime.now().strftime('%Y-%m-%d')
+            
+            tracking_key = f"{self.tracking_key_prefix}:{target_date}"
+            redis_client.hincrby(tracking_key, event_type, 1)
+            redis_client.expire(tracking_key, 86400 * 3)  # 3天过期
+            
+        except Exception as e:
+            # 追踪失败不记录错误日志，避免干扰主流程
+            pass
+    
+    def track_data_source_usage(self, used_enhanced: bool, target_date: str = None):
+        """追踪数据源使用情况"""
+        if used_enhanced:
+            self.track_event("enhanced_data_used", target_date)
+        else:
+            self.track_event("fallback_to_original", target_date)
+    
+    def track_character_detection(self, used_companions: bool, target_date: str = None):
+        """追踪角色检测方式"""
+        if used_companions:
+            self.track_event("companions_detection", target_date)
+        else:
+            self.track_event("string_detection", target_date)
+    
+    def track_prompt_enhancement(self, success: bool, target_date: str = None):
+        """追踪提示词增强结果"""
+        if success:
+            self.track_event("prompt_enhancement_success", target_date)
+        else:
+            self.track_event("prompt_enhancement_failed", target_date)
+
+# 全局追踪器实例
+process_tracker = ProcessTracker()
+
 logger = logging.getLogger(__name__)
 
 # 初始化 Redis 客户端
@@ -49,15 +95,105 @@ async def _async_prepare_images():
         logger.error(f"❌ 图片生成任务发生未知错误: {e}")
 
 
+async def _try_read_enhanced_data():
+    """尝试读取增强交互数据，失败时返回None"""
+    try:
+        today_key = f"interaction_needed_enhanced:{datetime.now().strftime('%Y-%m-%d')}"
+        if redis_client.exists(today_key):
+            events = redis_client.zrange(today_key, 0, -1)
+            if events:
+                logger.info(f"[image_gen] 🆕 读取到增强数据: {len(events)} 条")
+                return events, today_key, True  # (events, key, is_enhanced)
+        logger.debug(f"[image_gen] 增强数据不存在，将使用原始数据")
+        return None, None, False
+    except Exception as e:
+        logger.warning(f"[image_gen] 读取增强数据失败，将使用原始数据: {e}")
+        return None, None, False
+
+
+def _build_enhanced_content(interaction_content: str, enhanced_info: dict, generation_type: str) -> str:
+    """
+    🆕 构建增强的内容描述，失败时回退到原始内容
+    """
+    try:
+        if not enhanced_info:
+            return interaction_content
+            
+        schedule_context = enhanced_info.get("schedule_context", {})
+        emotions = enhanced_info.get("emotions", "")
+        thoughts = enhanced_info.get("thoughts", "")
+        time_period = enhanced_info.get("time_period", "")
+        
+        # 构建增强信息组件
+        enhanced_parts = []
+        
+        # 1. 基础内容
+        enhanced_parts.append(f"经历内容: {interaction_content}")
+        
+        # 2. 地点信息
+        location = schedule_context.get("location")
+        if location:
+            enhanced_parts.append(f"地点: {location}")
+        
+        # 3. 时间背景
+        time_context_map = {
+            "early_morning": "清晨时分，晨光初现",
+            "morning": "上午时光，阳光明媚", 
+            "noon": "正午时分，阳光正好",
+            "afternoon": "下午时光，光线柔和",
+            "evening": "傍晚时分，夕阳西下",
+            "night": "夜晚时分，灯火阑珊"
+        }
+        if time_period in time_context_map:
+            enhanced_parts.append(f"时间氛围: {time_context_map[time_period]}")
+        
+        # 4. 情感状态（主要用于自拍）
+        if emotions and generation_type == "selfie":
+            enhanced_parts.append(f"情感状态: {emotions}")
+        
+        # 5. 内心想法（用于增加深度）
+        if thoughts and len(thoughts) < 100:  # 避免提示词过长
+            enhanced_parts.append(f"内心感受: {thoughts}")
+            
+        # 6. 活动背景
+        activity_title = schedule_context.get("title")
+        if activity_title:
+            enhanced_parts.append(f"活动背景: {activity_title}")
+        
+        enhanced_content = " | ".join(enhanced_parts)
+        logger.debug(f"[image_gen] ✨ 构建增强描述成功，长度: {len(enhanced_content)}")
+        return enhanced_content
+        
+    except Exception as e:
+        logger.warning(f"[image_gen] ⚠️ 构建增强描述失败，使用原始内容: {e}")
+        return interaction_content
+
+
 async def _do_image_generation():
     """执行具体的图片生成逻辑"""
-    today_key = f"interaction_needed:{datetime.now().strftime('%Y-%m-%d')}"
-    if not redis_client.exists(today_key):
-        logger.warning(f"⚠️ Redis 中不存在 key: {today_key}，无法为主动交互生成图片。")
-        return
+    # 🆕 优先尝试读取增强数据
+    enhanced_events, enhanced_key, using_enhanced = await _try_read_enhanced_data()
+    
+    if using_enhanced and enhanced_events:
+        # 使用增强数据
+        events = enhanced_events
+        events_key = enhanced_key
+        logger.info(f"[image_gen] ✨ 使用增强数据进行图片生成")
+        # 🚀 追踪：使用增强数据
+        process_tracker.track_data_source_usage(used_enhanced=True)
+    else:
+        # 回退到原始数据（保持原有逻辑100%不变）
+        today_key = f"interaction_needed:{datetime.now().strftime('%Y-%m-%d')}"
+        if not redis_client.exists(today_key):
+            logger.warning(f"⚠️ Redis 中不存在 key: {today_key}，无法为主动交互生成图片。")
+            return
+        events = redis_client.zrange(today_key, 0, -1)
+        events_key = today_key
+        using_enhanced = False
+        logger.info(f"[image_gen] 📦 使用原始数据进行图片生成")
+        # 🚀 追踪：回退到原始数据
+        process_tracker.track_data_source_usage(used_enhanced=False)
 
-    # 获取所有事件，这里不关心分数，因为是提前准备
-    events = redis_client.zrange(today_key, 0, -1)
     if not events:
         logger.info("[image_gen] 今天没有需要处理的主动交互事件。")
         return
@@ -67,8 +203,24 @@ async def _do_image_generation():
     for event_json_str in events:
         try:
             event_data = json.loads(event_json_str)
-            experience_id = event_data.get("id")
-            interaction_content = event_data.get("interaction_content")
+            
+            # 🆕 根据数据格式提取信息（向后兼容）
+            if using_enhanced:
+                # 增强数据格式
+                experience_id = event_data.get("id")
+                interaction_content = event_data.get("interaction_content")
+                enhanced_info = {
+                    "emotions": event_data.get("emotions"),
+                    "thoughts": event_data.get("thoughts"),
+                    "schedule_context": event_data.get("schedule_context", {}),
+                    "major_event_context": event_data.get("major_event_context"),
+                    "time_period": event_data.get("time_period"),
+                }
+            else:
+                # 原始数据格式（保持100%兼容）
+                experience_id = event_data.get("id")
+                interaction_content = event_data.get("interaction_content")
+                enhanced_info = None
 
             if not experience_id or not interaction_content:
                 logger.warning(f"⚠️ 事件数据缺少ID或内容，跳过: {event_json_str[:100]}...")
@@ -92,6 +244,17 @@ async def _do_image_generation():
                 error_msg = None
                 max_retries = 2  # 最多重试2次（总共3次尝试）
                 
+                # 🆕 构建增强内容描述（失败时使用原始内容）
+                enhanced_content = _build_enhanced_content(
+                    interaction_content, 
+                    enhanced_info, 
+                    "selfie" if is_selfie else "scene"
+                )
+                
+                # 🚀 追踪：提示词增强结果
+                enhancement_successful = (enhanced_content != interaction_content) if enhanced_info else False
+                process_tracker.track_prompt_enhancement(success=enhancement_successful)
+                
                 for attempt in range(max_retries + 1):
                     try:
                         if attempt > 0:
@@ -102,7 +265,7 @@ async def _do_image_generation():
                                 logger.info(f"[image_gen] 📸 尝试为事件 {experience_id} 生成自拍。")
                             # 为自拍生成设置更长的超时时间（8分钟）
                             image_path = await asyncio.wait_for(
-                                image_generation_service.generate_selfie(interaction_content),
+                                image_generation_service.generate_selfie(enhanced_content),
                                 timeout=480.0
                             )
                         else:
@@ -110,7 +273,7 @@ async def _do_image_generation():
                                 logger.info(f"[image_gen] 🎨 尝试为事件 {experience_id} 生成场景图片。")
                             # 为场景图设置超时时间（5分钟）
                             image_path = await asyncio.wait_for(
-                                image_generation_service.generate_image_from_prompt(interaction_content),
+                                image_generation_service.generate_image_from_prompt(enhanced_content),
                                 timeout=300.0
                             )
                         
@@ -133,9 +296,26 @@ async def _do_image_generation():
                 
                 # 记录监控数据（失败不影响主流程）
                 try:
-                    # 检测角色用于监控
-                    from services.character_manager import character_manager
-                    detected_chars = character_manager.detect_characters_in_text(interaction_content)
+                    # 🆕 双轨制角色检测：优先使用增强数据，回退到字符串匹配
+                    detected_chars = []
+                    used_companions_detection = False
+                    
+                    if enhanced_info and enhanced_info.get("schedule_context"):
+                        companions = enhanced_info["schedule_context"].get("companions", [])
+                        if companions:
+                            detected_chars = companions
+                            used_companions_detection = True
+                            logger.debug(f"[image_gen] ✨ 使用增强数据检测角色: {detected_chars}")
+                    
+                    # 如果增强检测无结果，回退到原有的字符串匹配
+                    if not detected_chars:
+                        from services.character_manager import character_manager
+                        detected_chars = character_manager.detect_characters_in_text(interaction_content)
+                        used_companions_detection = False
+                        logger.debug(f"[image_gen] 📦 使用字符串匹配检测角色: {detected_chars}")
+                    
+                    # 🚀 追踪：角色检测方式
+                    process_tracker.track_character_detection(used_companions=used_companions_detection)
                     
                     # 如果检测到角色，更新生成类型
                     if detected_chars and not is_selfie:
@@ -148,7 +328,7 @@ async def _do_image_generation():
                         success=image_path is not None,
                         image_path=image_path,
                         error=error_msg,
-                        prompt_length=len(interaction_content),
+                        prompt_length=len(enhanced_content),  # 🆕 使用增强内容的长度
                         detected_characters=detected_chars
                     )
                 except Exception as monitor_error:

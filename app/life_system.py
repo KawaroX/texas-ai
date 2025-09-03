@@ -227,6 +227,112 @@ async def generate_and_store_daily_life(target_date: date):
     return daily_schedule_data
 
 
+async def _store_enhanced_interaction_data(target_date: date, micro_experiences: list, daily_schedule: dict, redis_client):
+    """
+    存储增强的交互数据，包含完整的微观经历信息、schedule_item数据和背景信息
+    """
+    date_str = target_date.strftime("%Y-%m-%d")
+    enhanced_redis_key = f"interaction_needed_enhanced:{date_str}"
+    logger.debug(f"[interactions] 开始存储增强交互数据: {enhanced_redis_key}")
+    
+    # 获取大事件背景信息（可能为None）
+    major_event_context = get_major_event_by_date(date_str)
+    
+    # 获取schedule_items映射，用于快速查找
+    schedule_items_map = {}
+    if daily_schedule.get("schedule_data") and daily_schedule["schedule_data"].get("schedule_items"):
+        for item in daily_schedule["schedule_data"]["schedule_items"]:
+            item_id = item.get("id")
+            if item_id:
+                schedule_items_map[item_id] = item
+    
+    # 辅助函数：时间转时间戳
+    def time_to_timestamp(date_obj: date, time_str: str) -> float:
+        dt_str = f"{date_obj.strftime('%Y-%m-%d')} {time_str}"
+        dt_obj = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+        return dt_obj.timestamp()
+    
+    enhanced_interactions = []
+    
+    # 处理每个微观经历记录
+    for record in micro_experiences:
+        experiences = record.get("experiences", [])
+        related_item_id = record.get("related_item_id")
+        
+        # 获取关联的schedule_item
+        related_schedule_item = schedule_items_map.get(related_item_id) if related_item_id else None
+        
+        for exp in experiences:
+            if exp.get("need_interaction") is True:
+                # 构建增强数据对象
+                enhanced_exp = {
+                    # 原有微观经历数据
+                    "id": exp.get("id"),
+                    "start_time": exp.get("start_time"),
+                    "end_time": exp.get("end_time"),
+                    "content": exp.get("content"),
+                    "emotions": exp.get("emotions"),
+                    "thoughts": exp.get("thoughts"),
+                    "need_interaction": exp.get("need_interaction"),
+                    "interaction_content": exp.get("interaction_content"),
+                    
+                    # 关联的schedule_item数据（增强信息）
+                    "schedule_context": {
+                        "item_id": related_item_id,
+                        "title": related_schedule_item.get("title") if related_schedule_item else None,
+                        "location": related_schedule_item.get("location") if related_schedule_item else None,
+                        "description": related_schedule_item.get("description") if related_schedule_item else None,
+                        "companions": related_schedule_item.get("companions", []) if related_schedule_item else [],
+                        "category": related_schedule_item.get("category") if related_schedule_item else None,
+                    },
+                    
+                    # 大事件背景信息
+                    "major_event_context": major_event_context,
+                    
+                    # 派生信息
+                    "date": date_str,
+                    "time_period": _get_time_period(exp.get("start_time")),
+                    "enhanced_data_version": "1.0",
+                }
+                
+                enhanced_interactions.append(enhanced_exp)
+    
+    # 存储到Redis Sorted Set
+    for enhanced_exp in enhanced_interactions:
+        try:
+            score = time_to_timestamp(target_date, enhanced_exp["start_time"])
+            redis_client.zadd(enhanced_redis_key, {json.dumps(enhanced_exp, ensure_ascii=False): score})
+        except Exception as e:
+            logger.warning(f"⚠️ 存储单个增强交互数据失败: {e}")
+    
+    # 设置过期时间
+    redis_client.expire(enhanced_redis_key, 86400)  # 24小时过期
+    logger.info(f"[interactions] 增强交互数据已存储: {enhanced_redis_key} (共 {len(enhanced_interactions)} 条)")
+
+
+def _get_time_period(time_str: str) -> str:
+    """根据时间字符串返回时间段描述"""
+    if not time_str:
+        return "unknown"
+    
+    try:
+        hour = int(time_str.split(":")[0])
+        if 5 <= hour < 9:
+            return "early_morning"
+        elif 9 <= hour < 12:
+            return "morning"
+        elif 12 <= hour < 14:
+            return "noon"
+        elif 14 <= hour < 18:
+            return "afternoon"
+        elif 18 <= hour < 21:
+            return "evening"
+        else:
+            return "night"
+    except:
+        return "unknown"
+
+
 async def collect_interaction_experiences(target_date: date):
     """
     单独收集需要交互的微观经历并存入Redis
@@ -287,6 +393,13 @@ async def collect_interaction_experiences(target_date: date):
         # 设置 24 小时过期
         r.expire(redis_key, 86400)
         logger.info(f"[interactions] 已存储到 Redis: {redis_key} (24h 过期)")
+        
+        # 🆕 额外存储增强数据（失败不影响主流程）
+        try:
+            await _store_enhanced_interaction_data(target_date, micro_experiences, daily_schedule, r)
+        except Exception as enhanced_error:
+            logger.warning(f"⚠️ 存储增强交互数据失败（不影响主流程）: {enhanced_error}")
+        
         return True
 
     except Exception as e:
