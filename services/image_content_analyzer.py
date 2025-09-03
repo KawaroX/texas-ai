@@ -6,6 +6,7 @@ import hashlib
 import redis
 import asyncio
 from typing import Optional
+from datetime import datetime
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -17,6 +18,89 @@ GEMINI_API_URL = "https://gemini-v.kawaro.space/v1beta/models/gemini-2.5-flash-l
 
 # Redis 客户端
 redis_client = redis.StrictRedis.from_url(settings.REDIS_URL, decode_responses=True)
+
+# 通知配置 - 你需要指定一个专门接收通知的频道ID
+NOTIFICATION_CHANNEL_ID = "eqgikba1opnpupiy3w16icdxoo"  # 请替换为实际的频道ID
+
+
+async def send_analysis_notification(
+    image_path: str, 
+    success: bool, 
+    description: Optional[str] = None, 
+    error: Optional[str] = None
+):
+    """
+    发送图片分析结果通知到Mattermost频道
+    
+    Args:
+        image_path: 图片文件路径
+        success: 是否成功
+        description: 成功时的图片描述
+        error: 失败时的错误信息
+    """
+    try:
+        # 获取图片基本信息
+        image_name = os.path.basename(image_path)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        if success and description:
+            # 成功消息
+            message = f"""## 🎉 图片内容分析成功
+
+**📸 图片文件:** `{image_name}`  
+**⏰ 分析时间:** `{timestamp}`  
+**🔍 分析结果:**
+
+> {description}
+
+**📊 状态:** ✅ **成功完成**  
+**🚀 功能:** 智能占位符已生效，AI对话将能够理解图片内容
+            
+---
+*💡 此图片的描述已缓存24小时，用于提升对话体验*"""
+
+        else:
+            # 失败消息
+            error_display = error[:200] + "..." if error and len(error) > 200 else error or "未知错误"
+            
+            message = f"""## ⚠️ 图片内容分析失败
+
+**📸 图片文件:** `{image_name}`  
+**⏰ 分析时间:** `{timestamp}`  
+**❌ 错误信息:**
+
+```
+{error_display}
+```
+
+**📊 状态:** 🔴 **分析失败**  
+**🛡️ 保障机制:** 已自动降级到默认占位符 `[图片已发送]`，不影响正常功能
+
+---
+*🔧 请检查API密钥配置和网络连接*"""
+
+        # 发送消息到Mattermost
+        mattermost_url = f"{settings.MATTERMOST_HOST}/api/v4/posts"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {settings.MATTERMOST_TOKEN}"
+        }
+        
+        payload = {
+            "channel_id": NOTIFICATION_CHANNEL_ID,
+            "message": message
+        }
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(mattermost_url, headers=headers, json=payload)
+            
+            if response.status_code == 201:
+                logger.debug(f"[image_analyzer] ✅ 通知消息发送成功: {image_name}")
+            else:
+                logger.warning(f"⚠️ [image_analyzer] 通知消息发送失败: {response.status_code} - {response.text}")
+                
+    except Exception as e:
+        logger.error(f"❌ [image_analyzer] 发送通知消息时出错: {e}")
 
 
 def get_image_path_hash(image_path: str) -> str:
@@ -96,7 +180,15 @@ async def analyze_generated_image(image_path: str) -> Optional[str]:
         # 决定使用哪个API key
         api_key = GEMINI_API_KEY if GEMINI_API_KEY else GEMINI_API_KEY2
         if not api_key:
-            logger.error("❌ [image_analyzer] 没有可用的Gemini API密钥")
+            error_msg = "没有可用的Gemini API密钥"
+            logger.error(f"❌ [image_analyzer] {error_msg}")
+            
+            # 🆕 发送失败通知
+            try:
+                await send_analysis_notification(image_path, success=False, error=error_msg)
+            except Exception as notify_error:
+                logger.warning(f"⚠️ [image_analyzer] 发送失败通知失败（不影响主功能）: {notify_error}")
+            
             return None
         
         headers = {
@@ -131,26 +223,81 @@ async def analyze_generated_image(image_path: str) -> Optional[str]:
                         # 缓存结果到Redis，24小时过期
                         redis_client.setex(redis_key, 86400, description)
                         logger.info(f"[image_analyzer] ✅ 分析成功: {description[:50]}...")
+                        
+                        # 🆕 发送成功通知
+                        try:
+                            await send_analysis_notification(image_path, success=True, description=description)
+                        except Exception as notify_error:
+                            logger.warning(f"⚠️ [image_analyzer] 发送成功通知失败（不影响主功能）: {notify_error}")
+                        
                         return description
                     else:
-                        logger.warning("⚠️ [image_analyzer] API返回空描述")
+                        error_msg = "API返回空描述"
+                        logger.warning(f"⚠️ [image_analyzer] {error_msg}")
+                        
+                        # 🆕 发送失败通知
+                        try:
+                            await send_analysis_notification(image_path, success=False, error=error_msg)
+                        except Exception as notify_error:
+                            logger.warning(f"⚠️ [image_analyzer] 发送失败通知失败（不影响主功能）: {notify_error}")
+                        
                         return None
                 else:
-                    logger.warning(f"⚠️ [image_analyzer] API响应格式异常: {response_json}")
+                    error_msg = f"API响应格式异常: {response_json}"
+                    logger.warning(f"⚠️ [image_analyzer] {error_msg}")
+                    
+                    # 🆕 发送失败通知
+                    try:
+                        await send_analysis_notification(image_path, success=False, error=error_msg)
+                    except Exception as notify_error:
+                        logger.warning(f"⚠️ [image_analyzer] 发送失败通知失败（不影响主功能）: {notify_error}")
+                    
                     return None
                     
             except httpx.TimeoutException:
-                logger.error("❌ [image_analyzer] API请求超时")
+                error_msg = "API请求超时"
+                logger.error(f"❌ [image_analyzer] {error_msg}")
+                
+                # 🆕 发送失败通知
+                try:
+                    await send_analysis_notification(image_path, success=False, error=error_msg)
+                except Exception as notify_error:
+                    logger.warning(f"⚠️ [image_analyzer] 发送失败通知失败（不影响主功能）: {notify_error}")
+                
                 return None
             except httpx.HTTPStatusError as e:
-                logger.error(f"❌ [image_analyzer] API请求失败: {e.response.status_code} - {e.response.text}")
+                error_msg = f"API请求失败: {e.response.status_code} - {e.response.text}"
+                logger.error(f"❌ [image_analyzer] {error_msg}")
+                
+                # 🆕 发送失败通知
+                try:
+                    await send_analysis_notification(image_path, success=False, error=error_msg)
+                except Exception as notify_error:
+                    logger.warning(f"⚠️ [image_analyzer] 发送失败通知失败（不影响主功能）: {notify_error}")
+                
                 return None
                 
     except FileNotFoundError:
-        logger.error(f"❌ [image_analyzer] 图片文件未找到: {image_path}")
+        error_msg = f"图片文件未找到: {image_path}"
+        logger.error(f"❌ [image_analyzer] {error_msg}")
+        
+        # 🆕 发送失败通知
+        try:
+            await send_analysis_notification(image_path, success=False, error=error_msg)
+        except Exception as notify_error:
+            logger.warning(f"⚠️ [image_analyzer] 发送失败通知失败（不影响主功能）: {notify_error}")
+        
         return None
     except Exception as e:
-        logger.error(f"❌ [image_analyzer] 分析图片时发生未知错误: {e}")
+        error_msg = f"分析图片时发生未知错误: {str(e)}"
+        logger.error(f"❌ [image_analyzer] {error_msg}")
+        
+        # 🆕 发送失败通知
+        try:
+            await send_analysis_notification(image_path, success=False, error=error_msg)
+        except Exception as notify_error:
+            logger.warning(f"⚠️ [image_analyzer] 发送失败通知失败（不影响主功能）: {notify_error}")
+        
         return None
 
 
