@@ -27,3 +27,4 @@ scripts/scp_update_script.sh
 dev.yml
 nginx
 CLAUDE.md
+DEPLOYMENT.md

@@ -9,6 +9,7 @@ from datetime import datetime
 from celery import shared_task
 from app.config import settings
 from services.image_generation_service import image_generation_service
+from services.image_generation_monitor import image_generation_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,10 @@ def prepare_images_for_proactive_interactions():
 async def _async_prepare_images():
     """异步执行图片预生成逻辑"""
     try:
-        # 整体任务超时30分钟
-        await asyncio.wait_for(_do_image_generation(), timeout=1800.0)
+        # 整体任务超时45分钟（从30分钟增加）
+        await asyncio.wait_for(_do_image_generation(), timeout=2700.0)
     except asyncio.TimeoutError:
-        logger.error("⏱️ 整体图片生成任务超时（30分钟），部分图片可能未生成完成")
+        logger.error("⏱️ 整体图片生成任务超时（45分钟），部分图片可能未生成完成")
     except Exception as e:
         logger.error(f"❌ 图片生成任务发生未知错误: {e}")
 
@@ -86,27 +87,72 @@ async def _do_image_generation():
                 is_selfie = random.random() < 0.4
                 
                 image_path = None
+                generation_start_time = datetime.now()
+                generation_type = "selfie" if is_selfie else "scene"
+                error_msg = None
+                max_retries = 2  # 最多重试2次（总共3次尝试）
+                
+                for attempt in range(max_retries + 1):
+                    try:
+                        if attempt > 0:
+                            logger.info(f"[image_gen] 🔄 事件 {experience_id} 重试第 {attempt} 次图片生成")
+                        
+                        if is_selfie:
+                            if attempt == 0:
+                                logger.info(f"[image_gen] 📸 尝试为事件 {experience_id} 生成自拍。")
+                            # 为自拍生成设置更长的超时时间（8分钟）
+                            image_path = await asyncio.wait_for(
+                                image_generation_service.generate_selfie(interaction_content),
+                                timeout=480.0
+                            )
+                        else:
+                            if attempt == 0:
+                                logger.info(f"[image_gen] 🎨 尝试为事件 {experience_id} 生成场景图片。")
+                            # 为场景图设置超时时间（5分钟）
+                            image_path = await asyncio.wait_for(
+                                image_generation_service.generate_image_from_prompt(interaction_content),
+                                timeout=300.0
+                            )
+                        
+                        # 成功生成，跳出重试循环
+                        if image_path:
+                            if attempt > 0:
+                                logger.info(f"[image_gen] ✅ 事件 {experience_id} 重试第 {attempt} 次成功")
+                            break
+                            
+                    except asyncio.TimeoutError:
+                        error_msg = f"Generation timeout (attempt {attempt + 1}/{max_retries + 1})"
+                        logger.error(f"⏱️ 事件 {experience_id} 图片生成超时（第 {attempt + 1} 次尝试）")
+                        if attempt == max_retries:
+                            image_path = None
+                    except Exception as e:
+                        error_msg = f"{str(e)} (attempt {attempt + 1}/{max_retries + 1})"
+                        logger.error(f"❌ 事件 {experience_id} 图片生成失败（第 {attempt + 1} 次尝试）: {e}")
+                        if attempt == max_retries:
+                            image_path = None
+                
+                # 记录监控数据（失败不影响主流程）
                 try:
-                    if is_selfie:
-                        logger.info(f"[image_gen] 📸 尝试为事件 {experience_id} 生成自拍。")
-                        # 为自拍生成设置更长的超时时间（5分钟）
-                        image_path = await asyncio.wait_for(
-                            image_generation_service.generate_selfie(interaction_content),
-                            timeout=300.0
-                        )
-                    else:
-                        logger.info(f"[image_gen] 🎨 尝试为事件 {experience_id} 生成场景图片。")
-                        # 为场景图设置超时时间（3分钟）
-                        image_path = await asyncio.wait_for(
-                            image_generation_service.generate_image_from_prompt(interaction_content),
-                            timeout=180.0
-                        )
-                except asyncio.TimeoutError:
-                    logger.error(f"⏱️ 事件 {experience_id} 图片生成超时")
-                    image_path = None
-                except Exception as e:
-                    logger.error(f"❌ 事件 {experience_id} 图片生成失败: {e}")
-                    image_path = None
+                    # 检测角色用于监控
+                    from services.character_manager import character_manager
+                    detected_chars = character_manager.detect_characters_in_text(interaction_content)
+                    
+                    # 如果检测到角色，更新生成类型
+                    if detected_chars and not is_selfie:
+                        generation_type = "scene_with_characters"
+                    
+                    image_generation_monitor.record_generation_attempt(
+                        experience_id=experience_id,
+                        generation_type=generation_type,
+                        start_time=generation_start_time,
+                        success=image_path is not None,
+                        image_path=image_path,
+                        error=error_msg,
+                        prompt_length=len(interaction_content),
+                        detected_characters=detected_chars
+                    )
+                except Exception as monitor_error:
+                    logger.warning(f"⚠️ 记录监控数据失败（不影响主流程）: {monitor_error}")
                 
                 if image_path:
                     # 将 experience_id 和 image_path 存入 Redis Hash
@@ -123,6 +169,13 @@ async def _do_image_generation():
             logger.error(f"❌ 处理事件 {event_json_str[:100]}... 时发生未知错误: {e}")
 
     logger.info("[image_gen] 主动交互图片预生成任务完成。")
+    
+    # 生成今日汇总报告（失败不影响主流程）
+    try:
+        summary = image_generation_monitor.generate_daily_summary()
+        logger.info(f"📊 今日图片生成汇总: 尝试 {summary['total_attempts']} 次，成功 {summary['successful_generations']} 次，成功率 {summary['success_rate']:.2%}")
+    except Exception as summary_error:
+        logger.warning(f"⚠️ 生成每日汇总失败（不影响主流程）: {summary_error}")
 
 
 @shared_task

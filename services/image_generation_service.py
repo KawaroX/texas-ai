@@ -11,6 +11,8 @@ from app.config import settings
 from .bark_notifier import bark_notifier
 from .selfie_base_image_manager import selfie_manager
 from .character_manager import character_manager
+# 监控功能在 tasks 层使用，这里不需要导入
+# from .image_generation_monitor import image_generation_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +29,10 @@ class ImageGenerationService:
         self.edit_url = f"{base_url}/edits"
         
         # 超时配置 (秒)
-        self.generation_timeout = 120  # 场景图生成超时
-        self.selfie_timeout = 180     # 自拍生成超时  
-        self.multi_character_timeout = 300  # 多角色场景生成超时（更长）
-        self.download_timeout = 30    # 图片下载超时
+        self.generation_timeout = 300  # 场景图生成超时（从120秒增加到300秒/5分钟）
+        self.selfie_timeout = 480     # 自拍生成超时（从180秒增加到480秒/8分钟）
+        self.multi_character_timeout = 600  # 多角色场景生成超时（从300秒增加到600秒/10分钟）
+        self.download_timeout = 60    # 图片下载超时（从30秒增加到60秒）
         self.redis_client = redis.StrictRedis.from_url(
             settings.REDIS_URL, decode_responses=True
         )
@@ -232,7 +234,9 @@ class ImageGenerationService:
         """生成不包含特定角色的场景图"""
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "Accept": "application/json"}
         prompt = (
-            f"请根据下面的体验和想法或者经历，生成一张符合这个场景的高质量图片。"
+            f"请根据下面的体验和想法或者经历，生成一张第一人称视角的场景图片。"
+            f"视角要求：以拍摄者的第一人称视角构图，重点展现所处的环境、场景和氛围，画面中不要出现拍摄者本人。"
+            f"构图重点：突出场景环境、物品、建筑、风景等，而非人物角色。如果场景中确实需要其他人物，应作为背景元素而非主体。"
             f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格，色彩明亮，构图富有故事感。"
             f"场景描述: {experience_description}"
         )
