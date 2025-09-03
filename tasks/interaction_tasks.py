@@ -197,79 +197,8 @@ async def _process_events_async(
             image_path = redis_client.hget(PROACTIVE_IMAGES_KEY, experience_id)
             has_image = image_path and os.path.exists(image_path)
             
-            if has_image:
-                logger.info(f"[interactions] 找到关联图片: {image_path}，将发送带图片的消息")
-                
-                try:
-                    # 先生成AI回复内容
-                    from services.ai_service import stream_ai_chat
-                    
-                    # 使用现有的AI服务生成回复
-                    messages = [{"role": "user", "content": interaction_content}]
-                    # 如果有上下文信息，添加到系统消息中
-                    if context:
-                        system_prompt, chat_messages = context
-                        if system_prompt:
-                            messages.insert(0, {"role": "system", "content": system_prompt})
-                        messages.extend(chat_messages)
-                    
-                    # 使用流式API生成内容并拼接
-                    ai_response_parts = []
-                    async for chunk in stream_ai_chat(messages):
-                        ai_response_parts.append(chunk)
-                    ai_response = "".join(ai_response_parts)
-                    
-                    if ai_response and ai_response.strip():
-                        try:
-                            # 尝试发送带图片的消息
-                            await ws_client.post_message_with_image(
-                                channel_id=kawaro_dm_channel_id,
-                                message=ai_response,
-                                image_path=image_path
-                            )
-                            
-                            # 成功发送后从Redis中移除已使用的图片映射
-                            redis_client.hdel(PROACTIVE_IMAGES_KEY, experience_id)
-                            logger.info(f"[interactions] ✅ 成功发送带图片的主动交互消息，移除图片映射: {experience_id}")
-                            
-                        except Exception as img_send_error:
-                            logger.error(f"❌ 发送图片消息失败，降级为纯文本消息: {img_send_error}")
-                            # 降级处理：发送纯文本消息
-                            await ws_client.send_message(kawaro_dm_channel_id, ai_response)
-                            # 清理无效的图片映射
-                            redis_client.hdel(PROACTIVE_IMAGES_KEY, experience_id)
-                            logger.info(f"[interactions] 📝 降级发送纯文本消息成功，已清理图片映射: {experience_id}")
-                            
-                    else:
-                        logger.warning(f"[interactions] AI未生成有效回复，使用默认消息发送方式")
-                        # 清理图片映射，因为无法生成对应的消息内容
-                        redis_client.hdel(PROACTIVE_IMAGES_KEY, experience_id)
-                        await ws_client.send_ai_generated_message(
-                            channel_id=kawaro_dm_channel_id,
-                            processed_messages=[interaction_content],
-                            context_info=context,
-                            channel_info=kawaro_channel_info,
-                            user_info=kawaro_user_info,
-                            is_active_interaction=True,
-                        )
-                        
-                except Exception as ai_error:
-                    logger.error(f"❌ AI服务调用失败，使用默认消息发送方式: {ai_error}")
-                    # 清理图片映射
-                    redis_client.hdel(PROACTIVE_IMAGES_KEY, experience_id)
-                    await ws_client.send_ai_generated_message(
-                        channel_id=kawaro_dm_channel_id,
-                        processed_messages=[interaction_content],
-                        context_info=context,
-                        channel_info=kawaro_channel_info,
-                        user_info=kawaro_user_info,
-                        is_active_interaction=True,
-                    )
-            else:
-                # 没有图片，使用原有的消息发送方式
-                if image_path:
-                    logger.warning(f"[interactions] 图片文件不存在: {image_path}，但保留映射（图片文件永久保留策略）")
-                
+            # 统一处理：无论有无图片，都使用相同的AI消息生成逻辑
+            try:
                 await ws_client.send_ai_generated_message(
                     channel_id=kawaro_dm_channel_id,
                     processed_messages=[interaction_content],
@@ -277,7 +206,26 @@ async def _process_events_async(
                     channel_info=kawaro_channel_info,
                     user_info=kawaro_user_info,
                     is_active_interaction=True,
+                    image_path=image_path if has_image else None,  # 传入图片路径（如果有）
                 )
+                
+                # 成功发送后，如果有图片，从Redis中移除已使用的图片映射
+                if has_image:
+                    redis_client.hdel(PROACTIVE_IMAGES_KEY, experience_id)
+                    logger.info(f"[interactions] ✅ 成功发送带图片的主动交互消息，移除图片映射: {experience_id}")
+                else:
+                    logger.info(f"[interactions] ✅ 成功发送主动交互消息")
+                    
+            except Exception as send_error:
+                logger.error(f"❌ 发送主动交互消息失败: {send_error}")
+                # 如果有图片映射，清理它
+                if has_image:
+                    redis_client.hdel(PROACTIVE_IMAGES_KEY, experience_id)
+                    logger.info(f"[interactions] 清理失败的图片映射: {experience_id}")
+            
+            # 记录图片文件不存在的情况（但保留映射以便后续处理）
+            if image_path and not os.path.exists(image_path):
+                logger.warning(f"[interactions] 图片文件不存在: {image_path}，但保留映射（图片文件永久保留策略）")
 
             # 成功处理后，从 Redis Sorted Set 中移除该事件
             redis_client.zrem(redis_key, event_json_str)

@@ -713,6 +713,7 @@ class MattermostWebSocketClient:
         channel_info: Dict = None,
         user_info: Dict = None,
         is_active_interaction: bool = False,  # 新增参数，标记是否是主动交互
+        image_path: str = None,  # 新增参数，可选的图片路径
     ):
         """
         生成并发送 AI 回复。
@@ -725,6 +726,7 @@ class MattermostWebSocketClient:
             )
 
             sent_any = False  # 标记是否实际发出了任何内容
+            first_message_sent = False  # 标记是否已发送第一条消息
 
             # 流式生成回复
             async for segment in self.chat_engine.stream_reply(
@@ -740,7 +742,18 @@ class MattermostWebSocketClient:
                     sent_any = True
                     # if cleaned_segment.endswith((".", "。")):
                     #     cleaned_segment = cleaned_segment[:-1]
-                    await self._send_message_with_typing(channel_id, cleaned_segment)
+                    
+                    # 如果有图片且是第一条消息，发送带图片的消息
+                    if image_path and not first_message_sent and os.path.exists(image_path):
+                        await self._send_message_with_typing(channel_id, cleaned_segment, image_path)
+                        first_message_sent = True
+                        logging.info(f"[mm] ✅ 第一条消息已带图片发送: {os.path.basename(image_path)}")
+                    else:
+                        # 普通消息发送
+                        await self._send_message_with_typing(channel_id, cleaned_segment)
+                        if not first_message_sent:
+                            first_message_sent = True
+                    
                     # 若遇到 'SEND'，立即停止后续发送
                     if "SEND" in cleaned_segment:
                         break
@@ -802,13 +815,17 @@ class MattermostWebSocketClient:
         # 截断：确保在 0.3 到动态上限之间
         return min(max(0.3, delay), max_dynamic)
 
-    async def _send_message_with_typing(self, channel_id: str, text: str):
-        """在发送消息时持续发送打字指示器"""
+    async def _send_message_with_typing(self, channel_id: str, text: str, image_path: str = None):
+        """在发送消息时持续发送打字指示器，支持可选的图片附件"""
         # 快速路径：如果包含 'SEND'，仅发送其之前的内容，丢弃 'SEND' 及其后续
         if "SEND" in text:
             prefix = text.split("SEND", 1)[0].strip()
             if prefix:
-                await self.send_message(channel_id, prefix)
+                # 支持图片发送
+                if image_path and os.path.exists(image_path):
+                    await self.post_message_with_image(channel_id, prefix, image_path)
+                else:
+                    await self.send_message(channel_id, prefix)
             else:
                 logging.debug("[mm] 'SEND' 出现但前缀为空，跳过发送。 সন")
             # 不发送 typing，不等待，直接结束，进入完成状态
@@ -826,7 +843,13 @@ class MattermostWebSocketClient:
 
             # 等待消息发送完成，使用正态分布的随机等待时间
             delay = self._generate_typing_delay(len(text))
-            await self.send_message(channel_id, text)
+            
+            # 根据是否有图片选择发送方法
+            if image_path and os.path.exists(image_path):
+                await self.post_message_with_image(channel_id, text, image_path)
+            else:
+                await self.send_message(channel_id, text)
+                
             await asyncio.sleep(delay)
 
         finally:
