@@ -150,11 +150,16 @@ class GeminiProvider(AIProviderBase):
                                     candidate = data["candidates"][0]
                                     if "content" in candidate and "parts" in candidate["content"]:
                                         parts = candidate["content"]["parts"]
-                                        if parts and "text" in parts[0]:
-                                            text_chunk = parts[0]["text"]
-                                            if text_chunk:
-                                                yielded_any = True
-                                                yield text_chunk
+                                        for part in parts:
+                                            # 跳过思考内容
+                                            if part.get("thought"):
+                                                logger.debug(f"Skipping thought content: {part.get('text', '')[:50]}...")
+                                                continue
+                                            if "text" in part:
+                                                text_chunk = part["text"]
+                                                if text_chunk:
+                                                    yielded_any = True
+                                                    yield text_chunk
                                 
                             except json.JSONDecodeError as json_err:
                                 logger.error(
