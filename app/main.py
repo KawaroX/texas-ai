@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Depends, Query
 from app.config import settings
 import asyncio
 import json
-from services.ai_service import _redis, REDIS_GEMINI_CFG_KEY, DEFAULT_GEMINI_CFG
+from services.ai_config.gemini_config import GeminiConfigManager
 import os
 from app.mattermost_client import MattermostWebSocketClient
 from services.redis_cleanup_service import cleanup_service
@@ -12,6 +12,9 @@ from app.life_system import (
     collect_interaction_experiences,
 )
 from datetime import date
+
+# 创建全局配置管理器实例
+gemini_config = GeminiConfigManager()
 
 # 第二套默认 Gemini 配置
 DEFAULT_GEMINI_CFG_2 = {
@@ -25,6 +28,8 @@ DEFAULT_GEMINI_CFG_2 = {
     "thinking_budget": 24576,
     "response_mime_type": "text/plain",
 }
+
+DEFAULT_GEMINI_CFG = gemini_config.get_default_config()
 ALLOWED_KEYS = set(DEFAULT_GEMINI_CFG.keys())
 
 # 配置日志：时间戳、级别、模块、函数、行号、消息
@@ -56,8 +61,7 @@ def check_k(k: str = Query(default="")):
 
 @app.get("/llm-config/gemini")
 async def get_gemini_cfg(_=Depends(check_k)):
-    raw = await _redis.get(REDIS_GEMINI_CFG_KEY)
-    return json.loads(raw) if raw else DEFAULT_GEMINI_CFG
+    return await gemini_config.load_config()
 
 
 @app.post("/llm-config/gemini/reset/{which}")
@@ -68,7 +72,7 @@ async def reset_gemini_cfg(which: int, _=Depends(check_k)):
         cfg = DEFAULT_GEMINI_CFG_2
     else:
         raise HTTPException(status_code=400, detail="无效的默认值编号（只能是 1 或 2）")
-    await _redis.set(REDIS_GEMINI_CFG_KEY, json.dumps(cfg, ensure_ascii=False))
+    await gemini_config.save_config(cfg)
     return {"ok": True, "config": cfg}
 
 
@@ -83,10 +87,9 @@ def _filter_and_merge(base: dict, patch: dict) -> dict:
 @app.patch("/llm-config/gemini")
 async def patch_gemini_cfg(payload: dict, _=Depends(check_k)):
     try:
-        current_raw = await _redis.get(REDIS_GEMINI_CFG_KEY)
-        current = json.loads(current_raw) if current_raw else DEFAULT_GEMINI_CFG
+        current = await gemini_config.load_config()
         new_cfg = _filter_and_merge(current, payload)
-        await _redis.set(REDIS_GEMINI_CFG_KEY, json.dumps(new_cfg, ensure_ascii=False))
+        await gemini_config.save_config(new_cfg)
         return {"ok": True, "config": new_cfg}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -96,7 +99,7 @@ async def patch_gemini_cfg(payload: dict, _=Depends(check_k)):
 async def replace_gemini_cfg(payload: dict, _=Depends(check_k)):
     try:
         new_cfg = _filter_and_merge(DEFAULT_GEMINI_CFG, payload)
-        await _redis.set(REDIS_GEMINI_CFG_KEY, json.dumps(new_cfg, ensure_ascii=False))
+        await gemini_config.save_config(new_cfg)
         return {"ok": True, "config": new_cfg}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
