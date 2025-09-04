@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Dict, Any
 
-from utils.redis_manager import get_redis_client
+from utils.redis_manager import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class GeminiConfigManager:
     """Gemini配置管理器"""
     
     def __init__(self):
-        self._redis = get_redis_client()
+        self._redis = get_async_redis_client()
     
     async def load_config(self) -> Dict[str, Any]:
         """
