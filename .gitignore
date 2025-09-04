@@ -28,3 +28,4 @@ dev.yml
 nginx
 CLAUDE.md
 DEPLOYMENT.md
+ROLLBACK_GUIDE.md

@@ -89,7 +89,8 @@ class RAGDecisionMaker:
         self.memory_boost_probability = memory_boost_probability
 
         # 初始化Redis连接
-        self.redis_client = redis.Redis.from_url(os.getenv("REDIS_URL"))
+        from utils.redis_manager import get_redis_client
+        self.redis_client = get_redis_client()
 
         # Redis键名设计
         self._context_key = f"rag_decision:context:{self.user_id}"

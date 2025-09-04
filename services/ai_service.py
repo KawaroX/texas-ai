@@ -114,9 +114,9 @@ def summarize_payload_for_log(payload: dict, preview_len: int = 20) -> dict:
 # === end helpers ===
 
 # === Redis-based runtime config for Gemini streaming ===
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+from utils.redis_manager import get_redis_client
 REDIS_GEMINI_CFG_KEY = os.getenv("REDIS_GEMINI_CFG_KEY", "texas:llm:gemini_cfg")
-_redis = redis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+_redis = get_redis_client()
 
 DEFAULT_GEMINI_CFG = {
     "model": "gemini-2.5-pro",

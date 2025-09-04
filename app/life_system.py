@@ -368,7 +368,8 @@ async def collect_interaction_experiences(target_date: date):
         )
 
         # 存储到 Redis
-        r = redis.Redis.from_url(os.getenv("REDIS_URL"))
+        from utils.redis_manager import get_redis_client
+        r = get_redis_client()
         redis_key = f"interaction_needed:{date_str}"
 
         # 辅助函数：将 HH:MM 格式的时间字符串转换为当天的 Unix 时间戳

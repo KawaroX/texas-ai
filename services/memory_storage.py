@@ -12,11 +12,9 @@ logger = logging.getLogger(__name__)
 
 class MemoryStorage:
     def __init__(self):
-        redis_url = os.getenv("REDIS_URL")
-        if not redis_url:
-            raise ValueError("REDIS_URL环境变量未设置")
-        self.client = redis.Redis.from_url(redis_url)
-        logger.debug("[MemoryStorage] Redis client initialized with URL: %s", redis_url)
+        from utils.redis_manager import get_redis_client
+        self.client = get_redis_client()
+        logger.debug("[MemoryStorage] Using shared Redis connection pool")
 
     def _ensure_string(self, value) -> str:
         """确保值是字符串类型"""
