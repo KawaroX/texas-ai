@@ -211,7 +211,7 @@ class ImageGenerationService:
         logger.info(f"🖼️ 图片已保存到: {filepath}")
         return filepath
 
-    async def generate_image_from_prompt(self, experience_description: str) -> Optional[str]:
+    async def generate_image_from_prompt(self, experience_description: str, scene_analysis: Optional[Dict] = None) -> Optional[str]:
         """根据经历描述生成图片"""
         await bark_notifier.send_notification("德克萨斯AI-开始生成场景图", f"内容: {experience_description[:50]}...", "TexasAIPics")
         if not self.api_key:
@@ -219,26 +219,53 @@ class ImageGenerationService:
             await bark_notifier.send_notification("德克萨斯AI-生成场景图失败", "错误: 未配置OPENAI_API_KEY", "TexasAIPics")
             return None
 
-        # 检测场景中是否包含其他角色
-        detected_characters = character_manager.detect_characters_in_text(experience_description)
-        logger.info(f"🔍 检测到场景中的角色: {detected_characters}")
+        # 🆕 优先使用AI预分析的角色检测结果
+        if scene_analysis:
+            detected_characters = scene_analysis.get("characters", [])
+            logger.info(f"🔍 使用AI预分析检测到的角色: {detected_characters}")
+        else:
+            # 回退到传统角色检测方法
+            detected_characters = character_manager.detect_characters_in_text(experience_description)
+            logger.info(f"🔍 使用传统方法检测到场景中的角色: {detected_characters}")
         
         # 如果检测到角色，尝试使用角色图片增强生成
         if detected_characters:
-            return await self._generate_scene_with_characters(experience_description, detected_characters)
+            return await self._generate_scene_with_characters(experience_description, detected_characters, scene_analysis)
         else:
-            return await self._generate_scene_without_characters(experience_description)
+            return await self._generate_scene_without_characters(experience_description, scene_analysis)
     
-    async def _generate_scene_without_characters(self, experience_description: str) -> Optional[str]:
+    async def _generate_scene_without_characters(self, experience_description: str, scene_analysis: Optional[Dict] = None) -> Optional[str]:
         """生成不包含特定角色的场景图"""
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "Accept": "application/json"}
-        prompt = (
+        
+        # 🆕 使用AI预分析增强提示词
+        base_prompt = (
             f"请根据下面的体验和想法或者经历，生成一张第一人称视角的场景图片。"
             f"视角要求：以拍摄者的第一人称视角构图，重点展现所处的环境、场景和氛围，画面中不要出现拍摄者本人。"
             f"构图重点：突出场景环境、物品、建筑、风景等，而非人物角色。如果场景中确实需要其他人物，应作为背景元素而非主体。"
             f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格，色彩明亮，构图富有故事感。"
-            f"场景描述: {experience_description}"
         )
+        
+        # 构建增强的场景描述
+        if scene_analysis:
+            enhanced_details = []
+            if scene_analysis.get("location"):
+                enhanced_details.append(f"地点设定: {scene_analysis['location']}")
+            if scene_analysis.get("time_atmosphere"): 
+                enhanced_details.append(f"时间氛围: {scene_analysis['time_atmosphere']}")
+            if scene_analysis.get("lighting_mood"):
+                enhanced_details.append(f"光线效果: {scene_analysis['lighting_mood']}")
+            if scene_analysis.get("color_tone"):
+                enhanced_details.append(f"色彩基调: {scene_analysis['color_tone']}")
+            if scene_analysis.get("composition_style"):
+                enhanced_details.append(f"构图风格: {scene_analysis['composition_style']}")
+            if scene_analysis.get("weather_context"):
+                enhanced_details.append(f"天气环境: {scene_analysis['weather_context']}")
+                
+            enhanced_desc = " | ".join(enhanced_details) if enhanced_details else experience_description
+            prompt = f"{base_prompt}场景描述: {enhanced_desc}"
+        else:
+            prompt = f"{base_prompt}场景描述: {experience_description}"
         payload = {"size": "1024x1536", "prompt": prompt, "model": "gpt-image-1", "n": 1}
 
         try:
@@ -278,7 +305,7 @@ class ImageGenerationService:
             await bark_notifier.send_notification("德克萨斯AI-生成场景图异常", f"错误: {str(e)[:100]}...", "TexasAIPics")
             return None
     
-    async def _generate_scene_with_characters(self, experience_description: str, detected_characters: List[str]) -> Optional[str]:
+    async def _generate_scene_with_characters(self, experience_description: str, detected_characters: List[str], scene_analysis: Optional[Dict] = None) -> Optional[str]:
         """生成包含特定角色的场景图"""
         logger.info(f"🎭 使用角色增强生成场景图: {detected_characters}")
         
@@ -297,24 +324,68 @@ class ImageGenerationService:
             logger.info(f"✅ 成功读取角色图片: {main_character} -> {character_image_path}")
         except Exception as e:
             logger.error(f"❌ 无法读取角色图片: {e}")
-            return await self._generate_scene_without_characters(experience_description)
+            return await self._generate_scene_without_characters(experience_description, scene_analysis)
         
-        # 🆕 获取动态服装建议（借鉴自拍的设计理念）
-        clothing_prompt = await self._get_weather_based_clothing_prompt()
-        
-        # 构建包含所有角色信息的提示词
-        character_descriptions = self._build_character_descriptions(detected_characters, main_character)
-        
-        prompt = (
+        # 🆕 构建增强的提示词，结合AI预分析和传统方法
+        base_prompt = (
             f"请将这张角色图片作为基础，根据以下场景描述，生成一张高质量的二次元风格多角色场景图片。"
             f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格，色彩明亮，构图富有故事感。"
-            f"角色信息：{character_descriptions}"
-            f"服装设计要求：所有角色都需要重新设计符合当前场景的服装，不要直接沿用底图原有服装。{clothing_prompt} 每个角色的服装应该体现其个性特色并与场景氛围协调。"
-            f"神态表情要求：根据各角色性格特点设计表情神态 - 能天使（活泼开朗的笑容），可颂（慵懒随意的神情），空（安静温和的表情），拉普兰德（略带野性的神态），大帝（威严中带着亲和）等。神态要贴合当前场景情境。"
-            f"动作姿态要求：角色的动作和姿态要自然融入场景，展现真实的互动感和生活感。避免死板的pose，要有生动的肢体语言和场景互动，体现角色间的关系。"
-            f"场景融合要求：确保所有角色都真实自然地参与到场景中，服装、动作、表情都要与环境完美匹配，营造生动的生活画面。"
-            f"场景描述: {experience_description}"
         )
+        
+        # 构建角色信息
+        character_descriptions = self._build_character_descriptions(detected_characters, main_character)
+        character_prompt = f"角色信息：{character_descriptions}"
+        
+        # 🆕 使用AI预分析的角色表情或回退到传统表情描述
+        if scene_analysis and scene_analysis.get("character_expressions"):
+            expressions = scene_analysis["character_expressions"]
+            expression_descriptions = []
+            for expr in expressions:
+                char_name = expr.get("name", "")
+                char_expr = expr.get("expression", "")
+                if char_name and char_expr:
+                    expression_descriptions.append(f"{char_name}（{char_expr}）")
+            
+            if expression_descriptions:
+                expression_prompt = f"神态表情要求：{', '.join(expression_descriptions)}。表情要贴合当前场景情境。"
+            else:
+                expression_prompt = f"神态表情要求：根据各角色性格特点设计表情神态 - 能天使（活泼开朗的笑容），可颂（慵懒随意的神情），空（安静温和的表情），拉普兰德（略带野性的神态），大帝（威严中带着亲和）等。神态要贴合当前场景情境。"
+        else:
+            expression_prompt = f"神态表情要求：根据各角色性格特点设计表情神态 - 能天使（活泼开朗的笑容），可颂（慵懒随意的神情），空（安静温和的表情），拉普兰德（略带野性的神态），大帝（威严中带着亲和）等。神态要贴合当前场景情境。"
+        
+        # 🆕 服装建议：结合AI预分析和天气系统
+        clothing_parts = []
+        if scene_analysis and scene_analysis.get("weather_context"):
+            clothing_parts.append(f"根据{scene_analysis['weather_context']}设计合适的服装")
+        else:
+            # 回退到传统天气服装建议
+            traditional_clothing = await self._get_weather_based_clothing_prompt()
+            clothing_parts.append(traditional_clothing)
+        clothing_parts.append("每个角色的服装应该体现其个性特色并与场景氛围协调")
+        clothing_prompt = f"服装设计要求：所有角色都需要重新设计符合当前场景的服装，不要直接沿用底图原有服装。{' '.join(clothing_parts)}"
+        
+        # 🆕 构建增强的场景描述
+        if scene_analysis:
+            scene_details = []
+            if scene_analysis.get("location"):
+                scene_details.append(f"地点: {scene_analysis['location']}")
+            if scene_analysis.get("time_atmosphere"):
+                scene_details.append(f"时间氛围: {scene_analysis['time_atmosphere']}")
+            if scene_analysis.get("lighting_mood"):
+                scene_details.append(f"光线效果: {scene_analysis['lighting_mood']}")
+            if scene_analysis.get("color_tone"):
+                scene_details.append(f"色彩基调: {scene_analysis['color_tone']}")
+            if scene_analysis.get("composition_style"):
+                scene_details.append(f"构图风格: {scene_analysis['composition_style']}")
+            if scene_analysis.get("emotional_state"):
+                scene_details.append(f"场景氛围: {scene_analysis['emotional_state']}")
+                
+            enhanced_scene_desc = " | ".join(scene_details) if scene_details else experience_description
+        else:
+            enhanced_scene_desc = experience_description
+        
+        # 组合完整提示词
+        prompt = f"{base_prompt}{character_prompt}{clothing_prompt}{expression_prompt}动作姿态要求：角色的动作和姿态要自然融入场景，展现真实的互动感和生活感。避免死板的pose，要有生动的肢体语言和场景互动，体现角色间的关系。场景融合要求：确保所有角色都真实自然地参与到场景中，服装、动作、表情都要与环境完美匹配，营造生动的生活画面。场景描述: {enhanced_scene_desc}"
         
         try:
             # 使用类似自拍的multipart上传方式
@@ -388,7 +459,7 @@ class ImageGenerationService:
         
         return " ".join(descriptions)
 
-    async def generate_selfie(self, experience_description: str) -> Optional[str]:
+    async def generate_selfie(self, experience_description: str, scene_analysis: Optional[Dict] = None) -> Optional[str]:
         """根据经历描述和每日基础图片生成自拍，并加入季节性服装要求。"""
         await bark_notifier.send_notification("德克萨斯AI-开始生成自拍", f"内容: {experience_description[:50]}...", "TexasAIPics")
         if not self.api_key:
@@ -411,13 +482,25 @@ class ImageGenerationService:
             await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", f"错误: 无法读取底图文件 {base_image_path}", "TexasAIPics")
             return None
 
-        clothing_prompt = await self._get_weather_based_clothing_prompt()
+        # 🆕 优先使用AI预分析的角色检测结果
+        if scene_analysis:
+            detected_characters = scene_analysis.get("characters", [])
+            # 自拍模式确保包含德克萨斯（预分析中应该已处理，这里做双重保险）
+            if "德克萨斯" not in detected_characters:
+                detected_characters.append("德克萨斯")
+            logger.info(f"🔍 使用AI预分析检测到的自拍角色: {detected_characters}")
+        else:
+            # 回退到传统角色检测
+            detected_characters = character_manager.detect_characters_in_text(experience_description)
+            # 自拍模式确保包含德克萨斯
+            if "德克萨斯" not in detected_characters:
+                detected_characters.append("德克萨斯")
+            logger.info(f"🔍 使用传统方法检测到的自拍角色: {detected_characters}")
         
-        # 检测场景中是否包含其他角色
-        detected_characters = character_manager.detect_characters_in_text(experience_description)
+        # 构建其他角色描述（排除德克萨斯）
+        other_characters = [char for char in detected_characters if char != "德克萨斯"]
         other_characters_desc = ""
-        if detected_characters:
-            logger.info(f"🔍 自拍场景中检测到其他角色: {detected_characters}")
+        if other_characters:
             character_traits = {
                 "能天使": "活泼开朗的天使族女孩，红色头发，头顶有光圈，多个长三角形组成的光翼，充满活力",
                 "可颂": "乐观开朗活泼的企鹅物流成员，橙色头发",
@@ -425,21 +508,60 @@ class ImageGenerationService:
                 "拉普兰德": "过于开朗特别活泼的狼族干员，白色头发，狼耳朵，古灵精怪略带病娇的笑容",
                 "大帝": "喜欢说唱的帝企鹅，戴着墨镜和大金链子，西海岸嘻哈风格，企鹅形态而非人形"
             }
-            char_descriptions = [f"{char}（{character_traits.get(char, '明日方舟角色')}）" for char in detected_characters]
+            char_descriptions = [f"{char}（{character_traits.get(char, '明日方舟角色')}）" for char in other_characters]
             other_characters_desc = f"场景中的其他角色：{', '.join(char_descriptions)}。"
         
-        prompt = (
+        # 🆕 服装建议：结合AI预分析和天气系统
+        if scene_analysis and scene_analysis.get("weather_context"):
+            clothing_prompt = f"服装设计要求：根据{scene_analysis['weather_context']}设计合适的服装，体现德克萨斯的个性特色。"
+        else:
+            traditional_clothing = await self._get_weather_based_clothing_prompt()
+            clothing_prompt = f"服装设计要求：{traditional_clothing}"
+        
+        # 🆕 构建增强的自拍提示词
+        base_selfie_prompt = (
             f"请将这张人物图片作为基础，根据以下场景描述，生成一张人物在该场景下的高质量二次元风格自拍照片。"
             f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格。"
             f"主角特征要求：德克萨斯（黑色头发，兽耳），必须保持独特的渐变色眼眸，BOTH EYES must have gradient colors from blue (top) to orange (bottom)，两只眼睛都是从蓝色（上半部分）渐变到橙色（下半部分），这是区别于其他角色的重要特征。"
             f"人物的面部特征、黑色发型和整体风格需要与原图保持高度一致。"
-            f"{other_characters_desc}"
-            f"性格表情要求：德克萨斯性格高冷内敛，通常表情淡漠不苟言笑。但面对信任的人时会微妙地放下防备，可能会有极其细微的笑意或温和神情，但绝不是明显的笑容。表情应该体现这种微妙的情感变化。"
-            f"服装设计要求：{clothing_prompt}"
-            f"构图要求：Selfie pose with one arm extended holding phone (but don't show the phone/camera in frame)，一只手臂自然伸出做自拍手势但画面中不要显示手机或相机设备。"
-            f"场景融合：姿势、神态和背景需要完全融入新的场景，营造自然的自拍效果。"
-            f"场景描述: {experience_description}"
         )
+        
+        # 🆕 使用AI预分析的表情建议或传统表情描述
+        if scene_analysis and scene_analysis.get("character_expressions"):
+            # 查找德克萨斯的表情建议
+            texas_expression = None
+            for expr in scene_analysis["character_expressions"]:
+                if expr.get("name") == "德克萨斯":
+                    texas_expression = expr.get("expression")
+                    break
+            
+            if texas_expression:
+                expression_prompt = f"性格表情要求：德克萨斯{texas_expression}，体现其高冷内敛的性格特点，表情应该贴合当前场景情境。"
+            else:
+                expression_prompt = f"性格表情要求：德克萨斯性格高冷内敛，通常表情淡漠不苟言笑。但面对信任的人时会微妙地放下防备，可能会有极其细微的笑意或温和神情，但绝不是明显的笑容。表情应该体现这种微妙的情感变化。"
+        else:
+            expression_prompt = f"性格表情要求：德克萨斯性格高冷内敛，通常表情淡漠不苟言笑。但面对信任的人时会微妙地放下防备，可能会有极其细微的笑意或温和神情，但绝不是明显的笑容。表情应该体现这种微妙的情感变化。"
+        
+        # 🆕 构建增强的场景描述
+        if scene_analysis:
+            scene_details = []
+            if scene_analysis.get("location"):
+                scene_details.append(f"地点: {scene_analysis['location']}")
+            if scene_analysis.get("time_atmosphere"):
+                scene_details.append(f"时间氛围: {scene_analysis['time_atmosphere']}")
+            if scene_analysis.get("lighting_mood"):
+                scene_details.append(f"光线效果: {scene_analysis['lighting_mood']}")
+            if scene_analysis.get("color_tone"):
+                scene_details.append(f"色彩基调: {scene_analysis['color_tone']}")
+            if scene_analysis.get("emotional_state"):
+                scene_details.append(f"情感氛围: {scene_analysis['emotional_state']}")
+                
+            enhanced_scene_desc = " | ".join(scene_details) if scene_details else experience_description
+        else:
+            enhanced_scene_desc = experience_description
+        
+        # 组合完整的自拍提示词
+        prompt = f"{base_selfie_prompt}{other_characters_desc}{expression_prompt}{clothing_prompt}构图要求：Selfie pose with one arm extended holding phone (but don't show the phone/camera in frame)，一只手臂自然伸出做自拍手势但画面中不要显示手机或相机设备。场景融合：姿势、神态和背景需要完全融入新的场景，营造自然的自拍效果。场景描述: {enhanced_scene_desc}"
 
         try:
             # 使用优化的multipart上传方式，参考API最佳实践

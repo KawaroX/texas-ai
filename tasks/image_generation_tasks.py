@@ -245,16 +245,30 @@ async def _do_image_generation():
                 error_msg = None
                 max_retries = 2  # 最多重试2次（总共3次尝试）
                 
-                # 🆕 构建增强内容描述（失败时使用原始内容）
-                enhanced_content = _build_enhanced_content(
-                    interaction_content, 
-                    enhanced_info, 
-                    "selfie" if is_selfie else "scene"
-                )
+                # 🆕 使用AI预分析系统替代旧的增强内容构建
+                from services.scene_pre_analyzer import analyze_scene
                 
-                # 🚀 追踪：提示词增强结果
-                enhancement_successful = (enhanced_content != interaction_content) if enhanced_info else False
-                process_tracker.track_prompt_enhancement(success=enhancement_successful)
+                logger.info(f"[image_gen] 🔍 开始AI场景预分析: {experience_id}")
+                scene_analysis = await analyze_scene(event_data, is_selfie=is_selfie)
+                
+                if scene_analysis:
+                    # 使用AI生成的高质量描述
+                    enhanced_content = scene_analysis.get("description", interaction_content)
+                    detected_chars = scene_analysis.get("characters", [])
+                    logger.info(f"[image_gen] ✅ AI预分析成功，检测到角色: {detected_chars}")
+                    # 🚀 追踪：AI预分析成功
+                    process_tracker.track_prompt_enhancement(success=True)
+                else:
+                    # 回退到旧的增强内容构建
+                    logger.warning(f"[image_gen] ⚠️ AI预分析失败，回退到传统方法")
+                    enhanced_content = _build_enhanced_content(
+                        interaction_content, 
+                        enhanced_info, 
+                        "selfie" if is_selfie else "scene"
+                    )
+                    detected_chars = []
+                    # 🚀 追踪：AI预分析失败
+                    process_tracker.track_prompt_enhancement(success=False)
                 
                 for attempt in range(max_retries + 1):
                     try:
@@ -266,7 +280,7 @@ async def _do_image_generation():
                                 logger.info(f"[image_gen] 📸 尝试为事件 {experience_id} 生成自拍。")
                             # 为自拍生成设置更长的超时时间（8分钟）
                             image_path = await asyncio.wait_for(
-                                image_generation_service.generate_selfie(enhanced_content),
+                                image_generation_service.generate_selfie(enhanced_content, scene_analysis),
                                 timeout=480.0
                             )
                         else:
@@ -274,7 +288,7 @@ async def _do_image_generation():
                                 logger.info(f"[image_gen] 🎨 尝试为事件 {experience_id} 生成场景图片。")
                             # 为场景图设置超时时间（5分钟）
                             image_path = await asyncio.wait_for(
-                                image_generation_service.generate_image_from_prompt(enhanced_content),
+                                image_generation_service.generate_image_from_prompt(enhanced_content, scene_analysis),
                                 timeout=300.0
                             )
                         
@@ -297,26 +311,31 @@ async def _do_image_generation():
                 
                 # 记录监控数据（失败不影响主流程）
                 try:
-                    # 🆕 双轨制角色检测：优先使用增强数据，回退到字符串匹配
-                    detected_chars = []
-                    used_companions_detection = False
-                    
-                    if enhanced_info and enhanced_info.get("schedule_context"):
-                        companions = enhanced_info["schedule_context"].get("companions", [])
-                        if companions:
-                            detected_chars = companions
-                            used_companions_detection = True
-                            logger.debug(f"[image_gen] ✨ 使用增强数据检测角色: {detected_chars}")
-                    
-                    # 如果增强检测无结果，回退到原有的字符串匹配
-                    if not detected_chars:
-                        from services.character_manager import character_manager
-                        detected_chars = character_manager.detect_characters_in_text(interaction_content)
-                        used_companions_detection = False
-                        logger.debug(f"[image_gen] 📦 使用字符串匹配检测角色: {detected_chars}")
-                    
-                    # 🚀 追踪：角色检测方式
-                    process_tracker.track_character_detection(used_companions=used_companions_detection)
+                    # 🆕 使用AI预分析的角色检测结果
+                    if scene_analysis:
+                        # 使用AI预分析的角色检测结果
+                        used_ai_detection = True
+                        logger.debug(f"[image_gen] ✨ 使用AI预分析角色检测: {detected_chars}")
+                        # 🚀 追踪：使用AI角色检测
+                        process_tracker.track_character_detection(used_companions=True)
+                    else:
+                        # 回退：使用增强数据或字符串匹配
+                        used_ai_detection = False
+                        if enhanced_info and enhanced_info.get("schedule_context"):
+                            companions = enhanced_info["schedule_context"].get("companions", [])
+                            if companions:
+                                detected_chars = companions
+                                logger.debug(f"[image_gen] 📦 使用增强数据检测角色: {detected_chars}")
+                            else:
+                                from services.character_manager import character_manager
+                                detected_chars = character_manager.detect_characters_in_text(interaction_content)
+                                logger.debug(f"[image_gen] 📦 使用字符串匹配检测角色: {detected_chars}")
+                        else:
+                            from services.character_manager import character_manager
+                            detected_chars = character_manager.detect_characters_in_text(interaction_content)
+                            logger.debug(f"[image_gen] 📦 使用字符串匹配检测角色: {detected_chars}")
+                        # 🚀 追踪：回退到传统角色检测
+                        process_tracker.track_character_detection(used_companions=False)
                     
                     # 如果检测到角色，更新生成类型
                     if detected_chars and not is_selfie:
@@ -340,20 +359,12 @@ async def _do_image_generation():
                     redis_client.hset(PROACTIVE_IMAGES_KEY, experience_id, image_path)
                     logger.info(f"[image_gen] ✅ 成功关联图片 {image_path} 到事件 {experience_id}")
                     
-                    # 🆕 尝试分析图片内容（失败不影响主流程）
-                    try:
-                        from services.image_content_analyzer import analyze_generated_image
-                        
-                        logger.info(f"[image_gen] 🔍 开始分析图片内容: {os.path.basename(image_path)}")
-                        description = await analyze_generated_image(image_path)
-                        
-                        if description:
-                            logger.info(f"[image_gen] ✅ 图片内容分析成功: {description[:50]}...")
-                        else:
-                            logger.info("[image_gen] 📝 图片内容分析未返回结果，将使用默认占位符")
-                            
-                    except Exception as analyzer_error:
-                        logger.warning(f"⚠️ [image_gen] 图片内容分析失败（不影响主流程）: {analyzer_error}")
+                    # 🆕 不再需要图片后分析，AI预分析已经提供了场景描述
+                    if scene_analysis:
+                        scene_desc = scene_analysis.get("description", "")
+                        logger.info(f"[image_gen] ✅ 使用AI预分析的场景描述: {scene_desc[:50]}...")
+                    else:
+                        logger.info("[image_gen] 📝 未使用AI预分析，将使用传统描述方法")
                         
                 else:
                     logger.error(f"❌ 未能为事件 {experience_id} 生成图片。")
