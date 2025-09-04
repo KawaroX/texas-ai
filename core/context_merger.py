@@ -14,8 +14,7 @@ from utils.mem0_service import mem0
 logger = logging.getLogger(__name__)
 
 # Redis 客户端
-from utils.redis_manager import get_redis_client
-redis_client = get_redis_client()
+redis_client = redis.StrictRedis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
 def _needs_summary(messages_text: str) -> bool:
@@ -428,7 +427,7 @@ def _finalize_person_messages(
 
 
 async def merge_context(
-    channel_id: str, latest_query: str, now: datetime = None, is_active=False
+    channel_id: str, latest_query: str, now: datetime = datetime.now(), is_active=False
 ) -> Tuple[str, List[Dict]]:
     """
     整合最终上下文，返回 (system_prompt, messages) 元组
@@ -544,7 +543,7 @@ async def merge_context(
                 if isinstance(summary, Exception):
                     logger.warning(f"⚠️ 频道摘要失败: {summary}")
                     continue
-                if summary and summary.strip() and summary.strip() != "空":
+                if summary and str(summary).strip() and str(summary).strip() != "空":
                     summary_notes.append(summary)
 
         # 计算时间差并生成"谴责"提示
