@@ -272,7 +272,7 @@ class RAGDecisionMaker:
         try:
             context_data = self.redis_client.get(self._context_key)
             if context_data:
-                context_dict = json.loads(context_data.decode("utf-8"))
+                context_dict = json.loads(context_data)
                 logger.debug(
                     f"[RAG DECISION] Loaded context from Redis: {context_dict}"
                 )
@@ -302,7 +302,7 @@ class RAGDecisionMaker:
             # 获取当前统计
             stats_data = self.redis_client.get(self._stats_key)
             if stats_data:
-                stats = json.loads(stats_data.decode("utf-8"))
+                stats = json.loads(stats_data)
                 logger.debug("[RAG DECISION] Loaded existing stats from Redis")
             else:
                 stats = {
@@ -345,7 +345,7 @@ class RAGDecisionMaker:
         try:
             stats_data = self.redis_client.get(self._stats_key)
             if stats_data:
-                return json.loads(stats_data.decode("utf-8"))
+                return json.loads(stats_data)
         except (redis.RedisError, json.JSONDecodeError) as e:
             print(f"Warning: Failed to get stats from Redis: {e}")
 
