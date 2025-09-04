@@ -6,7 +6,8 @@ from datetime import date, datetime
 
 def inspect_life_data():
     # 连接到Redis
-    r = redis.StrictRedis.from_url(settings.REDIS_URL, decode_responses=True)
+    from utils.redis_manager import get_redis_client
+    r = get_redis_client()
 
     # 获取今天的键名
     today = date.today().strftime("%Y-%m-%d")

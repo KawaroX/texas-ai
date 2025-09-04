@@ -42,9 +42,8 @@ class MattermostWebSocketClient:
 
         # 消息缓冲相关
         self.processing_tasks: Dict = {}  # {channel_id: asyncio.Task}
-        self.redis_client = redis.StrictRedis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )  # 初始化 Redis 客户端
+        from utils.redis_manager import get_redis_client
+        self.redis_client = get_redis_client()  # 初始化 Redis 客户端
 
         # 缓存
         self.channel_info_cache = {}

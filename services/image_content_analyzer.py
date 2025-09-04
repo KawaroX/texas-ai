@@ -19,7 +19,8 @@ GEMINI_API_KEY2 = os.getenv("GEMINI_API_KEY2", "")
 GEMINI_API_URL = "https://gemini-v.kawaro.space/v1beta/models/gemini-2.5-flash-lite:generateContent"
 
 # Redis 客户端
-redis_client = redis.StrictRedis.from_url(settings.REDIS_URL, decode_responses=True)
+from utils.redis_manager import get_redis_client
+redis_client = get_redis_client()
 
 # 通知配置 - 你需要指定一个专门接收通知的频道ID
 NOTIFICATION_CHANNEL_ID = "eqgikba1opnpupiy3w16icdxoo"  # 请替换为实际的频道ID

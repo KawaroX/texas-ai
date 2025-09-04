@@ -9,7 +9,8 @@ from utils.postgres_service import insert_messages
 MEMORY_RETENTION_SECONDS = 48 * 60 * 60  # 48 小时
 
 # Redis 客户端
-redis_client = redis.StrictRedis.from_url(settings.REDIS_URL, decode_responses=True)
+from utils.redis_manager import get_redis_client
+redis_client = get_redis_client()
 
 
 class ChannelMemory:

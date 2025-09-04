@@ -32,9 +32,8 @@ logger = logging.getLogger(__name__)
 
 class ActiveInteractionTester:
     def __init__(self):
-        self.redis_client = redis.StrictRedis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        from utils.redis_manager import get_redis_client
+        self.redis_client = get_redis_client()
         self.test_date = datetime.now().date()
         self.test_date_str = self.test_date.strftime("%Y-%m-%d")
         self.test_schedule_id = None

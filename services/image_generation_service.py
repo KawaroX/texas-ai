@@ -33,9 +33,8 @@ class ImageGenerationService:
         self.selfie_timeout = 480     # 自拍生成超时（从180秒增加到480秒/8分钟）
         self.multi_character_timeout = 600  # 多角色场景生成超时（从300秒增加到600秒/10分钟）
         self.download_timeout = 60    # 图片下载超时（从30秒增加到60秒）
-        self.redis_client = redis.StrictRedis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        from utils.redis_manager import get_redis_client
+        self.redis_client = get_redis_client()
 
     async def _get_daily_base_image_path(self) -> Optional[str]:
         """获取当天的基础自拍图片本地路径，如果未选定则随机选择并存入Redis。"""

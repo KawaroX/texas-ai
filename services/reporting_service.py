@@ -66,7 +66,8 @@ class ImageGenerationReportingService:
     def __init__(self):
         from app.config import settings
         self.redis_url = settings.REDIS_URL
-        self.redis_client = redis.StrictRedis.from_url(self.redis_url, decode_responses=True)
+        from utils.redis_manager import get_redis_client
+        self.redis_client = get_redis_client()
         self.monitoring_logs_dir = Path("/app/image_generation_logs")
         self.process_tracking_key = "image_generation_process_tracking"
         

@@ -60,7 +60,8 @@ process_tracker = ProcessTracker()
 logger = logging.getLogger(__name__)
 
 # 初始化 Redis 客户端
-redis_client = redis.StrictRedis.from_url(settings.REDIS_URL, decode_responses=True)
+from utils.redis_manager import get_redis_client
+redis_client = get_redis_client()
 
 # 新的 Redis Hash Key，用于存储 interaction_id -> image_path 的映射
 PROACTIVE_IMAGES_KEY = "proactive_interaction_images"

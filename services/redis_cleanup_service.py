@@ -13,9 +13,8 @@ class RedisCleanupService:
     """Redis缓存清理服务，负责定期清理过期的聊天记录并归档到PostgreSQL"""
 
     def __init__(self):
-        self.redis_client = redis.StrictRedis.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        from utils.redis_manager import get_redis_client
+        self.redis_client = get_redis_client()
         self.cleanup_interval = 2 * 60 * 60  # 2小时运行一次清理
         self.retention_seconds = 48 * 60 * 60  # 48 小时保留时间
         self.min_keep_count = 1000  # 无论过期多久都保留的最近记录数量

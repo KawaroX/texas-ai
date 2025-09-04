@@ -9,7 +9,8 @@ from services.ai_service import summarize_past_micro_experiences  # 导入新的
 logger = logging.getLogger(__name__)
 
 # 复用项目现有的Redis连接池
-redis_client = redis.StrictRedis.from_url(settings.REDIS_URL, decode_responses=True)
+from utils.redis_manager import get_redis_client
+redis_client = get_redis_client()
 
 
 class LifeDataService:
