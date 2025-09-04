@@ -15,19 +15,19 @@ logger = logging.getLogger(__name__)
 
 class AIService:
     """AI服务统一调度器"""
-    
+
     def __init__(self):
         self.openrouter = OpenRouterProvider()
         self.gemini = GeminiProvider()
         self.openai = OpenAIProvider()
-        
+
         # 默认路由配置
         self._default_routes = {
             "stream": "gemini",  # 默认流式对话使用Gemini
             "summary": "openrouter",  # 摘要使用OpenRouter
             "structured": "openai",  # 结构化生成使用OpenAI
         }
-    
+
     def _get_provider(self, provider_name: str):
         """根据名称获取提供商实例"""
         providers = {
@@ -36,24 +36,259 @@ class AIService:
             "openai": self.openai,
         }
         return providers.get(provider_name)
-    
+
     async def stream_ai_chat(self, messages: list, model: Optional[str] = None) -> AsyncGenerator[str, None]:
         """
-        统一的流式AI对话接口
-        兼容原有的stream_ai_chat函数
+        流式生成AI回复，按分隔符分段输出 - 完整恢复原有功能
+        包含：模型路由、文本清理、分段处理、回退机制、Bark通知
         """
+        import re
+        from .ai_providers.utils import send_bark_notification
+
         # 根据模型选择提供商
-        if model and any(gemini_model in model for gemini_model in ["gemini", "Gemini"]):
-            provider = self.gemini
-        elif model and any(openrouter_model in model for openrouter_model in ["mistral", "glm", "qwen"]):
-            provider = self.openrouter
+        if model and "gemini" in model.lower():
+            provider = self.gemini  # 最常用，优先检查
+        elif model and "/" in model:
+            provider = self.openrouter  # OpenRouter模型格式：vendor/model
         else:
-            provider = self.gemini  # 默认使用Gemini
-        
+            provider = self.openai  # 其他情况使用OpenAI
+
         logger.info(f"[AIService] 使用 {provider.get_provider_name()} 进行流式对话")
-        async for chunk in provider.stream_chat(messages, model):
-            yield chunk
-    
+
+        def clean_segment(text):
+            """清理文本中的时间戳和发言人标识"""
+            return re.sub(
+                r"^\(距离上一条消息过去了：(\d+[hms]( \d+[hms])?)*\) \[\d{2}:\d{2}:\d{2}\] [^:]+:\s*",
+                "",
+                text,
+            ).strip()
+
+        buffer = ""
+        total_processed = 0  # 跟踪已处理的字符数
+
+        # 特殊处理：Gemini模型需要回退机制
+        if model and "gemini" in model.lower():
+            try:
+                yielded_any = False
+                async for chunk in provider.stream_chat(messages, model):
+                    if chunk.strip():
+                        yielded_any = True
+                    buffer += chunk
+
+                    # 应用文本分段处理逻辑
+                    while True:
+                        # 优先按句号、问号、感叹号切分
+                        indices = []
+                        for sep in ["。", "？", "！"]:
+                            idx = buffer.find(sep)
+                            if idx != -1:
+                                indices.append(idx)
+
+                        if indices:
+                            earliest_index = min(indices)
+                            # 如果句末标点在末尾，暂不切分，等待收尾符号
+                            if earliest_index == len(buffer) - 1:
+                                break
+
+                            # 将紧随其后的收尾字符一并包含
+                            closers = set([
+                                "”", "’", "】", "」", "』", "）", "》", "〉",
+                                ")", "]", "'", '"',
+                            ])
+                            end_index = earliest_index + 1
+                            while end_index < len(buffer) and buffer[end_index] in closers:
+                                end_index += 1
+
+                            segment = buffer[:end_index].strip()
+                            cleaned_segment = clean_segment(segment)
+                            if cleaned_segment:
+                                logger.debug(f"[ai] stream_ai_chat: yield sentence='{cleaned_segment[:50]}'")
+                                yield cleaned_segment
+                            buffer = buffer[end_index:]
+                            total_processed += end_index
+                            continue
+
+                        # 再尝试按换行符切分
+                        newline_index = buffer.find("\n")
+                        if newline_index != -1:
+                            if newline_index == len(buffer) - 1:
+                                buffer = buffer[:newline_index]
+                                break
+                            segment = buffer[:newline_index].strip()
+                            cleaned_segment = clean_segment(segment)
+                            if cleaned_segment:
+                                logger.debug(f"[ai] stream_ai_chat: yield line='{cleaned_segment[:50]}'")
+                                yield cleaned_segment
+                            buffer = buffer[newline_index + 1:]
+                            total_processed += newline_index + 1
+                            continue
+
+                        break
+
+                # 处理最终剩余内容
+                if buffer.strip():
+                    final_segment = clean_segment(buffer)
+                    if final_segment:
+                        logger.debug(f"[ai] stream_ai_chat: yield final='{final_segment[:80]}'")
+                        yield final_segment
+
+                # 如果Gemini没有产生任何输出，回退到OpenAI协议
+                if not yielded_any:
+                    fallback_message = f"⚠️ Gemini API 无输出，回退到 OpenAI协议({model})"
+                    logger.warning(fallback_message)
+                    await send_bark_notification(
+                        title="Gemini API 无输出回退",
+                        content=fallback_message,
+                        group="AI_Service_Alerts",
+                    )
+                    # 重置buffer并回退到OpenAI协议
+                    buffer = ""
+                    async for chunk in self.openai.stream_chat(messages, model):
+                        buffer += chunk
+                        # 应用相同的分段逻辑...
+                        while True:
+                            indices = []
+                            for sep in ["。", "？", "！"]:
+                                idx = buffer.find(sep)
+                                if idx != -1:
+                                    indices.append(idx)
+                            if indices:
+                                earliest_index = min(indices)
+                                if earliest_index == len(buffer) - 1:
+                                    break
+                                else:
+                                    closers = set(["”", "’", "】", "」", "』", "）", "》", "〉", ")", "]", "'", '"'])
+                                    end_index = earliest_index + 1
+                                    while end_index < len(buffer) and buffer[end_index] in closers:
+                                        end_index += 1
+                                    segment = buffer[:end_index].strip()
+                                    cleaned_segment = clean_segment(segment)
+                                    if cleaned_segment:
+                                        yield cleaned_segment
+                                    buffer = buffer[end_index:]
+                                    continue
+                            newline_index = buffer.find("\n")
+                            if newline_index != -1:
+                                if newline_index == len(buffer) - 1:
+                                    buffer = buffer[:newline_index]
+                                    break
+                                segment = buffer[:newline_index].strip()
+                                cleaned_segment = clean_segment(segment)
+                                if cleaned_segment:
+                                    yield cleaned_segment
+                                buffer = buffer[newline_index + 1:]
+                                continue
+                            break
+                    if buffer.strip():
+                        final_segment = clean_segment(buffer)
+                        if final_segment:
+                            yield final_segment
+                return
+
+            except Exception as e:
+                fallback_message = f"❌ Gemini API 失败: {str(e)}，回退到 OpenAI协议({model})"
+                logger.error(fallback_message)
+                await send_bark_notification(
+                    title="Gemini API 错误回退",
+                    content=fallback_message,
+                    group="AI_Service_Alerts",
+                )
+                # 重置buffer并回退到OpenAI协议，应用相同的分段逻辑
+                buffer = ""
+                async for chunk in self.openai.stream_chat(messages, model):
+                    buffer += chunk
+                    while True:
+                        indices = []
+                        for sep in ["。", "？", "！"]:
+                            idx = buffer.find(sep)
+                            if idx != -1:
+                                indices.append(idx)
+                        if indices:
+                            earliest_index = min(indices)
+                            if earliest_index == len(buffer) - 1:
+                                break
+                            closers = set(["”", "’", "】", "」", "』", "）", "》", "〉", ")", "]", "'", '"'])
+                            end_index = earliest_index + 1
+                            while end_index < len(buffer) and buffer[end_index] in closers:
+                                end_index += 1
+                            segment = buffer[:end_index].strip()
+                            cleaned_segment = clean_segment(segment)
+                            if cleaned_segment:
+                                yield cleaned_segment
+                            buffer = buffer[end_index:]
+                            continue
+                        newline_index = buffer.find("\n")
+                        if newline_index != -1:
+                            if newline_index == len(buffer) - 1:
+                                buffer = buffer[:newline_index]
+                                break
+                            segment = buffer[:newline_index].strip()
+                            cleaned_segment = clean_segment(segment)
+                            if cleaned_segment:
+                                yield cleaned_segment
+                            buffer = buffer[newline_index + 1:]
+                            continue
+                        break
+                if buffer.strip():
+                    final_segment = clean_segment(buffer)
+                    if final_segment:
+                        yield final_segment
+                return
+        else:
+            # 其他提供商也应用相同的文本分段处理逻辑
+            async for chunk in provider.stream_chat(messages, model):
+                buffer += chunk
+
+                while True:
+                    # 优先按句号、问号、感叹号切分
+                    indices = []
+                    for sep in ["。", "？", "！"]:
+                        idx = buffer.find(sep)
+                        if idx != -1:
+                            indices.append(idx)
+
+                    if indices:
+                        earliest_index = min(indices)
+                        if earliest_index == len(buffer) - 1:
+                            break
+
+                        closers = set(["”", "’", "】", "」", "』", "）", "》", "〉", ")", "]", "'", '"'])
+                        end_index = earliest_index + 1
+                        while end_index < len(buffer) and buffer[end_index] in closers:
+                            end_index += 1
+
+                        segment = buffer[:end_index].strip()
+                        cleaned_segment = clean_segment(segment)
+                        if cleaned_segment:
+                            logger.debug(f"[ai] stream_ai_chat: yield sentence='{cleaned_segment[:50]}'")
+                            yield cleaned_segment
+                        buffer = buffer[end_index:]
+                        total_processed += end_index
+                        continue
+
+                    newline_index = buffer.find("\n")
+                    if newline_index != -1:
+                        if newline_index == len(buffer) - 1:
+                            buffer = buffer[:newline_index]
+                            break
+                        segment = buffer[:newline_index].strip()
+                        cleaned_segment = clean_segment(segment)
+                        if cleaned_segment:
+                            logger.debug(f"[ai] stream_ai_chat: yield line='{cleaned_segment[:50]}'")
+                            yield cleaned_segment
+                        buffer = buffer[newline_index + 1:]
+                        total_processed += newline_index + 1
+                        continue
+
+                    break
+
+            # 处理最终剩余内容
+            if buffer.strip():
+                final_segment = clean_segment(buffer)
+                if final_segment:
+                    logger.debug(f"[ai] stream_ai_chat: yield final='{final_segment[:80]}'")
+                    yield final_segment
+
     async def call_ai_summary(self, prompt: str) -> str:
         """
         AI摘要调用接口
@@ -63,7 +298,7 @@ class AIService:
         model = "mistralai/mistral-7b-instruct:free"
         logger.info(f"[AIService] 开始AI摘要，模型={model}")
         return await self.openrouter.call_chat(messages, model)
-    
+
     async def call_structured_generation(self, messages: list, max_retries: int = 3) -> dict:
         """
         结构化生成接口
@@ -289,7 +524,7 @@ async def generate_daily_schedule(
   "schedule_items": [
     {{
       "start_time": "HH:MM",
-      "end_time": "HH:MM（如果到次日，则写23:59。最多不得超过23:59）", 
+      "end_time": "HH:MM（如果到次日，则写23:59。最多不得超过23:59）",
       "duration_minutes": 数字,
       "title": "活动标题",
       "category": "personal|work|social|rest",
