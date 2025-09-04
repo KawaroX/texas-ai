@@ -14,8 +14,8 @@ from utils.mem0_service import mem0
 logger = logging.getLogger(__name__)
 
 # Redis 客户端  
-from utils.redis_manager import get_redis_client
-redis_client = get_redis_client()
+from utils.redis_manager import get_async_redis_client
+redis_client = get_async_redis_client()
 
 
 def _needs_summary(messages_text: str) -> bool:
