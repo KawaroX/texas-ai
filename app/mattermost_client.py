@@ -203,7 +203,7 @@ class MattermostWebSocketClient:
             team_data_to_store = {
                 team["id"]: json.dumps(team, ensure_ascii=False) for team in teams
             }
-            self.redis_client.hmset("mattermost:teams", team_data_to_store)
+            self.redis_client.hset("mattermost:teams", mapping=team_data_to_store)
             logging.debug(f"[mm] 已将 {len(teams)} 个 Team 信息存储到 Redis")
         else:
             logging.warning("⚠️ 未获取到任何 Team 信息。 সন")
@@ -219,7 +219,7 @@ class MattermostWebSocketClient:
                 channel["id"]: json.dumps(channel, ensure_ascii=False)
                 for channel in all_channels
             }
-            self.redis_client.hmset("mattermost:channels", channel_data_to_store)
+            self.redis_client.hset("mattermost:channels", mapping=channel_data_to_store)
             logging.debug(f"[mm] 已将 {len(all_channels)} 个频道信息存储到 Redis")
         else:
             logging.warning("⚠️ 未获取到任何频道信息。 সন")
@@ -270,7 +270,7 @@ class MattermostWebSocketClient:
                     user_details, ensure_ascii=False
                 )
 
-            self.redis_client.hmset("mattermost:users", user_data_to_store)
+            self.redis_client.hset("mattermost:users", mapping=user_data_to_store)
             logging.debug(f"[mm] 已将 {len(all_users)} 个用户信息存储到 Redis")
         else:
             logging.warning("⚠️ 未获取到任何用户信息。 সন")
