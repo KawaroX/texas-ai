@@ -14,8 +14,8 @@ from utils.mem0_service import mem0
 logger = logging.getLogger(__name__)
 
 # Redis 客户端  
-from utils.redis_manager import get_async_redis_client
-redis_client = get_async_redis_client()
+from utils.redis_manager import get_redis_client
+redis_client = get_redis_client()
 
 
 def _needs_summary(messages_text: str) -> bool:
@@ -65,7 +65,7 @@ async def _summarize_channel(
         return ""
 
 
-async def _get_life_system_context() -> str:
+def _get_life_system_context() -> str:
     """获取生活系统数据作为上下文"""
     try:
         from datetime import date
@@ -74,7 +74,7 @@ async def _get_life_system_context() -> str:
         date_str = today.strftime("%Y-%m-%d")
         redis_key = f"life_system:{date_str}"
 
-        life_data = await redis_client.hgetall(redis_key)
+        life_data = redis_client.hgetall(redis_key)
 
         if not life_data:
             logger.debug("[context_merger] 未找到生活系统数据")
@@ -665,7 +665,7 @@ async def merge_context(
         logger.debug("[context_merger] 消息较简单，跳过跨频道摘要")
 
     # 3. 获取生活系统信息
-    life_system_context = await _get_life_system_context()
+    life_system_context = _get_life_system_context()
     logger.debug(
         f"[context_merger] Life system context 长度: {len(life_system_context)}"
     )
