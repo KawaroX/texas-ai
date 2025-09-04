@@ -68,9 +68,15 @@ class AIService:
 
         # 特殊处理：Gemini模型需要回退机制
         if model and "gemini" in model.lower():
+            # 第一次尝试：Gemini
+            gemini_failed = False
+            yielded_any = False
             try:
-                yielded_any = False
                 async for chunk in provider.stream_chat(messages, model):
+                    # 检查是否是自动回复（说明Gemini失败了）
+                    if chunk.startswith("[自动回复]") or not chunk.strip():
+                        gemini_failed = True
+                        break
                     if chunk.strip():
                         yielded_any = True
                     buffer += chunk
@@ -132,20 +138,22 @@ class AIService:
                         logger.debug(f"[ai] stream_ai_chat: yield final='{final_segment[:80]}'")
                         yield final_segment
 
-                # 如果Gemini没有产生任何输出，回退到OpenAI协议
-                if not yielded_any:
-                    fallback_message = f"⚠️ Gemini API 无输出，回退到 OpenAI协议({model})"
+                # 如果Gemini失败或无输出，立即尝试OpenAI协议
+                if gemini_failed or not yielded_any:
+                    fallback_message = f"⚠️ Gemini失败，立即尝试OpenAI协议({model})"
                     logger.warning(fallback_message)
-                    await send_bark_notification(
-                        title="Gemini API 无输出回退",
-                        content=fallback_message,
-                        group="AI_Service_Alerts",
-                    )
-                    # 重置buffer并回退到OpenAI协议
+
+                    # 重置buffer，第二次尝试：OpenAI协议
                     buffer = ""
-                    async for chunk in self.openai.stream_chat(messages, model):
-                        buffer += chunk
-                        # 应用相同的分段逻辑...
+                    openai_yielded = False
+                    try:
+                        async for chunk in self.openai.stream_chat(messages, model):
+                            if chunk.strip():
+                                openai_yielded = True
+                            buffer += chunk
+
+
+                        # OpenAI分段处理逻辑
                         while True:
                             indices = []
                             for sep in ["。", "？", "！"]:
@@ -156,17 +164,16 @@ class AIService:
                                 earliest_index = min(indices)
                                 if earliest_index == len(buffer) - 1:
                                     break
-                                else:
-                                    closers = set(["”", "’", "】", "」", "』", "）", "》", "〉", ")", "]", "'", '"'])
-                                    end_index = earliest_index + 1
-                                    while end_index < len(buffer) and buffer[end_index] in closers:
-                                        end_index += 1
-                                    segment = buffer[:end_index].strip()
-                                    cleaned_segment = clean_segment(segment)
-                                    if cleaned_segment:
-                                        yield cleaned_segment
-                                    buffer = buffer[end_index:]
-                                    continue
+                                closers = set(["”", "’", "】", "」", "』", "）", "》", "〉", ")", "]", "'", '"'])
+                                end_index = earliest_index + 1
+                                while end_index < len(buffer) and buffer[end_index] in closers:
+                                    end_index += 1
+                                segment = buffer[:end_index].strip()
+                                cleaned_segment = clean_segment(segment)
+                                if cleaned_segment:
+                                    yield cleaned_segment
+                                buffer = buffer[end_index:]
+                                continue
                             newline_index = buffer.find("\n")
                             if newline_index != -1:
                                 if newline_index == len(buffer) - 1:
@@ -179,61 +186,31 @@ class AIService:
                                 buffer = buffer[newline_index + 1:]
                                 continue
                             break
-                    if buffer.strip():
-                        final_segment = clean_segment(buffer)
-                        if final_segment:
-                            yield final_segment
-                return
+
+                        # 处理OpenAI剩余内容
+                        if buffer.strip():
+                            final_segment = clean_segment(buffer)
+                            if final_segment:
+                                yield final_segment
+
+                    except Exception as openai_e:
+                        logger.error(f"❌ OpenAI也失败: {openai_e}")
+                        openai_yielded = False
+
+                    # 如果OpenAI也没有输出，返回自动回复
+                    if not openai_yielded:
+                        await send_bark_notification(
+                            title="所有AI服务失败",
+                            content=f"Gemini和OpenAI都失败，返回自动回复",
+                            group="AI_Service_Alerts",
+                        )
+                        yield "[自动回复] 在忙，有事请留言"
+                    return
 
             except Exception as e:
-                fallback_message = f"❌ Gemini API 失败: {str(e)}，回退到 OpenAI协议({model})"
-                logger.error(fallback_message)
-                await send_bark_notification(
-                    title="Gemini API 错误回退",
-                    content=fallback_message,
-                    group="AI_Service_Alerts",
-                )
-                # 重置buffer并回退到OpenAI协议，应用相同的分段逻辑
-                buffer = ""
-                async for chunk in self.openai.stream_chat(messages, model):
-                    buffer += chunk
-                    while True:
-                        indices = []
-                        for sep in ["。", "？", "！"]:
-                            idx = buffer.find(sep)
-                            if idx != -1:
-                                indices.append(idx)
-                        if indices:
-                            earliest_index = min(indices)
-                            if earliest_index == len(buffer) - 1:
-                                break
-                            closers = set(["”", "’", "】", "」", "』", "）", "》", "〉", ")", "]", "'", '"'])
-                            end_index = earliest_index + 1
-                            while end_index < len(buffer) and buffer[end_index] in closers:
-                                end_index += 1
-                            segment = buffer[:end_index].strip()
-                            cleaned_segment = clean_segment(segment)
-                            if cleaned_segment:
-                                yield cleaned_segment
-                            buffer = buffer[end_index:]
-                            continue
-                        newline_index = buffer.find("\n")
-                        if newline_index != -1:
-                            if newline_index == len(buffer) - 1:
-                                buffer = buffer[:newline_index]
-                                break
-                            segment = buffer[:newline_index].strip()
-                            cleaned_segment = clean_segment(segment)
-                            if cleaned_segment:
-                                yield cleaned_segment
-                            buffer = buffer[newline_index + 1:]
-                            continue
-                        break
-                if buffer.strip():
-                    final_segment = clean_segment(buffer)
-                    if final_segment:
-                        yield final_segment
-                return
+                # Gemini异常也尝试OpenAI
+                logger.error(f"❌ Gemini异常: {e}，尝试OpenAI")
+                gemini_failed = True
         else:
             # 其他提供商也应用相同的文本分段处理逻辑
             async for chunk in provider.stream_chat(messages, model):
