@@ -5,8 +5,10 @@ import base64
 import hashlib
 import redis
 import asyncio
-from typing import Optional
+from typing import Optional, Tuple
 from datetime import datetime
+from PIL import Image
+import io
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -103,6 +105,89 @@ async def send_analysis_notification(
         logger.error(f"❌ [image_analyzer] 发送通知消息时出错: {e}")
 
 
+def compress_image_if_needed(image_data: bytes, max_size_mb: float = 3.0) -> Tuple[bytes, str]:
+    """
+    如果图片超过指定大小，则压缩图片
+    
+    Args:
+        image_data: 原始图片数据
+        max_size_mb: 最大允许大小（MB）
+        
+    Returns:
+        Tuple[bytes, str]: (压缩后的图片数据, MIME类型)
+    """
+    try:
+        current_size_mb = len(image_data) / (1024 * 1024)
+        
+        if current_size_mb <= max_size_mb:
+            # 判断原图片格式
+            try:
+                img = Image.open(io.BytesIO(image_data))
+                mime_type = f"image/{img.format.lower()}" if img.format else "image/png"
+                logger.debug(f"[image_analyzer] 图片大小 {current_size_mb:.2f}MB，无需压缩")
+                return image_data, mime_type
+            except Exception:
+                return image_data, "image/png"
+        
+        logger.info(f"[image_analyzer] 图片大小 {current_size_mb:.2f}MB 超过限制，开始压缩...")
+        
+        # 打开图片
+        img = Image.open(io.BytesIO(image_data))
+        
+        # 转换为RGB模式（如果需要）
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+        elif img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
+        
+        # 计算压缩比例
+        target_ratio = max_size_mb / current_size_mb
+        scale_factor = min(0.9, target_ratio ** 0.5)  # 保守压缩
+        
+        # 调整尺寸
+        new_width = int(img.width * scale_factor)
+        new_height = int(img.height * scale_factor)
+        img_resized = img.resize((new_width, new_height), Image.Lanczos)
+        
+        # 尝试不同的质量设置
+        for quality in [85, 75, 65, 55]:
+            output = io.BytesIO()
+            img_resized.save(output, format='JPEG', quality=quality, optimize=True)
+            compressed_data = output.getvalue()
+            compressed_size_mb = len(compressed_data) / (1024 * 1024)
+            
+            if compressed_size_mb <= max_size_mb:
+                logger.info(f"[image_analyzer] ✅ 压缩成功：{current_size_mb:.2f}MB → {compressed_size_mb:.2f}MB（质量:{quality}）")
+                return compressed_data, "image/jpeg"
+        
+        # 如果还是太大，再次缩小尺寸
+        for scale in [0.8, 0.6, 0.4]:
+            new_width = int(img.width * scale)
+            new_height = int(img.height * scale)
+            img_small = img.resize((new_width, new_height), Image.Lanczos)
+            
+            output = io.BytesIO()
+            img_small.save(output, format='JPEG', quality=60, optimize=True)
+            compressed_data = output.getvalue()
+            compressed_size_mb = len(compressed_data) / (1024 * 1024)
+            
+            if compressed_size_mb <= max_size_mb:
+                logger.info(f"[image_analyzer] ✅ 极限压缩成功：{current_size_mb:.2f}MB → {compressed_size_mb:.2f}MB（缩放:{scale}）")
+                return compressed_data, "image/jpeg"
+        
+        # 实在压缩不下去，返回最后一次尝试的结果
+        logger.warning(f"⚠️ [image_analyzer] 压缩后仍然较大：{compressed_size_mb:.2f}MB，但已尽力压缩")
+        return compressed_data, "image/jpeg"
+        
+    except Exception as e:
+        logger.error(f"❌ [image_analyzer] 图片压缩失败：{e}")
+        return image_data, "image/png"
+
+
 def get_image_path_hash(image_path: str) -> str:
     """
     生成图片路径的SHA256哈希值，用作Redis键名。
@@ -145,8 +230,11 @@ async def analyze_generated_image(image_path: str) -> Optional[str]:
         with open(image_path, "rb") as f:
             image_data = f.read()
         
+        # 🆕 压缩图片（如果需要）
+        compressed_data, mime_type = compress_image_if_needed(image_data, max_size_mb=3.0)
+        
         # 图片转base64
-        encoded_image = base64.b64encode(image_data).decode("utf-8")
+        encoded_image = base64.b64encode(compressed_data).decode("utf-8")
         
         # 构建请求payload
         payload = {
@@ -156,7 +244,7 @@ async def analyze_generated_image(image_path: str) -> Optional[str]:
                     "parts": [
                         {
                             "inlineData": {
-                                "mimeType": "image/png",  # 大部分生成的图片都是PNG
+                                "mimeType": mime_type,  # 使用动态检测的MIME类型
                                 "data": encoded_image
                             }
                         },
