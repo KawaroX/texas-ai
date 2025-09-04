@@ -186,13 +186,13 @@ class GeminiProvider(AIProviderBase):
                 logger.error(
                     f"❌ Gemini流式调用失败: HTTP错误: {status_code}. URL: {http_err.request.url}. 响应头: {http_err.response.headers}. 错误详情: {error_text}"
                 )
-                yield f"[自动回复] 在忙，有事请留言 ({status_code})"
-                return
+                # 向上抛出异常，让ai_service.py的回退机制处理
+                raise http_err
                 
             except Exception as e:
                 logger.error(f"❌ Gemini流式调用失败: 未知错误: {e}")
-                yield ""
-                return
+                # 向上抛出异常，让ai_service.py的回退机制处理  
+                raise e
     
     async def call_chat(self, messages: list, model: Optional[str] = None, **kwargs) -> str:
         """非流式对话"""
