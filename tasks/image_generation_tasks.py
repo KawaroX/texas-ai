@@ -245,30 +245,61 @@ async def _do_image_generation():
                 error_msg = None
                 max_retries = 2  # 最多重试2次（总共3次尝试）
                 
-                # 🆕 使用AI预分析系统替代旧的增强内容构建
-                from services.scene_pre_analyzer import analyze_scene
+                # 🆕 使用AI预分析系统替代旧的增强内容构建（安全导入和异常捕获）
+                scene_analysis = None
+                try:
+                    from services.scene_pre_analyzer import analyze_scene
+                    logger.info(f"[image_gen] 🔍 开始AI场景预分析: {experience_id}")
+                    scene_analysis = await analyze_scene(event_data, is_selfie=is_selfie)
+                except ImportError as import_error:
+                    logger.error(f"❌ [image_gen] 场景预分析模块导入失败，使用传统方法: {import_error}")
+                    scene_analysis = None
+                except Exception as analysis_error:
+                    logger.error(f"❌ [image_gen] AI预分析系统异常，使用传统方法: {analysis_error}")
+                    scene_analysis = None
                 
-                logger.info(f"[image_gen] 🔍 开始AI场景预分析: {experience_id}")
-                scene_analysis = await analyze_scene(event_data, is_selfie=is_selfie)
-                
-                if scene_analysis:
-                    # 使用AI生成的高质量描述
-                    enhanced_content = scene_analysis.get("description", interaction_content)
+                # 🛡️ 强化回退逻辑：确保所有路径都有安全的默认值
+                if scene_analysis and isinstance(scene_analysis, dict):
+                    # 使用AI生成的高质量描述，带安全检查
+                    enhanced_content = scene_analysis.get("description") 
+                    if not enhanced_content or not isinstance(enhanced_content, str):
+                        logger.warning(f"[image_gen] ⚠️ AI预分析返回无效描述，使用原始内容")
+                        enhanced_content = interaction_content
+                    
                     detected_chars = scene_analysis.get("characters", [])
+                    if not isinstance(detected_chars, list):
+                        logger.warning(f"[image_gen] ⚠️ AI预分析返回无效角色列表，使用空列表")
+                        detected_chars = []
+                        
                     logger.info(f"[image_gen] ✅ AI预分析成功，检测到角色: {detected_chars}")
                     # 🚀 追踪：AI预分析成功
                     process_tracker.track_prompt_enhancement(success=True)
                 else:
                     # 回退到旧的增强内容构建
-                    logger.warning(f"[image_gen] ⚠️ AI预分析失败，回退到传统方法")
-                    enhanced_content = _build_enhanced_content(
-                        interaction_content, 
-                        enhanced_info, 
-                        "selfie" if is_selfie else "scene"
-                    )
+                    logger.warning(f"[image_gen] ⚠️ AI预分析失败或返回无效数据，回退到传统方法")
+                    
+                    # 安全调用传统方法
+                    try:
+                        enhanced_content = _build_enhanced_content(
+                            interaction_content, 
+                            enhanced_info, 
+                            "selfie" if is_selfie else "scene"
+                        )
+                        # 确保返回值安全
+                        if not enhanced_content or not isinstance(enhanced_content, str):
+                            enhanced_content = interaction_content
+                    except Exception as fallback_error:
+                        logger.error(f"❌ [image_gen] 传统方法也失败，使用原始内容: {fallback_error}")
+                        enhanced_content = interaction_content
+                    
                     detected_chars = []
-                    # 🚀 追踪：AI预分析失败
+                    # 🚀 追踪：AI预分析失败  
                     process_tracker.track_prompt_enhancement(success=False)
+                
+                # 🔒 最终安全检查
+                if not enhanced_content:
+                    logger.error(f"❌ [image_gen] 所有描述生成方法都失败，使用最后的安全默认值")
+                    enhanced_content = f"图片生成请求: {experience_id}"
                 
                 for attempt in range(max_retries + 1):
                     try:
