@@ -261,22 +261,54 @@ class OpenAIProvider(ConfigurableProvider):
             "Authorization": f"Bearer {self._config['structured_api_key']}",
         }
         payload = self._build_payload_for_model(messages, self._config["structured_model"], stream=False)
+        # 强制JSON输出格式
+        payload["response_format"] = {"type": "json_object"}
 
         async def _call_request():
             logger.info(f"[OpenAI] 开始结构化生成，模型={self._config['structured_model']}")
-            async with httpx.AsyncClient(timeout=self._config["timeout"]) as client:
+            async with httpx.AsyncClient(timeout=360.0) as client:  # 恢复360秒超时
                 response = await client.post(
                     self._config["structured_api_url"], headers=headers, json=payload
                 )
                 response.raise_for_status()
                 content = response.json()["choices"][0]["message"]["content"]
                 
-                # 尝试解析JSON
+                # 完整的JSON解析逻辑（恢复原版处理方式）
                 try:
-                    return json.loads(content)
-                except json.JSONDecodeError:
-                    logger.warning("⚠️ 结构化生成返回的不是有效JSON，返回原始内容")
-                    return {"raw_content": content}
+                    # 如果内容以```json开头，去除标记
+                    if content.strip().startswith("```json"):
+                        # 移除开头的```json和结尾的```
+                        content = content.strip().replace("```json", "", 1)
+                        if content.endswith("```"):
+                            content = content[:-3].strip()
+                    # 如果内容以```开头（没有json标记），也尝试移除
+                    elif content.strip().startswith("```"):
+                        content = content.strip().replace("```", "", 1)
+                        if content.endswith("```"):
+                            content = content[:-3].strip()
+                    
+                    # 尝试直接解析
+                    try:
+                        result = json.loads(content)
+                        if not isinstance(result, dict):
+                            raise ValueError("AI返回的不是JSON对象")
+                        return result
+                    except json.JSONDecodeError:
+                        # 如果直接解析失败，尝试提取第一个有效JSON对象
+                        start_idx = content.find("{")
+                        end_idx = content.rfind("}")
+                        if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+                            json_str = content[start_idx : end_idx + 1]
+                            result = json.loads(json_str)
+                            if not isinstance(result, dict):
+                                raise ValueError("提取的JSON不是对象")
+                            logger.warning("⚠️ 从响应中提取JSON对象")
+                            return result
+                        else:
+                            raise  # 重新抛出异常
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning(f"⚠️ JSON解析失败: {e}")
+                    return {"raw_content": content, "parse_error": str(e)}
 
         try:
             return await retry_with_backoff(_call_request, max_retries, self._config["base_delay"])
