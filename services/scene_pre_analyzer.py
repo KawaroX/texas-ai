@@ -19,6 +19,117 @@ GEMINI_API_URL = "https://gemini-v.kawaro.space/v1beta/models/gemini-2.5-flash-l
 from utils.redis_manager import get_redis_client
 redis_client = get_redis_client()
 
+# 通知配置 - 复用image_content_analyzer的通知系统
+NOTIFICATION_CHANNEL_ID = "eqgikba1opnpupiy3w16icdxoo"  # 预分析通知频道
+
+
+async def send_scene_analysis_notification(
+    scene_data: Dict[str, Any],
+    is_selfie: bool,
+    success: bool,
+    analysis_result: Optional[Dict[str, Any]] = None,
+    error: Optional[str] = None
+):
+    """
+    发送场景预分析结果通知到Mattermost频道
+    
+    Args:
+        scene_data: 原始场景数据
+        is_selfie: 是否为自拍模式
+        success: 是否成功
+        analysis_result: 成功时的分析结果
+        error: 失败时的错误信息
+    """
+    try:
+        # 获取场景基本信息
+        scene_id = scene_data.get('id', 'unknown')
+        content_preview = scene_data.get('content', '')[:50] + "..." if scene_data.get('content') else "N/A"
+        mode = "自拍模式" if is_selfie else "场景模式" 
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        if success and analysis_result:
+            # 成功消息
+            characters = analysis_result.get('characters', [])
+            character_count = len(characters)
+            scene_desc = analysis_result.get('description', 'N/A')[:100] + "..."
+            
+            # 构建角色表情信息
+            expressions_info = ""
+            if analysis_result.get('character_expressions'):
+                expressions = []
+                for expr in analysis_result['character_expressions']:
+                    name = expr.get('name', '')
+                    expression = expr.get('expression', '')
+                    if name and expression:
+                        expressions.append(f"• {name}: {expression}")
+                if expressions:
+                    expressions_info = f"\n\n**🎭 角色表情分析:**\n" + "\n".join(expressions)
+            
+            message = f"""## 🎉 AI场景预分析成功 ({mode})
+
+**🆔 场景ID:** `{scene_id}`  
+**⏰ 分析时间:** `{timestamp}`  
+**📝 原始内容:** {content_preview}
+
+**🔍 分析结果:**
+• **场景描述:** {scene_desc}
+• **检测角色:** {characters} ({character_count}个)
+• **地点设定:** {analysis_result.get('location', 'N/A')}
+• **时间氛围:** {analysis_result.get('time_atmosphere', 'N/A')}
+• **情感状态:** {analysis_result.get('emotional_state', 'N/A')}
+• **光线效果:** {analysis_result.get('lighting_mood', 'N/A')}
+• **色彩基调:** {analysis_result.get('color_tone', 'N/A')}{expressions_info}
+
+**📊 状态:** ✅ **分析成功**  
+**🚀 功能:** AI增强提示词已生效，图片生成将使用高质量描述
+
+---
+*💡 此分析结果已缓存2小时，用于优化图片生成质量*"""
+
+        else:
+            # 失败消息
+            error_display = error[:200] + "..." if error and len(error) > 200 else error or "未知错误"
+            
+            message = f"""## ⚠️ AI场景预分析失败 ({mode})
+
+**🆔 场景ID:** `{scene_id}`  
+**⏰ 分析时间:** `{timestamp}`  
+**📝 原始内容:** {content_preview}
+**❌ 错误信息:**
+
+```
+{error_display}
+```
+
+**📊 状态:** 🔴 **分析失败**  
+**🛡️ 保障机制:** 已自动降级到传统角色检测和描述构建，不影响图片生成功能
+
+---
+*🔧 请检查Gemini API配置和网络连接*"""
+
+        # 发送消息到Mattermost
+        mattermost_url = "https://prts.kawaro.space/api/v4/posts"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer 8or4yqexc3r6brji6s4acp1ycr"
+        }
+        
+        payload = {
+            "channel_id": NOTIFICATION_CHANNEL_ID,
+            "message": message
+        }
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(mattermost_url, headers=headers, json=payload)
+            
+            if response.status_code == 201:
+                logger.debug(f"[scene_analyzer] ✅ 通知消息发送成功: {scene_id}")
+            else:
+                logger.warning(f"⚠️ [scene_analyzer] 通知消息发送失败: {response.status_code} - {response.text}")
+                
+    except Exception as e:
+        logger.error(f"❌ [scene_analyzer] 发送通知消息时出错: {e}")
+
 
 def get_scene_hash(scene_data: Dict[str, Any]) -> str:
     """
@@ -184,6 +295,15 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
         if not api_key:
             error_msg = "没有可用的Gemini API密钥"
             logger.error(f"❌ [scene_analyzer] {error_msg}")
+            
+            # 🆕 发送失败通知
+            try:
+                await send_scene_analysis_notification(
+                    scene_data, is_selfie, success=False, error=error_msg
+                )
+            except Exception as notify_error:
+                logger.warning(f"⚠️ [scene_analyzer] 发送失败通知失败: {notify_error}")
+                
             return None
         
         headers = {
@@ -237,6 +357,14 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
                             redis_client.setex(cache_key, 7200, json.dumps(result, ensure_ascii=False))
                             logger.info(f"[scene_analyzer] ✅ {mode}场景分析成功: {len(result.get('characters', []))}个角色")
                             
+                            # 🆕 发送成功通知到Mattermost
+                            try:
+                                await send_scene_analysis_notification(
+                                    scene_data, is_selfie, success=True, analysis_result=result
+                                )
+                            except Exception as notify_error:
+                                logger.warning(f"⚠️ [scene_analyzer] 发送成功通知失败（不影响主功能）: {notify_error}")
+                            
                             return result
                         except json.JSONDecodeError as e:
                             logger.error(f"❌ [scene_analyzer] JSON解析失败: {e}")
@@ -250,14 +378,43 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
                     return None
                     
             except httpx.TimeoutException:
-                logger.error(f"❌ [scene_analyzer] API请求超时")
+                error_msg = "API请求超时"
+                logger.error(f"❌ [scene_analyzer] {error_msg}")
+                
+                # 🆕 发送失败通知
+                try:
+                    await send_scene_analysis_notification(
+                        scene_data, is_selfie, success=False, error=error_msg
+                    )
+                except Exception as notify_error:
+                    logger.warning(f"⚠️ [scene_analyzer] 发送失败通知失败: {notify_error}")
+                
                 return None
             except httpx.HTTPStatusError as e:
-                logger.error(f"❌ [scene_analyzer] API请求失败: {e.response.status_code} - {e.response.text}")
+                error_msg = f"API请求失败: {e.response.status_code} - {e.response.text}"
+                logger.error(f"❌ [scene_analyzer] {error_msg}")
+                
+                # 🆕 发送失败通知
+                try:
+                    await send_scene_analysis_notification(
+                        scene_data, is_selfie, success=False, error=error_msg
+                    )
+                except Exception as notify_error:
+                    logger.warning(f"⚠️ [scene_analyzer] 发送失败通知失败: {notify_error}")
+                
                 return None
                 
     except Exception as e:
         logger.error(f"❌ [scene_analyzer] 分析场景时发生未知错误: {str(e)}")
+        
+        # 🆕 发送失败通知到Mattermost
+        try:
+            await send_scene_analysis_notification(
+                scene_data, is_selfie, success=False, error=str(e)
+            )
+        except Exception as notify_error:
+            logger.warning(f"⚠️ [scene_analyzer] 发送失败通知失败: {notify_error}")
+        
         return None
 
 
