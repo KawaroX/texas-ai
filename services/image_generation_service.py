@@ -127,7 +127,7 @@ class ImageGenerationService:
         if weekday >= 5: # Saturday or Sunday
             style_suggestion = "可以是时尚漂亮的周末私服，风格可以大胆一些。"
         else:
-            style_suggestion = "请设计成一套合身得体的日常便服。"
+            style_suggestion = "根据当前场景设计合适的日常服装：工作场合可以是简洁的工装服配热裤等得体搭配，休闲时刻可以是舒适的日常服或热裤等轻松搭配。整体保持好看和有个性。"
         
         return f"{clothing_prompt} {style_suggestion}"
 
@@ -300,14 +300,20 @@ class ImageGenerationService:
             logger.error(f"❌ 无法读取角色图片: {e}")
             return await self._generate_scene_without_characters(experience_description)
         
+        # 🆕 获取动态服装建议（借鉴自拍的设计理念）
+        clothing_prompt = await self._get_weather_based_clothing_prompt()
+        
         # 构建包含所有角色信息的提示词
         character_descriptions = self._build_character_descriptions(detected_characters, main_character)
         
         prompt = (
-            f"请将这张角色图片作为基础，根据以下场景描述，生成一张高质量的二次元风格场景图片。"
+            f"请将这张角色图片作为基础，根据以下场景描述，生成一张高质量的二次元风格多角色场景图片。"
             f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格，色彩明亮，构图富有故事感。"
             f"角色信息：{character_descriptions}"
-            f"场景要求：确保所有提到的角色都出现在画面中，保持角色特征的一致性。"
+            f"服装设计要求：所有角色都需要重新设计符合当前场景的服装，不要直接沿用底图原有服装。{clothing_prompt} 每个角色的服装应该体现其个性特色并与场景氛围协调。"
+            f"神态表情要求：根据各角色性格特点设计表情神态 - 能天使（活泼开朗的笑容），可颂（慵懒随意的神情），空（安静温和的表情），拉普兰德（略带野性的神态），大帝（威严中带着亲和）等。神态要贴合当前场景情境。"
+            f"动作姿态要求：角色的动作和姿态要自然融入场景，展现真实的互动感和生活感。避免死板的pose，要有生动的肢体语言和场景互动，体现角色间的关系。"
+            f"场景融合要求：确保所有角色都真实自然地参与到场景中，服装、动作、表情都要与环境完美匹配，营造生动的生活画面。"
             f"场景描述: {experience_description}"
         )
         
