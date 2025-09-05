@@ -52,7 +52,7 @@ class AIService:
         
         # === DEBUG_CONTEXT_SAVE_START === 保存发送给AI的完整上下文到本地文件用于调试
         try:
-            debug_dir = "/Volumes/base/texas-ai/debug_output"
+            debug_dir = "/app/debug_output"
             os.makedirs(debug_dir, exist_ok=True)
             
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # 包含毫秒
