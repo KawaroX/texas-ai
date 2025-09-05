@@ -804,7 +804,7 @@ async def merge_context(
         user_query_content = (
             f"{condemn_prefix}"  # 添加谴责消息
             f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] Kawaro:\n{latest_query}\n\n"
-            "你是德克萨斯，你看完了Kawaro刚刚发来的信息，思考应该如何回复后在聊天框输入了以下信息并发送。注意只回复此刻的信息，不设计未来的回复信息：\n"
+            f"现在是{texas_time_str}，你是德克萨斯，你看完了Kawaro刚刚发来的信息，思考应该如何回复后在聊天框输入了以下信息并发送。注意只回复此刻的信息，不设计未来的回复信息：\n"
             f"(距离上一条消息过去了：{texas_time_diff_str}) [{texas_time_str}] 德克萨斯：\n\n"
             "(If you think no reply is necessary right now, simply respond with:\n(no messages)\n\n)"
             "(Once your message is fully composed and complete, append the word SEND at the end of the message to indicate it's ready to be sent. Make sure to include SEND only once and only after all parts of the message are finalized.)"
