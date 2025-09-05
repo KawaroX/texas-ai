@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = ""
     CLAUDE_API_KEY: str = ""
-    
+
     # 图片生成专用配置
     IMAGE_GENERATION_API_KEY: str = ""
     IMAGE_GENERATION_API_URL: str = "https://yunwu.ai/v1/images"

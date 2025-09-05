@@ -51,38 +51,41 @@ class AIService:
         from .ai_providers.utils import send_bark_notification
         
         # === DEBUG_CONTEXT_SAVE_START === 保存发送给AI的完整上下文到本地文件用于调试
-        try:
-            debug_dir = "/app/debug_output"
-            os.makedirs(debug_dir, exist_ok=True)
-            
-            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # 包含毫秒
-            
-            # 1. 保存原始messages JSON
-            messages_json_file = f"{debug_dir}/ai_context_messages_{timestamp_str}.json"
-            with open(messages_json_file, 'w', encoding='utf-8') as f:
-                json.dump(messages, f, ensure_ascii=False, indent=2)
-            
-            # 2. 保存人类可读格式
-            messages_readable_file = f"{debug_dir}/ai_context_readable_{timestamp_str}.txt"
-            with open(messages_readable_file, 'w', encoding='utf-8') as f:
-                f.write("=" * 80 + "\n")
-                f.write("AI CONTEXT - 发送给AI的完整上下文\n")
-                f.write("=" * 80 + "\n")
-                f.write(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"模型: {model}\n")
-                f.write(f"消息总数: {len(messages)}\n")
-                f.write("=" * 80 + "\n\n")
+        # 修改这里的 True/False 来启用/禁用调试功能，无需重启服务
+        DEBUG_SAVE_CONTEXT = False
+        if DEBUG_SAVE_CONTEXT:
+            try:
+                debug_dir = "/app/debug_output"
+                os.makedirs(debug_dir, exist_ok=True)
                 
-                for i, msg in enumerate(messages):
-                    f.write(f"[消息 {i+1}] 角色: {msg['role']}\n")
-                    f.write("-" * 40 + "\n")
-                    f.write(msg['content'])
-                    f.write("\n" + "=" * 40 + "\n\n")
-            
-            logger.debug(f"✅ 上下文已保存: {messages_json_file}")
-            
-        except Exception as e:
-            logger.warning(f"⚠️ 保存上下文失败: {e}")
+                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # 包含毫秒
+                
+                # 1. 保存原始messages JSON
+                messages_json_file = f"{debug_dir}/ai_context_messages_{timestamp_str}.json"
+                with open(messages_json_file, 'w', encoding='utf-8') as f:
+                    json.dump(messages, f, ensure_ascii=False, indent=2)
+                
+                # 2. 保存人类可读格式
+                messages_readable_file = f"{debug_dir}/ai_context_readable_{timestamp_str}.txt"
+                with open(messages_readable_file, 'w', encoding='utf-8') as f:
+                    f.write("=" * 80 + "\n")
+                    f.write("AI CONTEXT - 发送给AI的完整上下文\n")
+                    f.write("=" * 80 + "\n")
+                    f.write(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"模型: {model}\n")
+                    f.write(f"消息总数: {len(messages)}\n")
+                    f.write("=" * 80 + "\n\n")
+                    
+                    for i, msg in enumerate(messages):
+                        f.write(f"[消息 {i+1}] 角色: {msg['role']}\n")
+                        f.write("-" * 40 + "\n")
+                        f.write(msg['content'])
+                        f.write("\n" + "=" * 40 + "\n\n")
+                
+                logger.debug(f"✅ 上下文已保存: {messages_json_file}")
+                
+            except Exception as e:
+                logger.warning(f"⚠️ 保存上下文失败: {e}")
         # === DEBUG_CONTEXT_SAVE_END ===
 
         # 根据模型选择提供商
