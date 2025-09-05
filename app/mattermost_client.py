@@ -949,8 +949,6 @@ class MattermostWebSocketClient:
                     placeholder = "[图片已发送]"  # 默认占位符
                     
                     try:
-                        import os
-                        import json
                         
                         # 首先尝试从Redis获取AI预分析的描述
                         image_filename = os.path.basename(image_path)
