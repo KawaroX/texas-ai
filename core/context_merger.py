@@ -13,7 +13,7 @@ from utils.mem0_service import mem0
 
 logger = logging.getLogger(__name__)
 
-# Redis 客户端  
+# Redis 客户端
 from utils.redis_manager import get_redis_client
 redis_client = get_redis_client()
 
@@ -284,6 +284,10 @@ def _format_time_diff(seconds: int) -> str:
     """格式化时间差为可读格式"""
     if seconds == 0:
         return "0s"
+    
+    # 处理负数情况（时间戳错误导致的）
+    if seconds < 0:
+        return f"-{_format_time_diff(-seconds)}"
 
     if seconds < 60:
         return f"{seconds}s"
@@ -428,7 +432,7 @@ def _finalize_person_messages(
 
 
 async def merge_context(
-    channel_id: str, latest_query: str, now: datetime = datetime.now(), is_active=False
+    channel_id: str, latest_query: str, now: datetime = None, is_active=False
 ) -> Tuple[str, List[Dict]]:
     """
     整合最终上下文，返回 (system_prompt, messages) 元组
