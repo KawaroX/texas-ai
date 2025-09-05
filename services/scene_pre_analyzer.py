@@ -352,8 +352,8 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
                                     })
                                     result["character_expressions"] = expressions
 
-                            # 缓存结果到Redis，2小时过期
-                            redis_client.setex(cache_key, 7200, json.dumps(result, ensure_ascii=False))
+                            # 缓存结果到Redis，48小时过期（与图片元数据映射保持一致）
+                            redis_client.setex(cache_key, 172800, json.dumps(result, ensure_ascii=False))
                             logger.info(f"[scene_analyzer] ✅ {mode}场景分析成功: {len(result.get('characters', []))}个角色")
 
                             # 🆕 发送成功通知到Mattermost

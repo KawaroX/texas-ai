@@ -390,10 +390,23 @@ async def _do_image_generation():
                     redis_client.hset(PROACTIVE_IMAGES_KEY, experience_id, image_path)
                     logger.info(f"[image_gen] ✅ 成功关联图片 {image_path} 到事件 {experience_id}")
                     
-                    # 🆕 不再需要图片后分析，AI预分析已经提供了场景描述
+                    # 🆕 存储图片路径到场景分析结果的映射，用于发送时获取AI描述
                     if scene_analysis:
+                        import os
+                        import json
+                        image_filename = os.path.basename(image_path)
+                        image_metadata_key = f"image_metadata:{image_filename}"
+                        
+                        # 存储完整的场景分析结果，48小时过期
+                        redis_client.setex(
+                            image_metadata_key, 
+                            172800,  # 48小时 = 172800秒
+                            json.dumps(scene_analysis, ensure_ascii=False)
+                        )
+                        
                         scene_desc = scene_analysis.get("description", "")
-                        logger.info(f"[image_gen] ✅ 使用AI预分析的场景描述: {scene_desc[:50]}...")
+                        logger.info(f"[image_gen] ✅ 已存储图片元数据映射: {image_filename} -> AI描述({len(scene_desc)}字符)")
+                        logger.debug(f"[image_gen] 场景描述预览: {scene_desc[:50]}...")
                     else:
                         logger.info("[image_gen] 📝 未使用AI预分析，将使用传统描述方法")
                         
