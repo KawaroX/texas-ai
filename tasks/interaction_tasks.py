@@ -196,7 +196,18 @@ async def _process_events_async(
 
             # 检查是否有预生成的图片与此事件关联
             image_path = redis_client.hget(PROACTIVE_IMAGES_KEY, experience_id)
+            
+            # 🔍 添加详细调试日志
+            logger.info(f"[interactions] 🔍 调试信息 - experience_id: {experience_id}")
+            logger.info(f"[interactions] 🔍 从Redis获取的image_path: {image_path}")
+            if image_path:
+                file_exists = os.path.exists(image_path)
+                logger.info(f"[interactions] 🔍 文件是否存在: {file_exists} (路径: {image_path})")
+            else:
+                logger.info(f"[interactions] 🔍 Redis中没有找到该事件的图片映射")
+            
             has_image = image_path and os.path.exists(image_path)
+            logger.info(f"[interactions] 🔍 最终has_image判断结果: {has_image}")
             
             # 统一处理：无论有无图片，都使用相同的AI消息生成逻辑
             try:
