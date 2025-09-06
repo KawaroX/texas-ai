@@ -392,8 +392,6 @@ async def _do_image_generation():
                     
                     # 🆕 存储图片路径到场景分析结果的映射，用于发送时获取AI描述
                     if scene_analysis:
-                        import os
-                        import json
                         image_filename = os.path.basename(image_path)
                         image_metadata_key = f"image_metadata:{image_filename}"
                         
