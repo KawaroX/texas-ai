@@ -355,12 +355,15 @@ class ImageGenerationService:
         
         # 🆕 服装建议：结合AI预分析和天气系统
         clothing_parts = []
+        
+        # 添加天气情况描述（来自AI预分析）
         if scene_analysis and scene_analysis.get("weather_context"):
-            clothing_parts.append(f"根据{scene_analysis['weather_context']}设计合适的服装")
-        else:
-            # 回退到传统天气服装建议
-            traditional_clothing = await self._get_weather_based_clothing_prompt()
-            clothing_parts.append(traditional_clothing)
+            clothing_parts.append(f"天气情况: {scene_analysis['weather_context']}")
+        
+        # 添加具体着装建议（来自天气系统）
+        traditional_clothing = await self._get_weather_based_clothing_prompt()
+        clothing_parts.append(traditional_clothing)
+        
         clothing_parts.append("每个角色的服装应该体现其个性特色并与场景氛围协调")
         clothing_prompt = f"服装设计要求：所有角色都需要重新设计符合当前场景的服装，不要直接沿用底图原有服装。{' '.join(clothing_parts)}"
         
@@ -512,11 +515,18 @@ class ImageGenerationService:
             other_characters_desc = f"场景中的其他角色：{', '.join(char_descriptions)}。"
         
         # 🆕 服装建议：结合AI预分析和天气系统
+        clothing_parts = []
+        
+        # 添加天气情况描述（来自AI预分析）
         if scene_analysis and scene_analysis.get("weather_context"):
-            clothing_prompt = f"服装设计要求：根据{scene_analysis['weather_context']}设计合适的服装，体现德克萨斯的个性特色。"
-        else:
-            traditional_clothing = await self._get_weather_based_clothing_prompt()
-            clothing_prompt = f"服装设计要求：{traditional_clothing}"
+            clothing_parts.append(f"天气情况: {scene_analysis['weather_context']}")
+        
+        # 添加具体着装建议（来自天气系统）
+        traditional_clothing = await self._get_weather_based_clothing_prompt()
+        clothing_parts.append(traditional_clothing)
+        
+        clothing_parts.append("体现德克萨斯的个性特色")
+        clothing_prompt = f"服装设计要求：{' '.join(clothing_parts)}"
         
         # 🆕 构建增强的自拍提示词
         base_selfie_prompt = (
