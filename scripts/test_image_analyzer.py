@@ -66,12 +66,11 @@ def test_imports():
         return False
     
     try:
-        from services.image_content_analyzer import (
-            analyze_generated_image,
+        from services.image_service import (
             get_image_description_by_path,
             get_image_path_hash
         )
-        print("✅ image_content_analyzer 导入成功")
+        print("✅ image_service 导入成功")
         
         # 测试哈希函数
         test_result = test_hash_function()
@@ -79,7 +78,7 @@ def test_imports():
         return test_result
         
     except ImportError as e:
-        print(f"❌ image_content_analyzer 导入失败: {e}")
+        print(f"❌ image_service 导入失败: {e}")
         return False
     except Exception as e:
         print(f"❌ 模块测试失败: {e}")

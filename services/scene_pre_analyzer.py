@@ -181,7 +181,7 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
 1. 这是自拍照片，必须包含德克萨斯本人，请确保在角色列表中包含"德克萨斯"
 2. 分析画面构图、光线、色彩、氛围等视觉要素
 3. 根据场景推测可能出现的其他角色及其表情
-4. 考虑德克萨斯的性格特点：高冷内敛，表情通常淡漠，但面对信任的人会有细微的温和神情
+4. 考虑德克萨斯的性格特点：内敛温和，表情平静安详，常有淡淡的微笑或温和的神情
 
 请用中文详细分析并填写所有字段。"""
         else:
@@ -348,7 +348,7 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
                                 if not has_texas_expression:
                                     expressions.append({
                                         "name": "德克萨斯",
-                                        "expression": "淡漠中透露着细微的情感波动"
+                                        "expression": "平静温和的表情，面带淡淡微笑"
                                     })
                                     result["character_expressions"] = expressions
 

@@ -1,10 +1,47 @@
+"""
+通用图片处理工具服务 (General Image Processing Utility Service)
+
+主要功能:
+- 基于Gemini Vision API的图片内容描述生成
+- 支持重试机制和错误处理
+- 图片到文本的AI识别和描述
+- 图片压缩和优化处理 (迁移自 image_content_analyzer.py)
+- 图片描述缓存管理 (迁移自 image_content_analyzer.py)
+
+服务关系:
+- 独立的图片分析工具,可被其他服务调用
+- 整合了原 image_content_analyzer.py 的工具函数
+- 被 mattermost_client.py 调用提供图片占位符功能
+
+核心方法:
+- get_image_description(): 生成图片的自然语言描述
+- retry_with_backoff(): 带指数退避的重试机制
+- get_image_description_by_path(): 从Redis获取缓存的图片描述 (迁移)
+- compress_image_if_needed(): 智能图片压缩处理 (迁移)
+- get_image_path_hash(): SHA256路径哈希生成 (迁移)
+
+技术特点:
+- 使用Gemini 2.5 Flash Lite模型
+- Base64图片编码传输
+- 支持多种图片格式(JPEG, PNG等)
+- 配置化的安全设置和生成参数
+- Redis缓存机制避免重复分析
+- 多级图片压缩策略
+
+输入: 图片二进制数据 + MIME类型 + 可选提示词
+输出: AI生成的图片描述文本
+"""
+
 import os
 import httpx
 import logging
 import json
 import asyncio
 import base64
-from typing import Optional
+import hashlib
+import io
+from typing import Optional, Tuple
+from PIL import Image
 
 # --- 从 ai_service.py 借鉴的配置 ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -14,6 +51,10 @@ GEMINI_API_URL = os.getenv("GEMINI_API_URL111", "https://yunwu.ai/v1beta/models/
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 logger = logging.getLogger(__name__)
+
+# Redis 客户端 - 迁移自 image_content_analyzer.py
+from utils.redis_manager import get_redis_client
+redis_client = get_redis_client()
 
 
 async def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0):
@@ -170,3 +211,136 @@ async def get_image_description(
     except Exception as e:
         logger.error(f"❌ Gemini Vision 调用失败: 未知错误: {e}")
         return "[图片处理失败: 未知错误]"
+
+
+# ==========================================
+# 以下函数迁移自 image_content_analyzer.py
+# ==========================================
+
+def get_image_path_hash(image_path: str) -> str:
+    """
+    生成图片路径的SHA256哈希值，用作Redis键名。
+    
+    迁移自 image_content_analyzer.py
+    
+    Args:
+        image_path: 图片文件路径
+        
+    Returns:
+        str: SHA256哈希值
+    """
+    return hashlib.sha256(image_path.encode('utf-8')).hexdigest()
+
+
+def compress_image_if_needed(image_data: bytes, max_size_mb: float = 3.0) -> Tuple[bytes, str]:
+    """
+    如果图片超过指定大小，则压缩图片
+    
+    迁移自 image_content_analyzer.py
+    
+    Args:
+        image_data: 原始图片数据
+        max_size_mb: 最大允许大小（MB）
+        
+    Returns:
+        Tuple[bytes, str]: (压缩后的图片数据, MIME类型)
+    """
+    try:
+        current_size_mb = len(image_data) / (1024 * 1024)
+        
+        if current_size_mb <= max_size_mb:
+            # 判断原图片格式
+            try:
+                img = Image.open(io.BytesIO(image_data))
+                mime_type = f"image/{img.format.lower()}" if img.format else "image/png"
+                logger.debug(f"[image_service] 图片大小 {current_size_mb:.2f}MB，无需压缩")
+                return image_data, mime_type
+            except Exception:
+                return image_data, "image/png"
+        
+        logger.info(f"[image_service] 图片大小 {current_size_mb:.2f}MB 超过限制，开始压缩...")
+        
+        # 打开图片
+        img = Image.open(io.BytesIO(image_data))
+        
+        # 转换为RGB模式（如果需要）
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+        elif img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
+        
+        # 计算压缩比例
+        target_ratio = max_size_mb / current_size_mb
+        scale_factor = min(0.9, target_ratio ** 0.5)  # 保守压缩
+        
+        # 调整尺寸
+        new_width = int(img.width * scale_factor)
+        new_height = int(img.height * scale_factor)
+        img_resized = img.resize((new_width, new_height), Image.Lanczos)
+        
+        # 尝试不同的质量设置
+        for quality in [85, 75, 65, 55]:
+            output = io.BytesIO()
+            img_resized.save(output, format='JPEG', quality=quality, optimize=True)
+            compressed_data = output.getvalue()
+            compressed_size_mb = len(compressed_data) / (1024 * 1024)
+            
+            if compressed_size_mb <= max_size_mb:
+                logger.info(f"[image_service] ✅ 压缩成功：{current_size_mb:.2f}MB → {compressed_size_mb:.2f}MB（质量:{quality}）")
+                return compressed_data, "image/jpeg"
+        
+        # 如果还是太大，再次缩小尺寸
+        for scale in [0.8, 0.6, 0.4]:
+            new_width = int(img.width * scale)
+            new_height = int(img.height * scale)
+            img_small = img.resize((new_width, new_height), Image.Lanczos)
+            
+            output = io.BytesIO()
+            img_small.save(output, format='JPEG', quality=60, optimize=True)
+            compressed_data = output.getvalue()
+            compressed_size_mb = len(compressed_data) / (1024 * 1024)
+            
+            if compressed_size_mb <= max_size_mb:
+                logger.info(f"[image_service] ✅ 极限压缩成功：{current_size_mb:.2f}MB → {compressed_size_mb:.2f}MB（缩放:{scale}）")
+                return compressed_data, "image/jpeg"
+        
+        # 实在压缩不下去，返回最后一次尝试的结果
+        logger.warning(f"⚠️ [image_service] 压缩后仍然较大：{compressed_size_mb:.2f}MB，但已尽力压缩")
+        return compressed_data, "image/jpeg"
+        
+    except Exception as e:
+        logger.error(f"❌ [image_service] 图片压缩失败：{e}")
+        return image_data, "image/png"
+
+
+async def get_image_description_by_path(image_path: str) -> Optional[str]:
+    """
+    根据图片路径获取缓存的描述。
+    
+    迁移自 image_content_analyzer.py
+    
+    Args:
+        image_path: 图片文件路径
+        
+    Returns:
+        Optional[str]: 缓存的图片描述，没有时返回None
+    """
+    try:
+        path_hash = get_image_path_hash(image_path)
+        redis_key = f"image_desc:{path_hash}"
+        description = redis_client.get(redis_key)
+        
+        if description:
+            logger.debug(f"[image_service] 获取到图片描述: {image_path}")
+            return description
+        else:
+            logger.debug(f"[image_service] 未找到图片描述: {image_path}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ [image_service] 获取图片描述时出错: {e}")
+        return None

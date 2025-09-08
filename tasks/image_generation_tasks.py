@@ -1,4 +1,41 @@
 
+"""
+图片生成后台任务编排器 (Image Generation Background Task Orchestrator)
+
+主要功能:
+- Celery后台任务调度和执行
+- 主动交互事件的图片预生成(30%概率)
+- AI场景预分析系统集成
+- 增强数据源和传统数据源的智能回退机制
+- 过程追踪和性能监控
+
+服务关系:
+- 调用 image_generation_service.py 执行具体图片生成
+- 调用 image_generation_monitor.py 记录性能数据
+- 调用 scene_pre_analyzer.py 进行AI预分析
+- 使用 Redis 管理任务队列和缓存
+- 与 interaction_tasks.py 配合处理主动交互
+
+核心任务:
+- prepare_images_for_proactive_interactions(): 为主动交互预生成图片
+- cleanup_expired_proactive_images(): 清理过期图片映射
+- ProcessTracker: 详细的使用情况追踪
+
+工作流程:
+1. 从Redis读取interaction_needed事件
+2. 优先使用enhanced数据,回退到原始数据
+3. 调用AI预分析系统增强提示词
+4. 30%概率触发图片生成(其中40%为自拍)
+5. 存储experience_id到image_path的映射
+6. 记录监控数据和过程追踪
+
+技术特点:
+- 支持超时控制和重试机制
+- 兼容原始数据格式(向后兼容)
+- 全链路错误处理和降级策略
+- 详细的日志记录和调试信息
+"""
+
 import logging
 import random
 import json

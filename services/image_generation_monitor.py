@@ -1,7 +1,39 @@
 """
-图片生成监控服务
-用于记录图片生成的详细数据和每日汇总分析
+图片生成性能监控和分析服务 (Image Generation Performance Monitoring & Analytics Service)
+
+主要功能:
+- 图片生成过程的详细数据记录(JSONL格式)
+- 每日汇总报告生成和分析
+- 成功率、耗时、错误类型等关键指标统计
+- 角色检测和生成类型分布分析
+
+服务关系:
+- 被 image_generation_tasks.py 调用记录生成尝试
+- 独立存储监控数据到本地文件系统
+- 为运维和优化提供数据支持
+- 不影响主业务流程，失败不中断其他功能
+
+数据结构:
+- ImageGenerationRecord: 单次生成记录的完整数据模型
+- 包含时间戳、成功状态、耗时、错误信息、角色信息等
+
+核心功能:
+- record_generation_attempt(): 记录单次生成尝试
+- generate_daily_summary(): 生成每日汇总分析
+- get_recent_summaries(): 获取历史汇总数据
+
+文件组织:
+- /app/image_generation_logs/{date}/generation_log.jsonl (详细记录)
+- /app/image_generation_logs/{date}/daily_summary.json (每日汇总)
+
+监控指标:
+- 总尝试次数、成功次数、成功率
+- 平均生成耗时
+- 生成类型分布(selfie/scene/scene_with_characters)
+- 错误统计分析
+- 角色检测统计
 """
+
 import os
 import json
 import logging

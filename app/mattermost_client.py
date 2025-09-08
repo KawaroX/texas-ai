@@ -967,7 +967,7 @@ class MattermostWebSocketClient:
                         else:
                             # 回退到后分析系统
                             logging.debug("[mm] 未找到AI预分析数据，回退到后分析系统")
-                            from services.image_content_analyzer import get_image_description_by_path
+                            from services.image_service import get_image_description_by_path
                             description = await get_image_description_by_path(image_path)
                             
                             if description:

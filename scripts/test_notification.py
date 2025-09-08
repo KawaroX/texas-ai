@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """
 测试图片分析通知功能
+
+⚠️ 注意：此测试脚本已废弃
+原因：image_content_analyzer.py 已重构，send_analysis_notification 功能已移除
+建议：使用 scene_pre_analyzer.py 中的通知功能替代
 """
 
 import asyncio
 import sys
 from pathlib import Path
 
-# 添加项目根目录到Python路径
-sys.path.insert(0, str(Path(__file__).parent.parent))
+print("⚠️ 此测试脚本已废弃：image_content_analyzer.py 已重构")
+print("🔄 请使用 scene_pre_analyzer.py 中的新通知系统")
+sys.exit(1)
 
-from services.image_content_analyzer import send_analysis_notification
+# 已废弃的代码 - 保留用于参考
+# from services.image_content_analyzer import send_analysis_notification
 
 
 async def test_success_notification():
