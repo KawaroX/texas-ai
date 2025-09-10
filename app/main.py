@@ -1,5 +1,6 @@
 import logging
 from fastapi import FastAPI, HTTPException, Depends, Query
+from contextlib import asynccontextmanager
 from app.config import settings
 import asyncio
 import json
@@ -38,7 +39,22 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s:%(funcName)s:%(lineno)d - %(message)s",
 )
 
-app = FastAPI(title=settings.BOT_NAME)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理器"""
+    # 启动事件
+    ws_client = MattermostWebSocketClient()
+    asyncio.create_task(ws_client.connect())
+    
+    # 启动 Redis 清理服务
+    asyncio.create_task(cleanup_service.start_cleanup_scheduler())
+    
+    yield
+    # 关闭事件（如果需要的话可以在这里添加清理代码）
+
+
+app = FastAPI(title=settings.BOT_NAME, lifespan=lifespan)
 
 
 @app.get("/")
@@ -158,12 +174,3 @@ async def collect_interactions_endpoint(target_date: str = None):
         }
 
 
-@app.on_event("startup")
-async def startup_event():
-    """启动 WebSocket 客户端和Redis清理服务"""
-    # 启动 WebSocket 客户端
-    ws_client = MattermostWebSocketClient()
-    asyncio.create_task(ws_client.connect())
-
-    # 启动 Redis 清理服务
-    asyncio.create_task(cleanup_service.start_cleanup_scheduler())
