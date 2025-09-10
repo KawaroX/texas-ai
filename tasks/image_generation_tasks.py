@@ -237,8 +237,9 @@ async def _do_image_generation():
         return
 
     logger.info(f"[image_gen] 发现 {len(events)} 个潜在的交互事件需要处理图片生成。")
+    total_events = len(events)
 
-    for event_json_str in events:
+    for index, event_json_str in enumerate(events):
         try:
             event_data = json.loads(event_json_str)
             
@@ -269,12 +270,27 @@ async def _do_image_generation():
                 logger.debug(f"[image_gen] 事件 {experience_id} 已存在关联图片，跳过。")
                 continue
 
-            # 30% 的概率生成图片
-            if random.random() < 0.3:
-                logger.info(f"[image_gen] 🎲 事件 {experience_id} 触发图片生成。")
+            # 🌅🌙 识别首末事件（早安/晚安）并设置特殊概率
+            is_first_or_last = (index == 0 or index == total_events - 1)
+            
+            if is_first_or_last:
+                generation_probability = 1.0    # 首末事件100%生成图片
+                selfie_probability = 0.6        # 60%自拍40%场景
+                event_type = "早安" if index == 0 else "晚安" 
+                logger.info(f"[image_gen] 🌅🌙 检测到{event_type}经历 {experience_id}，固定生成图片")
+            else:
+                generation_probability = 0.45   # 其他事件45%概率
+                selfie_probability = 0.4        # 40%自拍60%场景
+
+            # 应用动态概率判断
+            if random.random() < generation_probability:
+                if is_first_or_last:
+                    logger.info(f"[image_gen] 🎲 {event_type}事件 {experience_id} 固定触发图片生成")
+                else:
+                    logger.info(f"[image_gen] 🎲 事件 {experience_id} 触发图片生成（45%概率）")
                 
-                # 在这30%中，有40%的概率是自拍
-                is_selfie = random.random() < 0.4
+                # 使用动态自拍率
+                is_selfie = random.random() < selfie_probability
                 
                 image_path = None
                 generation_start_time = datetime.now()
