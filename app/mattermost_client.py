@@ -14,6 +14,7 @@ from app.config import settings
 from core.memory_buffer import get_channel_memory
 from core.chat_engine import ChatEngine
 from services.image_service import get_image_description
+from utils.image_context_formatter import format_image_description, clean_ai_image_tags
 
 # 日志配置在 app/main.py 统一设置
 
@@ -816,6 +817,9 @@ class MattermostWebSocketClient:
 
     async def _send_message_with_typing(self, channel_id: str, text: str, image_path: str = None):
         """在发送消息时持续发送打字指示器，支持可选的图片附件"""
+        # 🆕 在发送前清理AI可能生成的图片标签，避免无图片对应的描述
+        text = clean_ai_image_tags(text)
+        
         # 快速路径：如果包含 'SEND'，仅发送其之前的内容，丢弃 'SEND' 及其后续
         if "SEND" in text:
             prefix = text.split("SEND", 1)[0].strip()
@@ -946,7 +950,7 @@ class MattermostWebSocketClient:
                     logging.info(f"[mm] 已发送带图片的消息: {message}")
                     
                     # 🆕 优先使用AI预分析描述，回退到后分析系统
-                    placeholder = "[图片已发送]"  # 默认占位符
+                    placeholder = format_image_description("图片已发送")  # 默认占位符
                     
                     try:
                         
@@ -960,7 +964,7 @@ class MattermostWebSocketClient:
                             scene_analysis = json.loads(cached_metadata)
                             description = scene_analysis.get("description", "")
                             if description:
-                                placeholder = f"[图片: {description}]"
+                                placeholder = format_image_description(description)
                                 logging.debug(f"[mm] ✅ 使用AI预分析描述: {description[:30]}...")
                             else:
                                 logging.debug("[mm] AI预分析描述为空，使用默认占位符")
@@ -971,7 +975,7 @@ class MattermostWebSocketClient:
                             description = await get_image_description_by_path(image_path)
                             
                             if description:
-                                placeholder = f"[图片: {description}]"
+                                placeholder = format_image_description(description)
                                 logging.debug(f"[mm] 使用后分析描述: {description[:30]}...")
                             else:
                                 logging.debug("[mm] 未找到任何图片描述，使用默认占位符")
