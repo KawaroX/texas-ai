@@ -28,15 +28,15 @@ class TexasLogFormatter(logging.Formatter):
     
     # 智能内容符号匹配（优先级更高）
     CONTENT_SYMBOLS = [
+        # AI 和处理 (优先级最高)
+        (r'(AI|LLM|Gemini|OpenAI|Claude|生成|analyze)', "✨"),
+        
         # 系统和启动
         (r'(启动|初始化|开始|start|init)', "🚀"),
         (r'(配置|config|setting)', "🔧"),
         (r'(连接|connect|websocket)', "🔌"),
         (r'(成功|完成|success|done|ok)', "✅"),
         (r'(失败|错误|error|fail)', "❌"),
-        
-        # AI 和处理
-        (r'(AI|LLM|Gemini|OpenAI|Claude|生成|analyze)', "🤖"),
         (r'(图片|图像|image|photo|生成)', "🖼️"),
         (r'(聊天|消息|message|chat|回复)', "💬"),
         (r'(记忆|memory|存储|storage)', "🧠"),
@@ -242,7 +242,7 @@ def log_start(logger, message: str):
 
 def log_ai_operation(logger, message: str):
     """记录AI操作"""
-    logger.info(f"🤖 {message}")
+    logger.info(f"✨ {message}")
 
 def log_config(logger, message: str):
     """记录配置操作"""
