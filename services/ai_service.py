@@ -183,7 +183,7 @@ class AIService:
 
                 # 如果Gemini失败或无输出，立即尝试OpenAI协议
                 if gemini_failed or not yielded_any:
-                    fallback_message = f"⚠️ Gemini失败，立即尝试OpenAI协议({model})"
+                    fallback_message = f"Gemini失败，立即尝试OpenAI协议({model})"
                     logger.warning(fallback_message)
                     await send_bark_notification(
                         title="Gemini API 回退",

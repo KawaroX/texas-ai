@@ -464,7 +464,7 @@ class MattermostWebSocketClient:
 
             except Exception as img_err:
                 logger.error(
-                    f"❌ 图片 {file_id} 缩放失败: {img_err}。将尝试使用原图。"
+                    f"图片 {file_id} 缩放失败: {img_err}。将尝试使用原图。"
                 )
                 # 如果缩放出错，则退回使用原图
                 processed_image_data = image_data
@@ -678,12 +678,12 @@ class MattermostWebSocketClient:
                             ):
                                 return channel["id"]
                     logger.warning(
-                        f"⚠️ 无法找到与用户 {target_user_id} 已存在的私聊频道。"
+                        f"无法找到与用户 {target_user_id} 已存在的私聊频道。"
                     )
                     return None
                 else:
                     logger.warning(
-                        f"⚠️ 创建私聊频道失败: {create_resp.status_code} - {create_resp.text}"
+                        f"创建私聊频道失败: {create_resp.status_code} - {create_resp.text}"
                     )
                     return None
             except Exception as e:
@@ -869,7 +869,7 @@ class MattermostWebSocketClient:
             get_channel_memory(channel_id).add_message("assistant", text)
         else:
             logger.error(
-                f"❌ Failed to send message: {response.status_code} - {response.text}"
+                f"Failed to send message: {response.status_code} - {response.text}"
             )
 
     async def post_message_with_image(
@@ -968,7 +968,7 @@ class MattermostWebSocketClient:
                     )
                 else:
                     logger.error(
-                        f"❌ 发送带图片的消息失败: {post_resp.status_code} - {post_resp.text}"
+                        f"发送带图片的消息失败: {post_resp.status_code} - {post_resp.text}"
                     )
 
     async def send_dm_to_kawaro(
