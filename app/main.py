@@ -1,5 +1,9 @@
 import logging
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Request, Response
+from fastapi.middleware.base import BaseHTTPMiddleware
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.exceptions import HTTPException as FastAPIHTTPException
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 from app.config import settings
 import asyncio
@@ -40,6 +44,53 @@ logging.basicConfig(
 )
 
 
+class SecurityMiddleware(BaseHTTPMiddleware):
+    """安全中间件：静默处理恶意扫描请求"""
+    
+    # 常见的恶意扫描路径
+    MALICIOUS_PATHS = {
+        "/favicon.ico",
+        "/robots.txt", 
+        "/sitemap.xml",
+        "/wp-login.php",
+        "/admin",
+        "/login",
+        "/phpMyAdmin",
+        "/images/js/eas/eas.js",
+        "/.env",
+        "/.git",
+        "/config",
+        "/setup",
+        "/install",
+    }
+    
+    # 可疑的查询参数
+    SUSPICIOUS_PARAMS = {"format": "json"}
+    
+    async def dispatch(self, request: Request, call_next):
+        # WebSocket升级请求不进行过滤
+        if request.headers.get("upgrade", "").lower() == "websocket":
+            return await call_next(request)
+        
+        # 检查是否为恶意路径
+        if request.url.path in self.MALICIOUS_PATHS:
+            return Response(status_code=404, content="")
+        
+        # 检查可疑查询参数
+        for param, value in self.SUSPICIOUS_PARAMS.items():
+            if request.query_params.get(param) == value:
+                return Response(status_code=404, content="")
+        
+        # 对根路径的非正常请求静默处理
+        if request.url.path == "/" and request.method == "GET":
+            # 检查User-Agent是否像爬虫/扫描器
+            user_agent = request.headers.get("user-agent", "").lower()
+            if any(bot in user_agent for bot in ["bot", "crawler", "spider", "scanner", "curl", "wget"]):
+                return Response(status_code=404, content="")
+        
+        return await call_next(request)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理器"""
@@ -55,6 +106,23 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.BOT_NAME, lifespan=lifespan)
+
+# 添加安全中间件
+app.add_middleware(SecurityMiddleware)
+
+
+# 静默404异常处理器 - 减少日志噪音
+@app.exception_handler(404)
+@app.exception_handler(StarletteHTTPException)
+async def custom_404_handler(request: Request, exc):
+    # 对于恶意扫描请求，直接返回空响应，不记录日志
+    if (request.url.path in SecurityMiddleware.MALICIOUS_PATHS or 
+        request.url.path == "/" or
+        any(param in request.query_params for param in SecurityMiddleware.SUSPICIOUS_PARAMS.keys())):
+        return Response(status_code=404, content="")
+    
+    # 对于正常的404请求，使用默认处理器
+    return await http_exception_handler(request, exc)
 
 
 @app.get("/")
@@ -119,6 +187,7 @@ async def replace_gemini_cfg(payload: dict, _=Depends(check_k)):
         return {"ok": True, "config": new_cfg}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 
 # Keep root path returning 404 (not accessible)
