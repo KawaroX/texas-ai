@@ -1,3 +1,7 @@
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 import psycopg2
 import json
 from psycopg2 import sql

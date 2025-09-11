@@ -1,9 +1,9 @@
 import httpx
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from urllib.parse import quote
 from app.config import settings
-
-logger = logging.getLogger(__name__)
 
 
 class BarkNotifier:
@@ -43,7 +43,7 @@ class BarkNotifier:
                         f"⚠️ Bark 推送可能失败，状态码: {response.status_code}"
                     )
         except Exception as e:
-            logger.error(f"❌ 发送 Bark 推送时发生异常: {e}")
+            logger.error(f"发送 Bark 推送时发生异常: {e}")
 
 
 # 创建一个单例供其他服务使用

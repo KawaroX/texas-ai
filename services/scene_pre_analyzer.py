@@ -1,6 +1,8 @@
 import os
 import httpx
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import json
 import hashlib
 import redis
@@ -8,7 +10,6 @@ import asyncio
 from typing import Optional, Dict, Any
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
 
 # API 配置 - 复用image_content_analyzer的配置
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -123,12 +124,12 @@ async def send_scene_analysis_notification(
             response = await client.post(mattermost_url, headers=headers, json=payload)
 
             if response.status_code == 201:
-                logger.debug(f"[scene_analyzer] ✅ 通知消息发送成功: {scene_id}")
+                logger.debug(f"[scene_analyzer] 通知消息发送成功: {scene_id}")
             else:
-                logger.warning(f"⚠️ [scene_analyzer] 通知消息发送失败: {response.status_code} - {response.text}")
+                logger.warning(f"[scene_analyzer] 通知消息发送失败: {response.status_code} - {response.text}")
 
     except Exception as e:
-        logger.error(f"❌ [scene_analyzer] 发送通知消息时出错: {e}")
+        logger.error(f"[scene_analyzer] 发送通知消息时出错: {e}")
 
 
 def get_scene_hash(scene_data: Dict[str, Any]) -> str:
@@ -293,7 +294,7 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
         api_key = GEMINI_API_KEY if GEMINI_API_KEY else GEMINI_API_KEY2
         if not api_key:
             error_msg = "没有可用的Gemini API密钥"
-            logger.error(f"❌ [scene_analyzer] {error_msg}")
+            logger.error(f"[scene_analyzer] {error_msg}")
 
             # 🆕 发送失败通知
             try:
@@ -301,7 +302,7 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
                     scene_data, is_selfie, success=False, error=error_msg
                 )
             except Exception as notify_error:
-                logger.warning(f"⚠️ [scene_analyzer] 发送失败通知失败: {notify_error}")
+                logger.warning(f"[scene_analyzer] 发送失败通知失败: {notify_error}")
 
             return None
 
@@ -354,7 +355,7 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
 
                             # 缓存结果到Redis，48小时过期（与图片元数据映射保持一致）
                             redis_client.setex(cache_key, 172800, json.dumps(result, ensure_ascii=False))
-                            logger.info(f"[scene_analyzer] ✅ {mode}场景分析成功: {len(result.get('characters', []))}个角色")
+                            logger.info(f"[scene_analyzer] {mode}场景分析成功: {len(result.get('characters', []))}个角色")
 
                             # 🆕 发送成功通知到Mattermost
                             try:
@@ -362,23 +363,23 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
                                     scene_data, is_selfie, success=True, analysis_result=result
                                 )
                             except Exception as notify_error:
-                                logger.warning(f"⚠️ [scene_analyzer] 发送成功通知失败（不影响主功能）: {notify_error}")
+                                logger.warning(f"[scene_analyzer] 发送成功通知失败（不影响主功能）: {notify_error}")
 
                             return result
                         except json.JSONDecodeError as e:
-                            logger.error(f"❌ [scene_analyzer] JSON解析失败: {e}")
+                            logger.error(f"[scene_analyzer] JSON解析失败: {e}")
                             logger.debug(f"原始响应: {result_text}")
                             return None
                     else:
-                        logger.warning(f"⚠️ [scene_analyzer] API返回空内容")
+                        logger.warning(f"[scene_analyzer] API返回空内容")
                         return None
                 else:
-                    logger.warning(f"⚠️ [scene_analyzer] API响应格式异常: {response_json}")
+                    logger.warning(f"[scene_analyzer] API响应格式异常: {response_json}")
                     return None
 
             except httpx.TimeoutException:
                 error_msg = "API请求超时"
-                logger.error(f"❌ [scene_analyzer] {error_msg}")
+                logger.error(f"[scene_analyzer] {error_msg}")
 
                 # 🆕 发送失败通知
                 try:
@@ -386,12 +387,12 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
                         scene_data, is_selfie, success=False, error=error_msg
                     )
                 except Exception as notify_error:
-                    logger.warning(f"⚠️ [scene_analyzer] 发送失败通知失败: {notify_error}")
+                    logger.warning(f"[scene_analyzer] 发送失败通知失败: {notify_error}")
 
                 return None
             except httpx.HTTPStatusError as e:
                 error_msg = f"API请求失败: {e.response.status_code} - {e.response.text}"
-                logger.error(f"❌ [scene_analyzer] {error_msg}")
+                logger.error(f"[scene_analyzer] {error_msg}")
 
                 # 🆕 发送失败通知
                 try:
@@ -399,12 +400,12 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
                         scene_data, is_selfie, success=False, error=error_msg
                     )
                 except Exception as notify_error:
-                    logger.warning(f"⚠️ [scene_analyzer] 发送失败通知失败: {notify_error}")
+                    logger.warning(f"[scene_analyzer] 发送失败通知失败: {notify_error}")
 
                 return None
 
     except Exception as e:
-        logger.error(f"❌ [scene_analyzer] 分析场景时发生未知错误: {str(e)}")
+        logger.error(f"[scene_analyzer] 分析场景时发生未知错误: {str(e)}")
 
         # 🆕 发送失败通知到Mattermost
         try:
@@ -412,7 +413,7 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
                 scene_data, is_selfie, success=False, error=str(e)
             )
         except Exception as notify_error:
-            logger.warning(f"⚠️ [scene_analyzer] 发送失败通知失败: {notify_error}")
+            logger.warning(f"[scene_analyzer] 发送失败通知失败: {notify_error}")
 
         return None
 
@@ -439,7 +440,7 @@ async def get_cached_scene_analysis(scene_data: Dict[str, Any], is_selfie: bool 
             return None
 
     except Exception as e:
-        logger.error(f"❌ [scene_analyzer] 获取缓存场景分析时出错: {e}")
+        logger.error(f"[scene_analyzer] 获取缓存场景分析时出错: {e}")
         return None
 
 
@@ -453,9 +454,9 @@ async def retry_with_backoff(func, max_retries: int = 2, base_delay: float = 1.0
         except Exception as e:
             if attempt < max_retries - 1:
                 delay = base_delay * (2 ** attempt)
-                logger.warning(f"⚠️ [scene_analyzer] 第{attempt + 1}次尝试失败，{delay}秒后重试: {e}")
+                logger.warning(f"[scene_analyzer] 第{attempt + 1}次尝试失败，{delay}秒后重试: {e}")
                 await asyncio.sleep(delay)
                 continue
             else:
-                logger.error(f"❌ [scene_analyzer] 达到最大重试次数，放弃: {e}")
+                logger.error(f"[scene_analyzer] 达到最大重试次数，放弃: {e}")
                 raise

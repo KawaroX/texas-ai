@@ -5,7 +5,9 @@
 
 import asyncio
 import json
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import redis
 import os
 import sys
@@ -23,7 +25,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
 
 # Redis 客户端
 from utils.redis_manager import get_redis_client
@@ -49,14 +50,14 @@ def create_test_interaction_event():
     past_timestamp = (datetime.now() - timedelta(minutes=5)).timestamp()
     
     redis_client.zadd(today_key, {json.dumps(test_event): past_timestamp})
-    logger.info(f"✅ 已创建测试交互事件: {test_event['id']}")
+    logger.info(f"已创建测试交互事件: {test_event['id']}")
     return test_event
 
 
 def create_test_image_mapping(experience_id: str, image_path: str):
     """创建测试用的图片映射"""
     redis_client.hset(PROACTIVE_IMAGES_KEY, experience_id, image_path)
-    logger.info(f"✅ 已创建图片映射: {experience_id} -> {image_path}")
+    logger.info(f"已创建图片映射: {experience_id} -> {image_path}")
 
 
 def cleanup_test_data():
@@ -77,7 +78,7 @@ def cleanup_test_data():
 
 async def test_image_generation_and_interaction():
     """测试图片生成和主动交互的完整流程"""
-    logger.info("🚀 开始测试主动交互图片发送功能")
+    logger.info("开始测试主动交互图片发送功能")
     
     try:
         # 1. 创建测试交互事件
@@ -90,13 +91,13 @@ async def test_image_generation_and_interaction():
         # 检查是否生成了图片映射
         image_path = redis_client.hget(PROACTIVE_IMAGES_KEY, test_event["id"])
         if image_path:
-            logger.info(f"✅ 图片预生成成功: {image_path}")
+            logger.info(f"图片预生成成功: {image_path}")
             
             # 检查文件是否真的存在
             if os.path.exists(image_path):
-                logger.info(f"✅ 图片文件确实存在: {image_path}")
+                logger.info(f"图片文件确实存在: {image_path}")
             else:
-                logger.warning(f"⚠️ 图片文件不存在: {image_path}")
+                logger.warning(f"图片文件不存在: {image_path}")
                 # 创建一个虚拟的测试图片路径用于测试逻辑
                 test_image_path = "/app/generated_content/images/test_image.png"
                 create_test_image_mapping(test_event["id"], test_image_path)
@@ -112,9 +113,9 @@ async def test_image_generation_and_interaction():
         # 在测试环境中，我们只能验证逻辑，不能真正发送消息
         try:
             process_scheduled_interactions()
-            logger.info("✅ 主动交互处理任务执行完成")
+            logger.info("主动交互处理任务执行完成")
         except Exception as e:
-            logger.error(f"❌ 主动交互处理任务执行失败（可能是因为没有Mattermost连接）: {e}")
+            logger.error(f"主动交互处理任务执行失败（可能是因为没有Mattermost连接）: {e}")
         
         # 4. 测试清理任务
         logger.info("🧹 测试图片映射清理任务...")
@@ -125,12 +126,12 @@ async def test_image_generation_and_interaction():
         if remaining_mapping:
             logger.info(f"📋 图片映射仍然存在: {remaining_mapping}")
         else:
-            logger.info("✅ 图片映射已被清理")
+            logger.info("图片映射已被清理")
         
         logger.info("🎉 测试完成！")
         
     except Exception as e:
-        logger.error(f"❌ 测试过程中发生错误: {e}")
+        logger.error(f"测试过程中发生错误: {e}")
     
     finally:
         # 清理测试数据
@@ -141,10 +142,10 @@ def test_redis_connectivity():
     """测试Redis连接"""
     try:
         redis_client.ping()
-        logger.info("✅ Redis连接正常")
+        logger.info("Redis连接正常")
         return True
     except Exception as e:
-        logger.error(f"❌ Redis连接失败: {e}")
+        logger.error(f"Redis连接失败: {e}")
         return False
 
 

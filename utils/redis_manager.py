@@ -5,10 +5,10 @@
 
 import os
 import redis
-import logging
-from typing import Optional
+from utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+from typing import Optional
 
 
 class RedisManager:
@@ -48,10 +48,10 @@ class RedisManager:
             
             # 测试连接
             self._redis_client.ping()
-            logger.info("✅ Redis连接池初始化成功")
+            logger.info("Redis连接池初始化成功")
             
         except Exception as e:
-            logger.error(f"❌ Redis连接池初始化失败: {e}")
+            logger.error(f"Redis连接池初始化失败: {e}")
             raise
     
     @property

@@ -2,7 +2,9 @@ import asyncio
 import json
 import os
 from datetime import date, timedelta
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import uuid
 from typing import Optional
 from datetime import datetime
@@ -25,7 +27,6 @@ from utils.postgres_service import (
     get_micro_experiences_by_related_item_id,  # 新增
 )
 
-logger = logging.getLogger(__name__)
 
 # 定义生成内容存储的文件夹
 GENERATED_CONTENT_DIR = "generated_content"
@@ -56,9 +57,6 @@ async def generate_and_store_daily_life(target_date: date):
     major_event_context = get_major_event_by_date(date_str)
 
     if major_event_context:
-        logger.debug(
-            f"[daily_life] 已存在大事件: {major_event_context.get('event_title', '未知事件')}"
-        )
         is_in_major_event = True
     else:
         logger.debug("[daily_life] 未检测到已存在的大事件")
@@ -69,9 +67,6 @@ async def generate_and_store_daily_life(target_date: date):
 
         gen_prob = 0.028  # 0.028
         rand_val = random.random()
-        logger.debug(
-            f"[daily_life] 评估是否生成新大事件: 概率={gen_prob * 100}%, 随机值={rand_val:.4f}"
-        )
 
         if rand_val < gen_prob:  # 0.028概率生成大事件
             # 正态分布生成持续天数 (μ=4, σ=2)，范围1-7天
@@ -87,9 +82,6 @@ async def generate_and_store_daily_life(target_date: date):
 
             # 生成大事件
             end_date = target_date + timedelta(days=duration_days - 1)
-            logger.debug(
-                f"[daily_life] 生成大事件: {event_type}, {date_str} -> {end_date.strftime('%Y-%m-%d')}"
-            )
             major_event_context = await generate_and_store_major_event(
                 target_date, end_date, event_type
             )
@@ -100,10 +92,10 @@ async def generate_and_store_daily_life(target_date: date):
 
     # 如果处于大事件中，但未获取上下文，尝试从数据库获取
     if is_in_major_event and not major_event_context:
-        logger.warning("⚠️ 大事件上下文缺失，尝试从数据库获取...")
+        logger.warning("大事件上下文缺失，尝试从数据库获取...")
         major_event_context = get_major_event_by_date(date_str)
         if not major_event_context:
-            logger.warning("❌ 数据库中也未找到大事件详情，使用默认值")
+            logger.warning("数据库中也未找到大事件详情，使用默认值")
             major_event_context = {
                 "event_title": "默认大事件",
                 "event_type": "默认类型",
@@ -111,9 +103,6 @@ async def generate_and_store_daily_life(target_date: date):
             }
     if is_in_major_event:
         weather += "以上为随机天气情况，仅供参考，以大事件情况为准。"
-        logger.debug(
-            f"[daily_life] 大事件状态: 存在, 类型: {major_event_context.get('event_type', '无')}"
-        )
     else:
         logger.debug("[daily_life] 大事件状态: 不存在")
 
@@ -129,7 +118,7 @@ async def generate_and_store_daily_life(target_date: date):
     )
 
     if "error" in daily_schedule_data:
-        logger.error(f"❌ AI生成日程失败: {daily_schedule_data['error']}")
+        logger.error(f"AI生成日程失败: {daily_schedule_data['error']}")
         return None
 
     logger.debug("[daily_life] AI日程生成成功")
@@ -165,7 +154,7 @@ async def generate_and_store_daily_life(target_date: date):
 
         daily_schedule_data["id"] = str(schedule_id)  # 将数据库生成的ID添加到数据中
     except Exception as e:
-        logger.error(f"❌ 存储日程到数据库失败: {e}")
+        logger.error(f"存储日程到数据库失败: {e}")
         return None
 
     # 6. 存储到文件
@@ -177,13 +166,10 @@ async def generate_and_store_daily_life(target_date: date):
             json.dump(daily_schedule_data, f, ensure_ascii=False, indent=2)
         logger.debug(f"[daily_life] 日程已保存到文件: {file_path}")
     except Exception as e:
-        logger.error(f"❌ 保存日程到文件失败: {e}")
+        logger.error(f"保存日程到文件失败: {e}")
 
     # 7. 生成并存储微观经历
     if "schedule_items" in daily_schedule_data:
-        logger.debug(
-            f"[daily_life] 生成微观经历: 共 {len(daily_schedule_data['schedule_items'])} 个项目"
-        )
         successful_experiences = 0
 
         # 获取之前的经历摘要（简化实现）
@@ -192,9 +178,6 @@ async def generate_and_store_daily_life(target_date: date):
         for index, item in enumerate(daily_schedule_data["schedule_items"]):
             # 设置当前时间为项目开始时间（如需使用可在后续逻辑中引用）
 
-            logger.debug(
-                f"[daily_life] 生成微观经历项 [{index + 1}/{len(daily_schedule_data['schedule_items'])}]: {item['title']}"
-            )
             micro_experiences = await generate_and_store_micro_experiences(
                 schedule_item=item,
                 current_date=target_date,
@@ -212,11 +195,8 @@ async def generate_and_store_daily_life(target_date: date):
                 ]
                 previous_experiences_summary = exp_summaries
 
-        logger.debug(
-            f"[daily_life] 微观经历生成完成: {successful_experiences}/{len(daily_schedule_data['schedule_items'])} 成功"
-        )
     else:
-        logger.warning("⚠️ 日程中没有可生成微观经历的项目")
+        logger.warning("日程中没有可生成微观经历的项目")
 
     logger.info(f"[daily_life] 生成完成: {date_str} 每日日程与存储")
 
@@ -303,7 +283,7 @@ async def _store_enhanced_interaction_data(target_date: date, micro_experiences:
             score = time_to_timestamp(target_date, enhanced_exp["start_time"])
             redis_client.zadd(enhanced_redis_key, {json.dumps(enhanced_exp, ensure_ascii=False): score})
         except Exception as e:
-            logger.warning(f"⚠️ 存储单个增强交互数据失败: {e}")
+            logger.warning(f"存储单个增强交互数据失败: {e}")
     
     # 设置过期时间
     redis_client.expire(enhanced_redis_key, 86400)  # 24小时过期
@@ -363,9 +343,6 @@ async def collect_interaction_experiences(target_date: date):
                 if exp.get("need_interaction") is True:
                     interaction_needed.append(exp)
 
-        logger.debug(
-            f"[interactions] 需要交互的微观经历条数: {len(interaction_needed)}"
-        )
 
         # 存储到 Redis
         from utils.redis_manager import get_redis_client
@@ -387,9 +364,9 @@ async def collect_interaction_experiences(target_date: date):
                 score = time_to_timestamp(target_date, exp["start_time"])
                 r.zadd(redis_key, {json.dumps(exp, ensure_ascii=False): score})
             except KeyError as ke:
-                logger.error(f"⚠️ 缺少时间字段，无法添加到 Sorted Set: {exp} - {ke}")
+                logger.error(f"缺少时间字段，无法添加到 Sorted Set: {exp} - {ke}")
             except Exception as add_e:
-                logger.error(f"❌ 添加到 Redis Sorted Set 失败: {exp} - {add_e}")
+                logger.error(f"添加到 Redis Sorted Set 失败: {exp} - {add_e}")
 
         # 设置 24 小时过期
         r.expire(redis_key, 86400)
@@ -399,7 +376,7 @@ async def collect_interaction_experiences(target_date: date):
         try:
             await _store_enhanced_interaction_data(target_date, micro_experiences, daily_schedule, r)
         except Exception as enhanced_error:
-            logger.warning(f"⚠️ 存储增强交互数据失败（不影响主流程）: {enhanced_error}")
+            logger.warning(f"存储增强交互数据失败（不影响主流程）: {enhanced_error}")
         
         return True
 
@@ -469,7 +446,7 @@ async def generate_and_store_major_event(
     )
 
     if "error" in major_event_data:
-        logger.error(f"❌ AI生成大事件失败: {major_event_data['error']}")
+        logger.error(f"AI生成大事件失败: {major_event_data['error']}")
         return None
 
     logger.debug("[major_event] AI 大事件生成成功")
@@ -489,7 +466,7 @@ async def generate_and_store_major_event(
         logger.debug(f"[major_event] 大事件已插入 (ID: {event_id})")
         major_event_data["id"] = str(event_id)  # 将数据库生成的ID添加到数据中
     except Exception as e:
-        logger.error(f"❌ 存储大事件到数据库失败: {e}")
+        logger.error(f"存储大事件到数据库失败: {e}")
         return None
 
     # 4. 存储到文件
@@ -504,7 +481,7 @@ async def generate_and_store_major_event(
             json.dump(major_event_data, f, ensure_ascii=False, indent=2)
         logger.debug(f"[major_event] 大事件已保存到文件: {file_path}")
     except Exception as e:
-        logger.error(f"❌ 保存大事件到文件失败: {e}")
+        logger.error(f"保存大事件到文件失败: {e}")
 
     logger.info("[major_event] 大事件生成与存储完成")
     return major_event_data
@@ -535,7 +512,7 @@ async def generate_and_store_micro_experiences(
 
     if not micro_experiences or any("error" in exp for exp in micro_experiences):
         errors = [exp["error"] for exp in micro_experiences if "error" in exp]
-        logger.error(f"❌ AI生成微观经历失败: {', '.join(errors)}")
+        logger.error(f"AI生成微观经历失败: {', '.join(errors)}")
         return None
 
     logger.debug(f"[micro_exp] AI 生成成功，数量: {len(micro_experiences)}")
@@ -552,12 +529,9 @@ async def generate_and_store_micro_experiences(
         logger.debug(f"[micro_exp] 微观经历已存储 (ID: {experience_id})")
         successful_items = len(micro_experiences)
     except Exception as e:
-        logger.error(f"❌ 存储微观经历失败: {e}")
+        logger.error(f"存储微观经历失败: {e}")
         successful_items = 0
 
-    logger.debug(
-        f"[micro_exp] 成功存储 {successful_items}/{len(micro_experiences)} 个微观经历项"
-    )
 
     # 3. 存储到文件
     logger.debug("[micro_exp] 存储微观经历到文件")
@@ -581,7 +555,7 @@ async def generate_and_store_micro_experiences(
             )
         logger.debug(f"[micro_exp] 微观经历项已保存到文件: {file_path}")
     except Exception as e:
-        logger.error(f"❌ 保存微观经历项到文件失败: {e}")
+        logger.error(f"保存微观经历项到文件失败: {e}")
 
     logger.info("[micro_exp] 微观经历项生成与存储完成")
     return micro_experiences
@@ -601,7 +575,7 @@ async def generate_and_store_micro_experiences(
 
 #     logger.info(f"找到 {len(experiences)} 条微观经历，正在总结...")
 #     summary = await summarize_experiences(experiences, summary_type)
-#     logger.info("✅ 总结完成。")
+#     logger.info("总结完成。")
 #     return summary
 
 
@@ -632,9 +606,6 @@ class LifeSystemQuery:
         return get_daily_schedule_by_date(self.date_str)
 
     async def get_schedule_item_at_time(self, target_time: str) -> Optional[dict]:
-        logger.debug(
-            f"get_schedule_item_at_time called with target_time: {target_time}"
-        )
         daily_schedule = await self.get_daily_schedule_info()
         if not daily_schedule:
             logger.debug("No daily schedule found.")
@@ -644,7 +615,7 @@ class LifeSystemQuery:
             "schedule_data" in daily_schedule
             and "schedule_items" in daily_schedule["schedule_data"]
         ):
-            logger.debug("Daily schedule has no 'schedule_data' or 'schedule_items'.")
+            logger.debug("Daily schedule has no'schedule_data' or 'schedule_items'.")
             return None
 
         try:
@@ -670,9 +641,6 @@ class LifeSystemQuery:
                 logger.error(f"Invalid time format in schedule item: {item}")
                 continue
 
-            logger.debug(
-                f"Checking item: {item.get('title')} from {item_start_time_str} to {item_end_time_str}"
-            )
             if item_start_time_obj <= target_time_obj < item_end_time_obj:
                 logger.debug(f"Matched schedule item: {item.get('title')}")
                 return item
@@ -688,16 +656,10 @@ class LifeSystemQuery:
     async def get_micro_experience_at_time(
         self, schedule_item_id: str, target_time: str
     ) -> Optional[dict]:
-        logger.debug(
-            f"get_micro_experience_at_time called for schedule_item_id: {schedule_item_id}, target_time: {target_time}"
-        )
         micro_experiences_list = await self.get_micro_experiences_for_schedule_item(
             schedule_item_id
         )
         if not micro_experiences_list:
-            logger.debug(
-                f"No micro experiences found for schedule_item_id: {schedule_item_id}"
-            )
             return None
 
         try:
@@ -709,9 +671,6 @@ class LifeSystemQuery:
         for record in micro_experiences_list:
             experiences_in_record = record.get("experiences", [])
             if not experiences_in_record:
-                logger.debug(
-                    f"Micro experience record {record.get('id')} has no 'experiences'."
-                )
                 continue
 
             for exp in experiences_in_record:
@@ -735,9 +694,6 @@ class LifeSystemQuery:
                     logger.error(f"Invalid time format in micro experience item: {exp}")
                     continue
 
-                logger.debug(
-                    f"Checking micro experience: {exp.get('content')} from {exp_start_time_str} to {exp_end_time_str}"
-                )
                 if exp_start_time_obj <= target_time_obj < exp_end_time_obj:
                     logger.debug(f"Matched micro experience: {exp.get('content')}")
                     return exp

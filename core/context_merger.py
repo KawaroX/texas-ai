@@ -1,4 +1,6 @@
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import redis
 import asyncio
 import json
@@ -11,7 +13,6 @@ from services.ai_service import call_ai_summary
 from app.config import settings
 from utils.mem0_service import mem0
 
-logger = logging.getLogger(__name__)
 
 # Redis 客户端
 from utils.redis_manager import get_redis_client
@@ -61,7 +62,7 @@ async def _summarize_channel(
         return ""
 
     except Exception as e:
-        logger.warning(f"⚠️ 频道 {channel_id} 摘要失败: {e}")
+        logger.warning(f"频道 {channel_id} 摘要失败: {e}")
         return ""
 
 
@@ -112,7 +113,7 @@ def _get_life_system_context() -> str:
                                     f"【{item['date']}】Day {item['day']}\n{item}"
                                 )
             except Exception as e:
-                logger.warning(f"⚠️ 大事件数据解析失败: {e}")
+                logger.warning(f"大事件数据解析失败: {e}")
                 if life_data["major_event"]:
                     context_parts.append(
                         f"【你正在经历的大事件】{life_data['major_event']}"
@@ -193,7 +194,7 @@ def _get_life_system_context() -> str:
 
                     context_parts.append(header + summary + "\n".join(items))
             except Exception as e:
-                logger.warning(f"⚠️ 日程解析失败: {e}")
+                logger.warning(f"日程解析失败: {e}")
 
         # 3. 过去经历回顾
         if "summarized_past_micro_experiences_story" in life_data:
@@ -217,7 +218,7 @@ def _get_life_system_context() -> str:
                         f"{content}\n🧠思考：{thoughts}\n🎭情绪：{emotions}"
                     )
             except Exception as e:
-                logger.warning(f"⚠️ 微观经历解析失败: {e}")
+                logger.warning(f"微观经历解析失败: {e}")
                 if life_data["current_micro_experience"]:
                     context_parts.append(
                         f"【你现在正在做的事情】{life_data['current_micro_experience']}"
@@ -226,7 +227,7 @@ def _get_life_system_context() -> str:
         return "\n\n".join(context_parts) if context_parts else ""
 
     except Exception as e:
-        logger.error(f"⚠️ 获取生活系统数据失败: {str(e)}", exc_info=True)
+        logger.error(f"获取生活系统数据失败: {str(e)}", exc_info=True)
         return ""
 
 
@@ -250,7 +251,7 @@ async def _get_mem0_relevant(
                 query=query, user_id=user_id, limit=limit, threshold=threshold
             ).get("results", [])
         except Exception as e:
-            logger.warning(f"⚠️ mem0.search 异常: {e}")
+            logger.warning(f"mem0.search 异常: {e}")
             return None
 
     loop = asyncio.get_running_loop()
@@ -274,9 +275,9 @@ async def _get_mem0_relevant(
         except asyncio.TimeoutError:
             logger.warning(f"⏱️ mem0.search 第 {attempt} 次尝试超过 {timeout}s 超时")
         except Exception as e:
-            logger.warning(f"⚠️ mem0.search 第 {attempt} 次尝试失败: {e}")
+            logger.warning(f"mem0.search 第 {attempt} 次尝试失败: {e}")
 
-    logger.error(f"❌ mem0.search 共 {max_retries + 1} 次尝试均失败，返回空列表")
+    logger.error(f"mem0.search 共 {max_retries + 1} 次尝试均失败，返回空列表")
     return []
 
 
@@ -451,9 +452,6 @@ async def merge_context(
     # 1. 获取并处理聊天记录
     raw_messages = get_channel_memory(channel_id).get_recent_messages()
     processed_messages = _process_chat_messages(raw_messages)
-    logger.debug(
-        f"[context_merger] 处理消息块 {len(processed_messages)} / 原始消息 {len(raw_messages)}"
-    )
 
     # 2. 获取参考资料（其他频道摘要）- 判断是否需要摘要
     summary_notes = []
@@ -479,18 +477,12 @@ async def merge_context(
                         latest_current_message_time = datetime.fromisoformat(
                             raw_messages[i]["timestamp"]
                         )
-                        logger.debug(
-                            f"[context_merger] 当前频道最后 assistant 前的 user: {latest_current_message_time}"
-                        )
                         break
 
             if latest_current_message_time is None and raw_messages:
                 # 如果没有找到符合条件的user消息，或者没有assistant消息，则使用最后一条消息的时间
                 latest_current_message_time = datetime.fromisoformat(
                     raw_messages[-1]["timestamp"]
-                )
-                logger.debug(
-                    f"[context_merger] 当前频道无匹配 user，使用最后一条消息时间 {latest_current_message_time}"
                 )
 
             if latest_current_message_time:
@@ -516,17 +508,11 @@ async def merge_context(
                         latest_other_message_time = datetime.fromisoformat(
                             messages[i]["timestamp"]
                         )
-                        logger.debug(
-                            f"[context_merger] 频道 {other_channel} 最后 assistant 前的 user 时间: {latest_other_message_time}"
-                        )
                         break
 
             if latest_other_message_time is None and messages:
                 latest_other_message_time = datetime.fromisoformat(
                     messages[-1]["timestamp"]
-                )
-                logger.debug(
-                    f"[context_merger] 频道 {other_channel} 使用最后一条消息时间: {latest_other_message_time}"
                 )
 
             if latest_other_message_time:
@@ -546,7 +532,7 @@ async def merge_context(
             # 处理结果，过滤异常和空摘要
             for i, summary in enumerate(summaries):
                 if isinstance(summary, Exception):
-                    logger.warning(f"⚠️ 频道摘要失败: {summary}")
+                    logger.warning(f"频道摘要失败: {summary}")
                     continue
                 if summary and str(summary).strip() and str(summary).strip() != "空":
                     summary_notes.append(summary)
@@ -563,9 +549,6 @@ async def merge_context(
             else:
                 logger.debug("[context_merger] 使用所有频道最新消息进行时间差判断")
 
-            logger.debug(
-                f"[context_merger] 时间差: 最后={latest_overall_message_time} 当前={current_time} 差={time_diff}"
-            )
 
             if time_diff > timedelta(hours=1):
                 # 判断是否在东八区睡眠时间（23:00 - 07:00）
@@ -599,12 +582,6 @@ async def merge_context(
                     # 粗略判断，如果时间差超过8小时，且跨越了整个睡眠时间段
                     is_during_sleep_time = True
 
-                logger.debug(
-                    f"[context_merger] 睡眠检查: last_hr={latest_local_time.hour} curr_hr={current_local_time.hour} 初判={is_during_sleep_time}"
-                )
-                logger.debug(
-                    f"[context_merger] 时间跨度检查: <{SLEEP_START_HOUR}? {latest_local_time.hour < SLEEP_START_HOUR} >= {SLEEP_END_HOUR}? {current_local_time.hour >= SLEEP_END_HOUR} >8h? {time_diff > timedelta(hours=8)}"
-                )
 
                 # 精确计算睡眠时间重叠
                 total_sleep_overlap_seconds = 0
@@ -640,9 +617,6 @@ async def merge_context(
                 is_during_sleep_time = (
                     total_sleep_overlap_seconds >= timedelta(hours=4).total_seconds()
                 )
-                logger.debug(
-                    f"[context_merger] 睡眠重叠时间: {total_sleep_overlap_seconds}秒 | 是否睡眠时段: {is_during_sleep_time}"
-                )
 
                 if not is_during_sleep_time:
                     hours_diff = int(time_diff.total_seconds() // 3600)
@@ -670,9 +644,6 @@ async def merge_context(
 
     # 3. 获取生活系统信息
     life_system_context = _get_life_system_context()
-    logger.debug(
-        f"[context_merger] Life system context 长度: {len(life_system_context)}"
-    )
 
     # 4. 获取记忆信息
     from core.rag_decision_system import RAGDecisionMaker

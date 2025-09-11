@@ -1,12 +1,13 @@
 import json
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from datetime import date, datetime  # 确保 datetime 类被正确导入
 import redis
 from app.config import settings
 from app.life_system import LifeSystemQuery
 from services.ai_service import summarize_past_micro_experiences  # 导入新的AI服务
 
-logger = logging.getLogger(__name__)
 
 # 复用项目现有的Redis连接池
 from utils.redis_manager import get_redis_client
@@ -52,7 +53,7 @@ class LifeDataService:
 
             # 验证生成结果
             if not summarized_story or summarized_story.strip() == "":
-                logger.warning("⚠️ AI汇总生成结果为空，保持重试状态")
+                logger.warning("AI汇总生成结果为空，保持重试状态")
                 # 更新失败状态，但不更新数据基准
                 failure_status = {
                     "last_success": "false",
@@ -78,7 +79,7 @@ class LifeDataService:
                 return summarized_story
 
         except Exception as e:
-            logger.error(f"❌ AI汇总生成失败: {str(e)}")
+            logger.error(f"AI汇总生成失败: {str(e)}")
             # 记录失败状态，但不更新数据基准
             failure_status = {
                 "last_success": "false",
@@ -121,9 +122,6 @@ class LifeDataService:
             ):
                 logger.debug("[LIFE_DATA] 遍历日程项")
                 for item in daily_schedule["schedule_data"]["schedule_items"]:
-                    logger.debug(
-                        f"[LIFE_DATA] 日程项开始时间: {item.get('start_time')}"
-                    )
                     logger.debug(f"[LIFE_DATA] 日程项结束时间: {item.get('end_time')}")
                     item_start_time = item["start_time"]
                     item_end_time = item["end_time"]
@@ -164,7 +162,7 @@ class LifeDataService:
                     if (
                         item_start_time_obj <= current_time_obj
                     ):  # 只包括当前时刻及之前的日程项
-                        # logger.info("[LIFE_DATA] 🔍 日程项开始时间小于等于当前时间!!!!!")
+                        # logger.info("[LIFE_DATA] 日程项开始时间小于等于当前时间!!!!!")
                         schedule_item_id = item.get("id")
                         if schedule_item_id:
                             # 获取该日程项的所有微观经历
@@ -209,9 +207,6 @@ class LifeDataService:
                 else ""
             )
 
-            logger.debug(
-                f"[LIFE_DATA] prev: ...{prev_past_micro_experiences[-100:] if prev_past_micro_experiences else 'None'}"
-            )
             logger.debug(f"[LIFE_DATA] curr: ...{current_exp_json[-100:]}")
             logger.debug(f"[LIFE_DATA] summary_status: {summary_status}")
 
@@ -358,9 +353,9 @@ async def main():
     # 执行数据获取和存储
     result = await life_data_service.fetch_and_store_today_data()
     if result:
-        logger.info("[LIFE_DATA] ✅ 生活系统数据获取和存储成功")
+        logger.info("[LIFE_DATA] 生活系统数据获取和存储成功")
     else:
-        logger.error("❌ 生活系统数据获取和存储失败")
+        logger.error("生活系统数据获取和存储失败")
 
     # 打印存储在Redis中的数据和状态
     today = datetime.date.today().strftime("%Y-%m-%d")
@@ -371,14 +366,11 @@ async def main():
     status_data = redis_client.hgetall(status_key)
 
     if stored_data:
-        logger.debug(f"[LIFE_DATA] 🔍 Redis存储的数据 ({redis_key}):")
+        logger.debug(f"[LIFE_DATA] Redis存储的数据 ({redis_key}):")
         for key, value in stored_data.items():
             # 尝试解析JSON值
             try:
                 parsed_value = json.loads(value)
-                logger.debug(
-                    f"{key}: {json.dumps(parsed_value, indent=2, ensure_ascii=False)}"
-                )
             except Exception:
                 logger.debug(f"[LIFE_DATA] {key}: {value}")
     else:

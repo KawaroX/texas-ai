@@ -8,13 +8,14 @@ import os
 import json
 import httpx
 import asyncio
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from typing import AsyncGenerator, Dict, Any, Optional
 
 from .base import ConfigurableProvider
 from .utils import retry_with_backoff
 
-logger = logging.getLogger(__name__)
 
 # 配置常量
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -102,7 +103,7 @@ class OpenRouterProvider(ConfigurableProvider):
             except httpx.HTTPStatusError as http_err:
                 status_code = http_err.response.status_code
                 if status_code == 429:
-                    logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+                    logger.error(f"模型 {model} 触发速率限制 (429)")
                     if attempt < max_retries - 1:
                         delay = base_delay * (2**attempt)
                         logger.warning(
@@ -139,7 +140,7 @@ class OpenRouterProvider(ConfigurableProvider):
                     await asyncio.sleep(delay)
                     continue
                 else:
-                    logger.error(f"❌ OpenRouter流式调用失败: 未知错误: {e}")
+                    logger.error(f"OpenRouter流式调用失败: 未知错误: {e}")
                     yield ""
                     return
 
@@ -170,7 +171,7 @@ class OpenRouterProvider(ConfigurableProvider):
         except httpx.HTTPStatusError as http_err:
             status_code = http_err.response.status_code
             if status_code == 429:
-                logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+                logger.error(f"模型 {model} 触发速率限制 (429)")
                 return "⚠️ API调用频率限制，请稍后再试。"
             else:
                 logger.error(
@@ -178,5 +179,5 @@ class OpenRouterProvider(ConfigurableProvider):
                 )
                 return f"[自动回复] 在忙，有事请留言 ({status_code})"
         except Exception as e:
-            logger.error(f"❌ OpenRouter调用失败: 未知错误: {e}")
+            logger.error(f"OpenRouter调用失败: 未知错误: {e}")
             return ""

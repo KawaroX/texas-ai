@@ -1,7 +1,6 @@
 import asyncio
 import websockets
 import json
-import logging
 import httpx
 import time
 import redis  # 导入 redis
@@ -15,8 +14,9 @@ from core.memory_buffer import get_channel_memory
 from core.chat_engine import ChatEngine
 from services.image_service import get_image_description
 from utils.image_context_formatter import format_image_description, clean_ai_image_tags
+from utils.logging_config import get_logger
 
-# 日志配置在 app/main.py 统一设置
+logger = get_logger(__name__)
 
 
 class MattermostWebSocketClient:
@@ -60,7 +60,7 @@ class MattermostWebSocketClient:
         if self.user_id is None:
             await self.fetch_bot_user_id()
             if self.user_id is None:
-                logging.error("❌ BOT user ID 未知，无法获取 Team 列表。 সন")
+                logger.error("BOT user ID 未知，无法获取 Team 列表")
                 return []
 
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -71,13 +71,12 @@ class MattermostWebSocketClient:
             )
             if resp.status_code == 200:
                 teams = resp.json()
-                logging.debug(f"[mm] 成功获取 Team 数量: {len(teams)}")
                 for team in teams:
                     self.team_info_cache[team["id"]] = team
                 return teams
             else:
-                logging.warning(
-                    f"⚠️ 无法获取 Team 列表: {resp.status_code} - {resp.text}"
+                logger.warning(
+                    f"无法获取 Team 列表: {resp.status_code} - {resp.text}"
                 )
                 return []
 
@@ -86,7 +85,7 @@ class MattermostWebSocketClient:
         if self.user_id is None:
             await self.fetch_bot_user_id()
             if self.user_id is None:
-                logging.error("❌ BOT user ID 未知，无法获取频道列表。 সন")
+                logger.error("BOT user ID 未知，无法获取频道列表")
                 return []
 
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -97,13 +96,13 @@ class MattermostWebSocketClient:
             )
             if resp.status_code == 200:
                 channels = resp.json()
-                logging.debug(f"[mm] 成功获取 Team {team_id} 频道数: {len(channels)}")
+                logger.debug(f"成功获取 Team {team_id} 频道数: {len(channels)}")
                 for channel in channels:
                     self.channel_info_cache[channel["id"]] = channel  # 缓存频道信息
                 return channels
             else:
-                logging.warning(
-                    f"⚠️ 无法获取 Team {team_id} 的频道列表: {resp.status_code} - {resp.text}"
+                logger.warning(
+                    f"无法获取 Team {team_id} 的频道列表: {resp.status_code} - {resp.text}"
                 )
                 return []
 
@@ -117,11 +116,11 @@ class MattermostWebSocketClient:
             )
             if resp.status_code == 200:
                 members = resp.json()
-                logging.debug(f"[mm] 频道 {channel_id} 成员数: {len(members)}")
+                logger.debug(f"频道 {channel_id} 成员数: {len(members)}")
                 return members
             else:
-                logging.warning(
-                    f"⚠️ 无法获取频道 {channel_id} 的成员列表: {resp.status_code} - {resp.text}"
+                logger.warning(
+                    f"无法获取频道 {channel_id} 的成员列表: {resp.status_code} - {resp.text}"
                 )
                 return []
 
@@ -144,7 +143,7 @@ class MattermostWebSocketClient:
                 self.channel_info_cache[channel_id] = info
                 return info
             else:
-                logging.warning(f"⚠️ 无法获取频道信息: {resp.status_code} - {resp.text}")
+                logger.warning(f"无法获取频道信息: {resp.status_code} - {resp.text}")
                 return None
 
     async def get_user_info(self, user_id):
@@ -168,7 +167,7 @@ class MattermostWebSocketClient:
                 self.user_info_cache[user_id] = info
                 return info
             else:
-                logging.warning(f"⚠️ 无法获取用户信息: {resp.status_code} - {resp.text}")
+                logger.warning(f"无法获取用户信息: {resp.status_code} - {resp.text}")
                 return None
 
     async def fetch_bot_user_id(self):
@@ -179,22 +178,22 @@ class MattermostWebSocketClient:
             )
             if resp.status_code == 200:
                 self.user_id = resp.json()["id"]
-                logging.debug(f"[mm] Bot user ID: {self.user_id}")
+                logger.debug(f"Bot user ID: {self.user_id}")
             else:
-                logging.error("❌ Failed to fetch bot user ID")
+                logger.error("Failed to fetch bot user ID")
 
     async def _fetch_and_store_mattermost_data(self):
         """
         获取 Mattermost Team、频道和用户信息，并存储到 Redis。
         对用户名为 'kawaro' 的用户进行特殊标记。
         """
-        logging.info("[mm] 开始同步 Mattermost 基础数据到 Redis")
+        logger.info("开始同步 Mattermost 基础数据到 Redis")
 
         # 1. 获取 BOT 自身信息 (已在 fetch_bot_user_id 中处理)
         if self.user_id is None:
             await self.fetch_bot_user_id()
             if self.user_id is None:
-                logging.error("❌ 无法获取 BOT user ID，跳过数据同步。 সন")
+                logger.error("无法获取 BOT user ID，跳过数据同步")
                 return
 
         # 2. 获取 BOT 加入的 Team 列表并存储
@@ -204,9 +203,9 @@ class MattermostWebSocketClient:
                 team["id"]: json.dumps(team, ensure_ascii=False) for team in teams
             }
             self.redis_client.hset("mattermost:teams", mapping=team_data_to_store)
-            logging.debug(f"[mm] 已将 {len(teams)} 个 Team 信息存储到 Redis")
+            logger.debug(f"已将 {len(teams)} 个 Team 信息存储到 Redis")
         else:
-            logging.warning("⚠️ 未获取到任何 Team 信息。 সন")
+            logger.warning("未获取到任何 Team 信息")
 
         # 3. 获取所有频道（含 DM）并存储
         all_channels = []
@@ -220,9 +219,9 @@ class MattermostWebSocketClient:
                 for channel in all_channels
             }
             self.redis_client.hset("mattermost:channels", mapping=channel_data_to_store)
-            logging.debug(f"[mm] 已将 {len(all_channels)} 个频道信息存储到 Redis")
+            logger.debug(f"已将 {len(all_channels)} 个频道信息存储到 Redis")
         else:
-            logging.warning("⚠️ 未获取到任何频道信息。 সন")
+            logger.warning("未获取到任何频道信息")
 
         # 4. 获取所有用户并存储
         # 这是一个更全面的获取用户列表的方式，不依赖于 DM 频道
@@ -244,8 +243,8 @@ class MattermostWebSocketClient:
                     all_users.extend(users_page)
                     page += 1
                 else:
-                    logging.warning(
-                        f"⚠️ 无法获取所有用户信息: {resp.status_code} - {resp.text}"
+                    logger.warning(
+                        f"无法获取所有用户信息: {resp.status_code} - {resp.text}"
                     )
                     break
 
@@ -264,22 +263,22 @@ class MattermostWebSocketClient:
                 }
                 if user_details.get("username") == "kawaro":
                     user_details["is_kawaro"] = True
-                    logging.debug(f'[mm] 标记用户 \'kawaro\' ({user_details["id"]})')
+                    logger.debug(f'标记用户 \'kawaro\' ({user_details["id"]})')
 
                 user_data_to_store[user["id"]] = json.dumps(
                     user_details, ensure_ascii=False
                 )
 
             self.redis_client.hset("mattermost:users", mapping=user_data_to_store)
-            logging.debug(f"[mm] 已将 {len(all_users)} 个用户信息存储到 Redis")
+            logger.debug(f"已将 {len(all_users)} 个用户信息存储到 Redis")
         else:
-            logging.warning("⚠️ 未获取到任何用户信息。 সন")
+            logger.warning("未获取到任何用户信息")
 
         # 5. 遍历 DM 频道，更新频道信息以包含对方用户 ID 和 is_special_user 标记
         # 这一步是为了完善频道信息，特别是 DM 频道，使其包含对方用户ID和特殊标记
         # 假设 all_channels 已经包含了所有频道，包括 DM 频道
         dm_channels_from_api = [c for c in all_channels if c.get("type") == "D"]
-        logging.debug(f"[mm] DM 频道数量: {len(dm_channels_from_api)}")
+        logger.debug(f"DM 频道数量: {len(dm_channels_from_api)}")
 
         for dm_channel in dm_channels_from_api:
             dm_channel_id = dm_channel["id"]
@@ -309,17 +308,14 @@ class MattermostWebSocketClient:
                         dm_channel_id,
                         json.dumps(dm_channel, ensure_ascii=False),
                     )
-                    logging.debug(
-                        f"[mm] 已更新 DM 频道 {dm_channel_id} 的对方用户信息与标记"
-                    )
                 else:
-                    logging.warning(
-                        f"⚠️ 无法从 Redis 获取用户 {other_user_id} 的详细信息，DM 频道 {dm_channel_id} 未完全更新。"
+                    logger.warning(
+                        f"无法从 Redis 获取用户 {other_user_id} 的详细信息，DM 频道 {dm_channel_id} 未完全更新"
                     )
             else:
-                logging.warning(f"⚠️ 无法找到 DM 频道 {dm_channel_id} 的对方用户。 সন")
+                logger.warning(f"无法找到 DM 频道 {dm_channel_id} 的对方用户")
 
-        logging.info("[mm] Mattermost 基础数据同步完成")
+        logger.info("Mattermost 基础数据同步完成")
 
     async def connect(self):
         retries = 5
@@ -327,12 +323,12 @@ class MattermostWebSocketClient:
         for i in range(retries):
             try:
                 await self.fetch_bot_user_id()
-                logging.info(f"[mm] 连接 WebSocket: {self.websocket_url}")
+                logger.info(f"连接 WebSocket: {self.websocket_url}")
                 self.connection = await websockets.connect(
                     self.websocket_url,
                     extra_headers={"Authorization": f"Bearer {self.token}"},
                 )
-                logging.info("[mm] WebSocket 连接成功")
+                logger.info("WebSocket 连接成功")
 
                 # 在连接成功后，获取并存储 Mattermost 基础数据
                 await self._fetch_and_store_mattermost_data()
@@ -343,19 +339,20 @@ class MattermostWebSocketClient:
                 await self.listen()
                 return
             except Exception as e:
-                logging.error(f"❌ 连接失败 {i + 1}/{retries}: {e}")
+                logger.error(f"连接失败 {i + 1}/{retries}: {e}")
                 if i < retries - 1:
-                    logging.debug(f"[mm] {delay} 秒后重试连接")
+                    logger.debug(f"{delay} 秒后重试连接")
                     await asyncio.sleep(delay)
                 else:
-                    logging.error("❌ 所有连接尝试失败，退出。 সন")
+                    logger.error("所有连接尝试失败，退出")
                     raise
 
     async def listen(self):
         async for message in self.connection:
             data = json.loads(message)
             event = data.get("event")
-            # logging.info(f"📡 收到事件类型: {event}，完整内容如下：\n{json.dumps(data, ensure_ascii=False, indent=2)}")
+            # logger.debug(f"收到事件类型: {event}")
+            # logger.debug(f"完整内容: {json.dumps(data, ensure_ascii=False, indent=2)}")
 
             if event == "posted":
                 post_data = json.loads(data["data"]["post"])
@@ -366,7 +363,7 @@ class MattermostWebSocketClient:
                     continue
 
                 original_message = post_data.get("message", "")
-                if original_message.startswith("🤖 সন"):
+                if original_message.startswith("🤖"):
                     continue
 
                 # --- 图片处理逻辑 ---
@@ -374,7 +371,7 @@ class MattermostWebSocketClient:
                 message_to_process = original_message
 
                 if file_ids:
-                    logging.info(
+                    logger.info(
                         f'[mm] 消息 {post_data["id"]} 包含 {len(file_ids)} 个文件，开始处理'
                     )
                     tasks = [self._process_image_file(file_id) for file_id in file_ids]
@@ -389,9 +386,6 @@ class MattermostWebSocketClient:
                             + "]"
                         )
                         message_to_process += formatted_descriptions
-                        logging.debug(
-                            f"[mm] 追加图片描述后的消息: {message_to_process}"
-                        )
                 # --- 图片处理逻辑结束 ---
 
                 # 更新频道活动状态
@@ -401,9 +395,6 @@ class MattermostWebSocketClient:
                 channel_info = await self.get_channel_info(channel_id)
                 user_info = await self.get_user_info(user_id)
 
-                logging.debug(
-                    f"[mm] 收到消息: {message_to_process} channel={channel_id} user={user_info['username'] if user_info else user_id}"
-                )
 
                 # 存储到内存缓冲区
                 get_channel_memory(channel_id).add_message("user", message_to_process)
@@ -414,7 +405,7 @@ class MattermostWebSocketClient:
                 )
 
             elif event == "typing":
-                logging.debug(f"[mm] 接收到 Typing 信号 ts={time.time()}")
+                logger.debug(f"接收到 Typing 信号 ts={time.time()}")
                 # 处理用户打字事件
                 typing_data = data["data"]
                 user_id = typing_data.get("user_id")
@@ -425,7 +416,7 @@ class MattermostWebSocketClient:
                     self.last_typing_time[channel_id] = time.time()
                     # 保持原活动状态更新
                     self.channel_activity[channel_id] = {"last_activity": time.time()}
-                    logging.debug(f"⌨️ 更新频道 {channel_id} 输入状态时间")
+                    logger.debug(f"更新频道 {channel_id} 输入状态时间")
 
     async def _process_image_file(self, file_id: str) -> Optional[str]:
         """处理单个图片文件：获取信息、下载、缩放并生成描述。"""
@@ -436,12 +427,12 @@ class MattermostWebSocketClient:
 
             mime_type = file_info.get("mime_type", "")
             if not mime_type.startswith("image/"):
-                logging.info(
-                    f"[mm] 文件 {file_id} 不是图片 (MIME: {mime_type})，跳过处理。 সন"
+                logger.info(
+                    f"[mm] 文件 {file_id} 不是图片 (MIME: {mime_type})，跳过处理。"
                 )
                 return None
 
-            logging.info(f"[mm] 下载图片文件 {file_id} ({mime_type})")
+            logger.info(f"下载图片文件 {file_id} ({mime_type})")
             image_data = await self._download_file(file_id)
             if not image_data:
                 return None
@@ -465,30 +456,30 @@ class MattermostWebSocketClient:
 
                 original_size_kb = len(image_data) / 1024
                 processed_size_kb = len(processed_image_data) / 1024
-                logging.info(
+                logger.info(
                     f"[mm] 图片 {file_id} 缩放完成。 "
                     f"原始尺寸: {original_size_kb:.2f} KB -> "
                     f"处理后尺寸: {processed_size_kb:.2f} KB"
                 )
 
             except Exception as img_err:
-                logging.error(
-                    f"❌ 图片 {file_id} 缩放失败: {img_err}。将尝试使用原图。 সন"
+                logger.error(
+                    f"❌ 图片 {file_id} 缩放失败: {img_err}。将尝试使用原图。"
                 )
                 # 如果缩放出错，则退回使用原图
                 processed_image_data = image_data
                 processed_mime_type = mime_type
             # --- 图片缩放逻辑结束 ---
 
-            logging.info(f"[mm] 为图片 {file_id} 生成描述...")
+            logger.info(f"为图片 {file_id} 生成描述...")
             description = await get_image_description(
                 processed_image_data, processed_mime_type
             )
-            logging.info(f"[mm] 图片 {file_id} 描述生成结果: {description}")
+            logger.info(f"图片 {file_id} 描述生成结果: {description}")
             return description
 
         except Exception as e:
-            logging.error(f"❌ 处理文件 {file_id} 时发生未知异常: {e}")
+            logger.error(f"处理文件 {file_id} 时发生未知异常: {e}")
             return None
 
     async def send_typing(self, channel_id: str):
@@ -502,7 +493,7 @@ class MattermostWebSocketClient:
                     headers=headers,
                 )
             except Exception as e:
-                logging.warning(f"⚠️ 发送打字指示器异常: {e}")
+                logger.warning(f"发送打字指示器异常: {e}")
 
     async def _add_to_buffer_and_process(
         self,
@@ -522,7 +513,7 @@ class MattermostWebSocketClient:
         buffer_is_empty = self.redis_client.llen(f"channel_buffer:{channel_id}") == 0
 
         if is_simple_message and buffer_is_empty:
-            logging.info(f"⚡ 收到简单消息 '{message}'，立即回复。 সন")
+            logger.info(f"收到简单消息'{message}'，立即回复。")
             # 立即处理简单消息，不经过缓冲和延迟
             async for segment in self.chat_engine.stream_reply_single(
                 channel_id, message, channel_info, user_info
@@ -548,7 +539,7 @@ class MattermostWebSocketClient:
             f"[{username}]：{message}",
         )
 
-        logging.info(
+        logger.info(
             f"📝 添加消息到缓冲区，频道 {channel_id} 现有 {self.redis_client.llen(f'channel_buffer:{channel_id}')} 条消息"
         )
 
@@ -607,7 +598,7 @@ class MattermostWebSocketClient:
                     if typing_elapsed > 2.3:
                         trigger_reason.append(f"输入停止(2.3s){typing_elapsed:.2f}")
 
-                    logging.info(
+                    logger.info(
                         f"⏳ 频道 {channel_id} 触发超时: {', '.join(trigger_reason)}"
                     )
                     break
@@ -616,7 +607,7 @@ class MattermostWebSocketClient:
 
             # 从 Redis 获取当前缓冲区中的所有消息
             messages = self.redis_client.lrange(f"channel_buffer:{channel_id}", 0, -1)
-            logging.info(
+            logger.info(
                 f"🤔 开始智能处理，频道 {channel_info['name']}，消息数：{len(messages)}"
             )
 
@@ -628,9 +619,9 @@ class MattermostWebSocketClient:
             )  # 传递从 Redis 获取的消息
 
         except asyncio.CancelledError:
-            logging.debug(f"[mm] 处理任务被取消 channel={channel_id}")
+            logger.debug(f"处理任务被取消 channel={channel_id}")
         except Exception as e:
-            logging.error(f"❌ 智能处理出错，频道 {channel_id}: {e}")
+            logger.error(f"智能处理出错，频道 {channel_id}: {e}")
         finally:
             # 清理处理任务记录
             if (
@@ -646,7 +637,7 @@ class MattermostWebSocketClient:
         if self.user_id is None:
             await self.fetch_bot_user_id()
             if self.user_id is None:
-                logging.error("❌ 无法获取 BOT user ID，无法创建或获取私聊频道。 সন")
+                logger.error("无法获取 BOT user ID，无法创建或获取私聊频道。")
                 return None
 
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -661,7 +652,7 @@ class MattermostWebSocketClient:
 
                 if create_resp.status_code == 201:
                     channel_data = create_resp.json()
-                    logging.debug(f"[mm] 创建私聊频道成功: {channel_data['id']}")
+                    logger.debug(f"创建私聊频道成功: {channel_data['id']}")
                     return channel_data["id"]
                 elif (
                     create_resp.status_code == 400
@@ -670,9 +661,6 @@ class MattermostWebSocketClient:
                 ):
                     # 如果频道已存在，Mattermost 会返回 400 错误，并包含特定错误信息
                     # 此时需要通过获取频道列表来找到已存在的 DM 频道
-                    logging.debug(
-                        f"[mm] 与用户 {target_user_id} 的私聊频道已存在，尝试获取"
-                    )
                     # 获取所有 DM 频道
                     all_channels = []
                     teams = await self.get_teams()  # 需要先获取 teams
@@ -688,21 +676,18 @@ class MattermostWebSocketClient:
                                 self.user_id in member_ids
                                 and target_user_id in member_ids
                             ):
-                                logging.debug(
-                                    f"[mm] 成功获取已存在的私聊频道: {channel['id']}"
-                                )
                                 return channel["id"]
-                    logging.warning(
-                        f"⚠️ 无法找到与用户 {target_user_id} 已存在的私聊频道。 সন"
+                    logger.warning(
+                        f"⚠️ 无法找到与用户 {target_user_id} 已存在的私聊频道。"
                     )
                     return None
                 else:
-                    logging.warning(
+                    logger.warning(
                         f"⚠️ 创建私聊频道失败: {create_resp.status_code} - {create_resp.text}"
                     )
                     return None
             except Exception as e:
-                logging.error(f"❌ 创建或获取私聊频道时发生异常: {e}")
+                logger.error(f"创建或获取私聊频道时发生异常: {e}")
                 return None
 
     async def send_ai_generated_message(
@@ -721,7 +706,7 @@ class MattermostWebSocketClient:
         """
         try:
             log_prefix = "主动交互" if is_active_interaction else "被动回复"
-            logging.info(
+            logger.info(
                 f"[mm] 开始生成 {log_prefix} channel={channel_id} 数量={len(processed_messages)}"
             )
 
@@ -747,7 +732,7 @@ class MattermostWebSocketClient:
                     if image_path and not first_message_sent and os.path.exists(image_path):
                         await self._send_message_with_typing(channel_id, cleaned_segment, image_path)
                         first_message_sent = True
-                        logging.info(f"[mm] ✅ 第一条消息已带图片发送: {os.path.basename(image_path)}")
+                        logger.info(f"第一条消息已带图片发送: {os.path.basename(image_path)}")
                     else:
                         # 普通消息发送
                         await self._send_message_with_typing(channel_id, cleaned_segment)
@@ -761,11 +746,8 @@ class MattermostWebSocketClient:
             # 如果是被动回复且确实发出了内容，才清空 Redis 缓冲区
             if not is_active_interaction and sent_any:
                 self.redis_client.delete(f"channel_buffer:{channel_id}")
-                logging.debug(f"[mm] 清空频道 {channel_id} 的消息缓冲区")
+                logger.debug(f"清空频道 {channel_id} 的消息缓冲区")
             elif not is_active_interaction and not sent_any:
-                logging.debug(
-                    f"[mm] 未生成有效内容，保留频道 {channel_id} 的消息缓冲区"
-                )
                 # 追加自动回复，但不清空缓冲区
                 try:
                     await self._send_message_with_typing(
@@ -773,10 +755,10 @@ class MattermostWebSocketClient:
                         "[自动回复]在忙，有事请留言",
                     )
                 except Exception as e:
-                    logging.warning(f"⚠️ 自动回复发送失败，频道 {channel_id}: {e}")
+                    logger.warning(f"自动回复发送失败，频道 {channel_id}: {e}")
 
         except Exception as e:
-            logging.error(f"❌ 生成 {log_prefix} 出错，频道 {channel_id}: {e}")
+            logger.error(f"生成 {log_prefix} 出错，频道 {channel_id}: {e}")
 
     async def _generate_and_send_reply(  # 旧方法，现在调用 send_ai_generated_message
         self,
@@ -830,7 +812,7 @@ class MattermostWebSocketClient:
                 else:
                     await self.send_message(channel_id, prefix)
             else:
-                logging.debug("[mm] 'SEND' 出现但前缀为空，跳过发送。 সন")
+                logger.debug("'SEND' 出现但前缀为空，跳过发送。")
             # 不发送 typing，不等待，直接结束，进入完成状态
             return
 
@@ -883,10 +865,10 @@ class MattermostWebSocketClient:
             )
 
         if response.status_code == 201:
-            logging.info(f"[mm] 已回复: {text}")
+            logger.info(f"已回复: {text}")
             get_channel_memory(channel_id).add_message("assistant", text)
         else:
-            logging.error(
+            logger.error(
                 f"❌ Failed to send message: {response.status_code} - {response.text}"
             )
 
@@ -919,13 +901,13 @@ class MattermostWebSocketClient:
                     upload_resp.raise_for_status()
                     upload_data = upload_resp.json()
                     file_id = upload_data["file_infos"][0]["id"]
-                    logging.info(f"[mm] 图片上传成功，File ID: {file_id}")
+                    logger.info(f"图片上传成功，File ID: {file_id}")
         except FileNotFoundError:
-            logging.error(f"❌ 图片文件未找到: {image_path}")
+            logger.error(f"图片文件未找到: {image_path}")
             await self.send_message(channel_id, message)  # 降级发送纯文本
             return
         except Exception as e:
-            logging.error(f"❌ 图片上传失败: {e}")
+            logger.error(f"图片上传失败: {e}")
             # 上传失败后，尝试只发送文本消息作为降级方案
             await self.send_message(channel_id, message)
             return
@@ -947,7 +929,7 @@ class MattermostWebSocketClient:
                     json=payload,
                 )
                 if post_resp.status_code == 201:
-                    logging.info(f"[mm] 已发送带图片的消息: {message}")
+                    logger.info(f"已发送带图片的消息: {message}")
                     
                     # 🆕 优先使用AI预分析描述，回退到后分析系统
                     placeholder = format_image_description("图片已发送")  # 默认占位符
@@ -965,35 +947,33 @@ class MattermostWebSocketClient:
                             description = scene_analysis.get("description", "")
                             if description:
                                 placeholder = format_image_description(description)
-                                logging.debug(f"[mm] ✅ 使用AI预分析描述: {description[:30]}...")
                             else:
-                                logging.debug("[mm] AI预分析描述为空，使用默认占位符")
+                                logger.debug("AI预分析描述为空，使用默认占位符")
                         else:
                             # 回退到后分析系统
-                            logging.debug("[mm] 未找到AI预分析数据，回退到后分析系统")
+                            logger.debug("未找到AI预分析数据，回退到后分析系统")
                             from services.image_service import get_image_description_by_path
                             description = await get_image_description_by_path(image_path)
                             
                             if description:
                                 placeholder = format_image_description(description)
-                                logging.debug(f"[mm] 使用后分析描述: {description[:30]}...")
                             else:
-                                logging.debug("[mm] 未找到任何图片描述，使用默认占位符")
+                                logger.debug("未找到任何图片描述，使用默认占位符")
                             
                     except Exception as e:
-                        logging.warning(f"⚠️ [mm] 获取图片描述失败（不影响消息发送）: {e}")
+                        logger.warning(f"获取图片描述失败（不影响消息发送）: {e}")
                     
                     get_channel_memory(channel_id).add_message(
                         "assistant", f"{message} {placeholder}"
                     )
                 else:
-                    logging.error(
+                    logger.error(
                         f"❌ 发送带图片的消息失败: {post_resp.status_code} - {post_resp.text}"
                     )
 
     async def send_dm_to_kawaro(
         self,
-        message: str = "德克萨斯已经上线，随时等待你的召唤。 সন",
+        message: str = "德克萨斯已经上线，随时等待你的召唤。",
     ):
         """
         向用户名为 'kawaro' 的用户发送私聊消息
@@ -1007,7 +987,7 @@ class MattermostWebSocketClient:
         if self.user_id is None:
             await self.fetch_bot_user_id()
             if self.user_id is None:
-                logging.error("❌ 无法获取 BOT user ID，无法发送消息 সন")
+                logger.error("无法获取 BOT user ID，无法发送消息")
                 return
 
         # 2. 从 Redis 获取 'kawaro' 用户 ID
@@ -1020,20 +1000,20 @@ class MattermostWebSocketClient:
                 break
 
         if not kawaro_user_id:
-            logging.warning("⚠️ 未找到 'kawaro' 用户 সন")
+            logger.warning("未找到'kawaro' 用户")
             return
 
-        logging.info(f"✅ 找到 'kawaro' 用户 ID: {kawaro_user_id}")
+        logger.info(f"找到'kawaro' 用户 ID: {kawaro_user_id}")
 
         # 3. 创建或获取私聊频道
         channel_id = await self.create_direct_channel(kawaro_user_id)
         if not channel_id:
-            logging.error("❌ 无法获取 'kawaro' 的私聊频道，无法发送消息。 সন")
+            logger.error("无法获取'kawaro' 的私聊频道，无法发送消息。")
             return
 
         # 4. 发送消息
         await self.send_message(channel_id, message)
-        logging.info(f"✅ 已向 'kawaro' 发送消息: '{message}'")
+        logger.info(f"已向'kawaro' 发送消息: '{message}'")
 
     async def get_kawaro_user_and_dm_info(self) -> Optional[dict]:
         """
@@ -1050,7 +1030,7 @@ class MattermostWebSocketClient:
         if self.user_id is None:
             await self.fetch_bot_user_id()
             if self.user_id is None:
-                logging.error("❌ 无法获取 BOT user ID সন")
+                logger.error("无法获取 BOT user ID")
                 return None
 
         # 从 Redis 获取 'kawaro' 用户 ID 和信息
@@ -1065,13 +1045,13 @@ class MattermostWebSocketClient:
                 break
 
         if not kawaro_user_id:
-            logging.warning("⚠️ 未找到 'kawaro' 用户 সন")
+            logger.warning("未找到'kawaro' 用户")
             return None
 
         # 获取与其的私聊频道
         channel_id = await self.create_direct_channel(kawaro_user_id)
         if not channel_id:
-            logging.warning("⚠️ 无法获取与 'kawaro' 的私聊频道 সন")
+            logger.warning("无法获取与'kawaro' 的私聊频道")
             return None
 
         channel_info = await self.get_channel_info(channel_id)
@@ -1095,12 +1075,12 @@ class MattermostWebSocketClient:
                 if resp.status_code == 200:
                     return resp.json()
                 else:
-                    logging.warning(
+                    logger.warning(
                         f"⚠️ 无法获取文件 {file_id} 的信息: {resp.status_code} - {resp.text}"
                     )
                     return None
             except Exception as e:
-                logging.error(f"❌ 获取文件 {file_id} 信息时发生异常: {e}")
+                logger.error(f"获取文件 {file_id} 信息时发生异常: {e}")
                 return None
 
     async def _download_file(self, file_id: str) -> Optional[bytes]:
@@ -1115,12 +1095,12 @@ class MattermostWebSocketClient:
                 if resp.status_code == 200:
                     return resp.content  # 返回二进制内容
                 else:
-                    logging.warning(
+                    logger.warning(
                         f"⚠️ 无法下载文件 {file_id}: {resp.status_code} - {resp.text}"
                     )
                     return None
             except Exception as e:
-                logging.error(f"❌ 下载文件 {file_id} 时发生异常: {e}")
+                logger.error(f"下载文件 {file_id} 时发生异常: {e}")
                 return None
 
 

@@ -6,12 +6,13 @@ Gemini配置管理模块
 
 import os
 import json
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from typing import Dict, Any
 
 from utils.redis_manager import get_async_redis_client
 
-logger = logging.getLogger(__name__)
 
 # 配置常量
 REDIS_GEMINI_CFG_KEY = os.getenv("REDIS_GEMINI_CFG_KEY", "texas:llm:gemini_cfg")
@@ -49,7 +50,7 @@ class GeminiConfigManager:
                     )
                     logger.debug("[GeminiConfig] Redis 无配置，写入默认 Gemini 配置")
                 except Exception as se:
-                    logger.warning(f"⚠️ 写入默认 Gemini 配置到 Redis 失败: {se}")
+                    logger.warning(f"写入默认 Gemini 配置到 Redis 失败: {se}")
                 return DEFAULT_GEMINI_CFG.copy()
             
             user_cfg = json.loads(raw)
@@ -57,7 +58,7 @@ class GeminiConfigManager:
             merged = {**DEFAULT_GEMINI_CFG, **(user_cfg or {})}
             return merged
         except Exception as e:
-            logger.warning(f"⚠️ 读取 Gemini 配置失败，使用默认值: {e}")
+            logger.warning(f"读取 Gemini 配置失败，使用默认值: {e}")
             return DEFAULT_GEMINI_CFG.copy()
     
     async def save_config(self, config: Dict[str, Any]) -> bool:
@@ -70,7 +71,7 @@ class GeminiConfigManager:
             logger.debug("[GeminiConfig] 配置已保存到 Redis")
             return True
         except Exception as e:
-            logger.error(f"❌ 保存 Gemini 配置到 Redis 失败: {e}")
+            logger.error(f"保存 Gemini 配置到 Redis 失败: {e}")
             return False
     
     def get_default_config(self) -> Dict[str, Any]:

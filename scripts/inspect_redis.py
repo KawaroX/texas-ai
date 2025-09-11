@@ -1,3 +1,7 @@
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 import redis
 from app.config import settings
 import json

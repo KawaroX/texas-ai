@@ -6,12 +6,13 @@ AI Providers 工具函数模块
 
 import os
 import httpx
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import asyncio
 import urllib.parse
 from typing import AsyncGenerator, Optional
 
-logger = logging.getLogger(__name__)
 
 # Bark通知配置
 BARK_BASE_URL = "https://api.day.app/h9F6jTtz4QYaZjkvFo7SxQ/"
@@ -37,9 +38,9 @@ async def send_bark_notification(
         async with httpx.AsyncClient(timeout=5) as client:
             response = await client.get(full_url)
             response.raise_for_status()
-            logger.info(f"✅ Bark notification sent: {title}")
+            logger.info(f"Bark notification sent: {title}")
     except Exception as bark_e:
-        logger.error(f"❌ Failed to send Bark notification: {bark_e}")
+        logger.error(f"Failed to send Bark notification: {bark_e}")
 
 
 def _truncate_for_log(s: str, limit: int = 20) -> str:
@@ -113,7 +114,7 @@ async def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0
                     await asyncio.sleep(delay)
                     continue
                 else:
-                    logger.error("❌ 达到最大重试次数，放弃重试")
+                    logger.error("达到最大重试次数，放弃重试")
                     raise
             else:
                 # 其他HTTP错误直接抛出，不重试
@@ -128,5 +129,5 @@ async def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0
                 await asyncio.sleep(delay)
                 continue
             else:
-                logger.error("❌ 达到最大重试次数，放弃重试")
+                logger.error("达到最大重试次数，放弃重试")
                 raise

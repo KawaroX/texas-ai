@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 角色图片初始化脚本
 下载并管理明日方舟角色的基础图片
 """

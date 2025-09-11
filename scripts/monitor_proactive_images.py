@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 监控主动交互图片生成和发送状态
 """
 

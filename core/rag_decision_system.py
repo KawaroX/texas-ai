@@ -8,9 +8,9 @@ from dataclasses import dataclass, asdict
 import jieba
 import redis
 
-import logging
+from utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -331,11 +331,6 @@ class RAGDecisionMaker:
             # 保存统计
             stats_json = json.dumps(stats)
             self.redis_client.setex(self._stats_key, self.cache_ttl, stats_json)
-            logger.debug(
-                f"[RAG DECISION] Updated stats: total_queries={stats['total_queries']}, "
-                f"search_count={stats['search_count']}, no_search_count={stats['no_search_count']}, "
-                f"avg_score={stats['avg_score']:.3f}"
-            )
 
         except (redis.RedisError, json.JSONDecodeError) as e:
             logger.error(f"[RAG DECISION] Failed to update stats in Redis: {e}")
@@ -368,9 +363,6 @@ class RAGDecisionMaker:
             if any(greeting in message for greeting in simple_greetings):
                 # 如果连续查询较多，即使是简单问候也可能需要搜索
                 if self._context.consecutive_queries >= 3:
-                    logger.debug(
-                        "[RAG DECISION] Quick filter: short greeting but consecutive queries -> search"
-                    )
                     return True
                 logger.debug("[RAG DECISION] Quick filter: short greeting -> no search")
                 return False
@@ -406,9 +398,6 @@ class RAGDecisionMaker:
         # 新增：对话延续指示词
         continuation_patterns = ["那么", "所以", "因此", "接着", "然后", "另外", "还有"]
         if any(pattern in message for pattern in continuation_patterns):
-            logger.debug(
-                "[RAG DECISION] Quick filter: continuation pattern -> potential search"
-            )
             # 延续性词汇增加搜索倾向，但不是绝对
             return None  # 需要详细分析，但会有加成
 
@@ -432,7 +421,7 @@ class RAGDecisionMaker:
                 else:
                     texas_score += matches * 0.12
         total_score += min(texas_score, 0.35)  # 上限提高
-        logger.debug(f"  - Texas keywords score: {min(texas_score, 0.35):.3f}")
+        logger.debug(f"- Texas keywords score: {min(texas_score, 0.35):.3f}")
 
         # 记忆相关词汇 (单独加强)
         memory_keywords = self.texas_keywords["memories"]
@@ -440,7 +429,7 @@ class RAGDecisionMaker:
             0.18 for keyword in memory_keywords if keyword in message
         )  # 权重提升
         total_score += min(memory_score, 0.45)  # 上限提高
-        logger.debug(f"  - Memory keywords score: {min(memory_score, 0.45):.3f}")
+        logger.debug(f"- Memory keywords score: {min(memory_score, 0.45):.3f}")
 
         # 2. 语言模式分析 - 权重调整
         pattern_scores = {}
@@ -456,7 +445,7 @@ class RAGDecisionMaker:
             total_score += pattern_score
             pattern_scores[pattern_type] = pattern_score
 
-        logger.debug(f"  - Pattern scores: {pattern_scores}")
+        logger.debug(f"- Pattern scores: {pattern_scores}")
 
         # 3. 个性化分析 - 增强
         personal_indicators = [
@@ -476,7 +465,7 @@ class RAGDecisionMaker:
         )
         personal_score = min(personal_score, 0.3)  # 上限提高
         total_score += personal_score
-        logger.debug(f"  - Personalization score: {personal_score:.3f}")
+        logger.debug(f"- Personalization score: {personal_score:.3f}")
 
         # 情感表达 - 增强
         emotional_words = [
@@ -500,12 +489,12 @@ class RAGDecisionMaker:
         )  # 权重提升
         emotion_score = min(emotion_score, 0.25)  # 上限提高
         total_score += emotion_score
-        logger.debug(f"  - Emotion score: {emotion_score:.3f}")
+        logger.debug(f"- Emotion score: {emotion_score:.3f}")
 
         # 4. 消息复杂度 - 调整
         length_score = min(len(message) / 80, 0.2)  # 长度阈值降低，上限提高
         total_score += length_score
-        logger.debug(f"  - Length score: {length_score:.3f}")
+        logger.debug(f"- Length score: {length_score:.3f}")
 
         # 5. 新增：问句检测
         question_indicators = [
@@ -525,7 +514,7 @@ class RAGDecisionMaker:
             else 0
         )
         total_score += question_score
-        logger.debug(f"  - Question score: {question_score:.3f}")
+        logger.debug(f"- Question score: {question_score:.3f}")
 
         total_score = min(total_score, 1.0)
         logger.debug(f"[RAG DECISION] Base score calculated: {total_score:.3f}")
@@ -555,9 +544,6 @@ class RAGDecisionMaker:
                 self.max_consecutive_boost,
             )
             random_factor += consecutive_boost
-            logger.debug(
-                f"[RAG DECISION] Consecutive queries boost: {consecutive_boost:.4f} (queries: {self._context.consecutive_queries})"
-            )
 
         # 冷却时间加成 - 如果距离上次触发较久，增加触发概率
         current_time = time.time()
@@ -568,9 +554,6 @@ class RAGDecisionMaker:
             if time_since_trigger > self.trigger_cooldown_minutes:
                 cooldown_boost = min(time_since_trigger / 60, 0.1)  # 最多10%加成
                 random_factor += cooldown_boost
-                logger.debug(
-                    f"[RAG DECISION] Cooldown boost: {cooldown_boost:.4f} (time: {time_since_trigger:.1f}min)"
-                )
 
         random_factor = max(-0.05, min(random_factor, 0.25))  # 总体范围限制
         logger.debug(f"[RAG DECISION] Generated memory spark: {random_factor:.4f}")
@@ -598,9 +581,6 @@ class RAGDecisionMaker:
             time_diff = (current_time - prev_time) / 60  # 分钟
             if time_diff > self.time_decay_minutes:
                 self._context.accumulated_score = 0.0
-                logger.debug(
-                    f"[RAG DECISION] Accumulation reset due to time decay ({time_diff:.1f}min > {self.time_decay_minutes}min)"
-                )
             else:
                 # 更温和的衰减
                 decay_factor = 1.0 - (
@@ -609,10 +589,6 @@ class RAGDecisionMaker:
                 self._context.accumulated_score *= max(
                     decay_factor, 0.1
                 )  # 保留更多累积值
-                logger.debug(
-                    f"[RAG DECISION] Time decay applied: decay_factor={decay_factor:.3f}, "
-                    f"time_diff={time_diff:.1f}min, accumulated={self._context.accumulated_score:.4f}"
-                )
 
         # 如果搜索了，记录触发时间但不完全重置累积
         if should_search:
@@ -643,18 +619,8 @@ class RAGDecisionMaker:
                     self._context.accumulated_score,
                     self.max_accumulation * 1.2,  # 上限提高
                 )
-                logger.debug(
-                    f"[RAG DECISION] Accumulation updated: "
-                    f"boost={accumulation_boost:.4f}, "
-                    f"new_accumulated={self._context.accumulated_score:.4f}"
-                )
 
         self._context.last_update_time = current_time
-        logger.debug(
-            f"[RAG DECISION] Context updated: accumulated_score={self._context.accumulated_score:.4f}, "
-            f"consecutive_queries={self._context.consecutive_queries}, "
-            f"last_update_time={current_time}"
-        )
 
         # 保存到Redis
         self._save_context()

@@ -5,12 +5,12 @@ AI服务统一调度模块
 保持与原有代码的API兼容性。
 """
 
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from typing import AsyncGenerator, Optional, Dict, Any
 
 from .ai_providers import OpenRouterProvider, GeminiProvider, OpenAIProvider
-
-logger = logging.getLogger(__name__)
 
 
 class AIService:
@@ -82,10 +82,10 @@ class AIService:
                         f.write(msg['content'])
                         f.write("\n" + "=" * 40 + "\n\n")
                 
-                logger.debug(f"✅ 上下文已保存: {messages_json_file}")
+                logger.debug(f"上下文已保存: {messages_json_file}")
                 
             except Exception as e:
-                logger.warning(f"⚠️ 保存上下文失败: {e}")
+                logger.warning(f"保存上下文失败: {e}")
         # === DEBUG_CONTEXT_SAVE_END ===
 
         # 根据模型选择提供商
@@ -96,7 +96,7 @@ class AIService:
         else:
             provider = self.openai  # 其他情况使用OpenAI
 
-        logger.info(f"[AIService] 使用 {provider.get_provider_name()} 进行流式对话")
+        logger.info(f"使用 {provider.get_provider_name()} 进行流式对话")
 
         def clean_segment(text):
             """清理文本中的时间戳和发言人标识"""
@@ -151,7 +151,7 @@ class AIService:
                             segment = buffer[:end_index].strip()
                             cleaned_segment = clean_segment(segment)
                             if cleaned_segment:
-                                logger.debug(f"[ai] stream_ai_chat: yield sentence='{cleaned_segment[:50]}'")
+                                logger.debug(f"stream_ai_chat: yield sentence='{cleaned_segment[:50]}'")
                                 yield cleaned_segment
                             buffer = buffer[end_index:]
                             total_processed += end_index
@@ -166,7 +166,7 @@ class AIService:
                             segment = buffer[:newline_index].strip()
                             cleaned_segment = clean_segment(segment)
                             if cleaned_segment:
-                                logger.debug(f"[ai] stream_ai_chat: yield line='{cleaned_segment[:50]}'")
+                                logger.debug(f"stream_ai_chat: yield line='{cleaned_segment[:50]}'")
                                 yield cleaned_segment
                             buffer = buffer[newline_index + 1:]
                             total_processed += newline_index + 1
@@ -178,7 +178,7 @@ class AIService:
                 if buffer.strip():
                     final_segment = clean_segment(buffer)
                     if final_segment:
-                        logger.debug(f"[ai] stream_ai_chat: yield final='{final_segment[:80]}'")
+                        logger.debug(f"stream_ai_chat: yield final='{final_segment[:80]}'")
                         yield final_segment
 
                 # 如果Gemini失败或无输出，立即尝试OpenAI协议
@@ -242,7 +242,7 @@ class AIService:
                                 yield final_segment
 
                     except Exception as openai_e:
-                        logger.error(f"❌ OpenAI也失败: {openai_e}")
+                        logger.error(f"OpenAI也失败: {openai_e}")
                         openai_yielded = False
 
                     # 如果OpenAI也没有输出，返回自动回复
@@ -257,7 +257,7 @@ class AIService:
 
             except Exception as e:
                 # Gemini异常也尝试OpenAI
-                logger.error(f"❌ Gemini异常: {e}，尝试OpenAI")
+                logger.error(f"Gemini异常: {e}，尝试OpenAI")
                 gemini_failed = True
         else:
             # 其他提供商也应用相同的文本分段处理逻辑
@@ -285,7 +285,7 @@ class AIService:
                         segment = buffer[:end_index].strip()
                         cleaned_segment = clean_segment(segment)
                         if cleaned_segment:
-                            logger.debug(f"[ai] stream_ai_chat: yield sentence='{cleaned_segment[:50]}'")
+                            logger.debug(f"stream_ai_chat: yield sentence='{cleaned_segment[:50]}'")
                             yield cleaned_segment
                         buffer = buffer[end_index:]
                         total_processed += end_index
@@ -299,7 +299,7 @@ class AIService:
                         segment = buffer[:newline_index].strip()
                         cleaned_segment = clean_segment(segment)
                         if cleaned_segment:
-                            logger.debug(f"[ai] stream_ai_chat: yield line='{cleaned_segment[:50]}'")
+                            logger.debug(f"stream_ai_chat: yield line='{cleaned_segment[:50]}'")
                             yield cleaned_segment
                         buffer = buffer[newline_index + 1:]
                         total_processed += newline_index + 1
@@ -311,7 +311,7 @@ class AIService:
             if buffer.strip():
                 final_segment = clean_segment(buffer)
                 if final_segment:
-                    logger.debug(f"[ai] stream_ai_chat: yield final='{final_segment[:80]}'")
+                    logger.debug(f"stream_ai_chat: yield final='{final_segment[:80]}'")
                     yield final_segment
 
     async def call_ai_summary(self, prompt: str) -> str:
@@ -321,7 +321,7 @@ class AIService:
         """
         messages = [{"role": "user", "content": prompt}]
         model = "mistralai/mistral-7b-instruct:free"
-        logger.info(f"[AIService] 开始AI摘要，模型={model}")
+        logger.info(f"开始AI摘要，模型={model}")
         return await self.openrouter.call_chat(messages, model)
 
     async def call_structured_generation(self, messages: list, max_retries: int = 3) -> dict:
@@ -422,10 +422,10 @@ def get_weather_info(date: str, location: str = "") -> str:
     ]
     if not location:
         location = random.choice(default_locations)
-        logger.debug(f"[ai.weather] 使用随机位置ID: {location} 查询 {date} 天气")
+        logger.debug(f"ai.weather 使用随机位置ID: {location} 查询 {date} 天气")
 
     try:
-        logger.info(f"[ai.weather] 开始获取天气 date={date} location={location}")
+        logger.info(f"ai.weather 开始获取天气 date={date} location={location}")
         url = (
             "https://"
             + os.getenv("HEFENG_API_HOST", "have_no_api_host")
@@ -436,13 +436,13 @@ def get_weather_info(date: str, location: str = "") -> str:
             "key": os.getenv("HEFENG_API_KEY"),
             "lang": "zh",
         }
-        logger.debug(f"[ai.weather] 请求参数: {params}")
+        logger.debug(f"ai.weather 请求参数: {params}")
 
         response = httpx.get(url, params=params, timeout=10)
         response.raise_for_status()
 
         data = response.json()
-        logger.debug(f"[ai.weather] 响应: {data}")
+        logger.debug(f"ai.weather 响应: {data}")
 
         if data.get("code") != "200":
             error_msg = f"API错误代码: {data.get('code')}"
@@ -463,7 +463,7 @@ def get_weather_info(date: str, location: str = "") -> str:
                     f"日出：{day.get('sunrise')}，日落：{day.get('sunset')}，"
                     f"月升：{day.get('moonrise')}，月落：{day.get('moonset')}。"
                 )
-                logger.info(f"[ai.weather] 成功获取 {date} 天气")
+                logger.info(f"ai.weather 成功获取 {date} 天气")
                 return result
 
         logger.warning(f"未找到 {date} 的天气数据，使用最后一天数据替代")
@@ -480,7 +480,7 @@ def get_weather_info(date: str, location: str = "") -> str:
             f"日出：{day.get('sunrise')}，日落：{day.get('sunset')}，"
             f"月升：{day.get('moonrise')}，月落：{day.get('moonset')}。"
         )
-        logger.debug(f"[ai.weather] 使用最后一天数据作为 {date} 天气: {result[:50]}...")
+        logger.debug(f"ai.weather 使用最后一天数据作为 {date} 天气: {result[:50]}...")
         return result
     except httpx.HTTPError as e:
         logger.error(f"HTTP请求失败: {e}")
@@ -494,13 +494,13 @@ def get_weather_info(date: str, location: str = "") -> str:
     # 回退：使用伪随机天气
     seed = int(hashlib.md5(f"{date}-{location}".encode()).hexdigest()[:8], 16)
     random.seed(seed)
-    logger.warning(f"⚠️ 回退到伪随机天气 (种子: {seed})")
+    logger.warning(f"回退到伪随机天气 (种子: {seed})")
 
     weather_options = ["晴天", "阴天", "雨天", "雪天", "雾天"]
     weather_weights = [0.4, 0.25, 0.2, 0.05, 0.1]
 
     result = random.choices(weather_options, weights=weather_weights)[0]
-    logger.debug(f"[ai.weather] 生成伪随机天气: {result}")
+    logger.debug(f"ai.weather 生成伪随机天气: {result}")
     return result
 
 
@@ -581,10 +581,10 @@ async def generate_daily_schedule(
 
         return result
     except json.JSONDecodeError:
-        logger.error(f"❌ generate_daily_schedule: AI返回的不是有效的JSON: {response}")
+        logger.error(f"generate_daily_schedule: AI返回的不是有效的JSON: {response}")
         return {"error": "AI返回格式错误", "raw_response": response}
     except Exception as e:
-        logger.error(f"❌ generate_daily_schedule: 调用失败: {e}")
+        logger.error(f"generate_daily_schedule: 调用失败: {e}")
         return {"error": f"调用失败: {str(e)}"}
 
 
@@ -663,10 +663,10 @@ async def generate_major_event(
 
         return result
     except json.JSONDecodeError:
-        logger.error(f"❌ generate_major_event: AI返回的不是有效的JSON: {response}")
+        logger.error(f"generate_major_event: AI返回的不是有效的JSON: {response}")
         return {"error": "AI返回格式错误", "raw_response": response}
     except Exception as e:
-        logger.error(f"❌ generate_major_event: 调用失败: {e}")
+        logger.error(f"generate_major_event: 调用失败: {e}")
         return {"error": f"调用失败: {str(e)}"}
 
 
@@ -752,10 +752,10 @@ async def generate_micro_experiences(
 
         return response["items"]
     except json.JSONDecodeError:
-        logger.error("❌ generate_micro_experiences: AI返回的不是有效的JSON")
+        logger.error("generate_micro_experiences: AI返回的不是有效的JSON")
         return [{"error": "AI返回格式错误"}]
     except Exception as e:
-        logger.error(f"❌ generate_micro_experiences: 调用失败: {e}")
+        logger.error(f"generate_micro_experiences: 调用失败: {e}")
         return [{"error": f"调用失败: {str(e)}"}]
 
 
@@ -789,5 +789,5 @@ async def summarize_past_micro_experiences(experiences: list) -> str:
         # response = await call_openai(messages, model="gpt-4o-mini")
         return response
     except Exception as e:
-        logger.error(f"❌ summarize_past_micro_experiences: 调用失败: {e}")
+        logger.error(f"summarize_past_micro_experiences: 调用失败: {e}")
         return f"故事生成失败: {str(e)}"

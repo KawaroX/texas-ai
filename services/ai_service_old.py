@@ -1,6 +1,8 @@
 import os
 import httpx
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import json
 import asyncio
 import re  # Add this import
@@ -34,9 +36,9 @@ async def send_bark_notification(
         async with httpx.AsyncClient(timeout=5) as client:
             response = await client.get(full_url)
             response.raise_for_status()
-            logger.info(f"✅ Bark notification sent: {title}")
+            logger.info(f"Bark notification sent: {title}")
     except Exception as bark_e:
-        logger.error(f"❌ Failed to send Bark notification: {bark_e}")
+        logger.error(f"Failed to send Bark notification: {bark_e}")
 
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -52,9 +54,6 @@ OPENAI_API_URL = "https://yunwu.ai/v1/chat/completions"
 OPENAI_API_MODEL = (
     "claude-3-7-sonnet-20250219"  # 默认模型改为 claude-3-7-sonnet-20250219
 )
-
-
-logger = logging.getLogger(__name__)
 
 
 # === compact payload logging helpers ===
@@ -144,16 +143,16 @@ async def load_gemini_cfg() -> dict:
                     REDIS_GEMINI_CFG_KEY,
                     json.dumps(DEFAULT_GEMINI_CFG, ensure_ascii=False),
                 )
-                logger.debug("[ai] Redis 无配置，写入默认 Gemini 配置")
+                logger.debug("Redis 无配置，写入默认 Gemini 配置")
             except Exception as se:
-                logger.warning(f"⚠️ 写入默认 Gemini 配置到 Redis 失败: {se}")
+                logger.warning(f"写入默认 Gemini 配置到 Redis 失败: {se}")
             return DEFAULT_GEMINI_CFG
         user_cfg = json.loads(raw)
         # 合并默认值，避免缺字段
         merged = {**DEFAULT_GEMINI_CFG, **(user_cfg or {})}
         return merged
     except Exception as e:
-        logger.warning(f"⚠️ 读取 Gemini 配置失败，使用默认值: {e}")
+        logger.warning(f"读取 Gemini 配置失败，使用默认值: {e}")
         return DEFAULT_GEMINI_CFG
 
 
@@ -174,7 +173,7 @@ async def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0
                     await asyncio.sleep(delay)
                     continue
                 else:
-                    logger.error("❌ 达到最大重试次数，放弃重试")
+                    logger.error("达到最大重试次数，放弃重试")
                     raise
             else:
                 # 其他HTTP错误直接抛出，不重试
@@ -189,7 +188,7 @@ async def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0
                 await asyncio.sleep(delay)
                 continue
             else:
-                logger.error("❌ 达到最大重试次数，放弃重试")
+                logger.error("达到最大重试次数，放弃重试")
                 raise
 
 
@@ -199,7 +198,7 @@ async def stream_openrouter(
     """
     流式调用OpenRouter API，返回异步生成器。
     """
-    logger.info(f"[ai] 开始 stream_openrouter 模型={model}")
+    logger.info(f"开始 stream_openrouter 模型={model}")
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
@@ -254,7 +253,7 @@ async def stream_openrouter(
         except httpx.HTTPStatusError as http_err:
             status_code = http_err.response.status_code
             if status_code == 429:
-                logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+                logger.error(f"模型 {model} 触发速率限制 (429)")
                 if attempt < max_retries - 1:
                     delay = base_delay * (2**attempt)
                     logger.warning(
@@ -291,7 +290,7 @@ async def stream_openrouter(
                 await asyncio.sleep(delay)
                 continue
             else:
-                logger.error(f"❌ OpenRouter流式调用失败: 未知错误: {e}")
+                logger.error(f"OpenRouter流式调用失败: 未知错误: {e}")
                 yield ""
                 return
 
@@ -302,7 +301,7 @@ async def stream_reply_ai(
     """
     流式调用 Reply AI API (支持 OpenAI 协议)，返回异步生成器。
     """
-    logger.info(f"[ai] 开始 stream_reply_ai 模型={model}")
+    logger.info(f"开始 stream_reply_ai 模型={model}")
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json",
@@ -399,7 +398,7 @@ async def stream_reply_ai(
         except httpx.HTTPStatusError as http_err:
             status_code = http_err.response.status_code
             if status_code == 429:
-                logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+                logger.error(f"模型 {model} 触发速率限制 (429)")
                 if attempt < max_retries - 1:
                     delay = base_delay * (2**attempt)
                     logger.warning(
@@ -436,7 +435,7 @@ async def stream_reply_ai(
                 await asyncio.sleep(delay)
                 continue
             else:
-                logger.error(f"❌ Reply AI流式调用失败: 未知错误: {e}")
+                logger.error(f"Reply AI流式调用失败: 未知错误: {e}")
                 yield ""
                 return
 
@@ -448,15 +447,15 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     """
     # 模型选择逻辑保持不变...
     if model is None or model == "deep seek-v3-250324":
-        logger.info(f"[ai] 开始 stream_ai_chat 渠道=ReplyAI 模型={OPENAI_API_MODEL}")
+        logger.info(f"开始 stream_ai_chat 渠道=ReplyAI 模型={OPENAI_API_MODEL}")
         stream_func = stream_reply_ai
         actual_model = OPENAI_API_MODEL
     elif model == "gemini-api":
-        logger.info(f"[ai] 开始 stream_ai_chat 渠道=GeminiAPI 模型={model}")
+        logger.info(f"开始 stream_ai_chat 渠道=GeminiAPI 模型={model}")
         stream_func = stream_reply_ai_by_gemini
         actual_model = "gemini-2.5-pro"
     else:
-        logger.info(f"[ai] 开始 stream_ai_chat 渠道=OpenRouter 模型={model}")
+        logger.info(f"开始 stream_ai_chat 渠道=OpenRouter 模型={model}")
         stream_func = stream_openrouter
         actual_model = model
 
@@ -548,7 +547,7 @@ async def stream_ai_chat(messages: list, model: Optional[str] = None):
     if buffer.strip():
         final_segment = clean_segment(buffer)
         if final_segment:
-            logger.debug(f"[ai] stream_ai_chat: yield final='{final_segment[:80]}'")
+            logger.debug(f"stream_ai_chat: yield final='{final_segment[:80]}'")
             yield final_segment
 
 
@@ -566,7 +565,7 @@ async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") 
     }
 
     async def _call_request():
-        logger.info(f"[ai] 开始 call_openrouter 模型={model}")
+        logger.info(f"开始 call_openrouter 模型={model}")
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
                 OPENROUTER_API_URL, headers=headers, json=payload
@@ -579,7 +578,7 @@ async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") 
     except httpx.HTTPStatusError as http_err:
         status_code = http_err.response.status_code
         if status_code == 429:
-            logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+            logger.error(f"模型 {model} 触发速率限制 (429)")
             return "⚠️ API调用频率限制，请稍后再试。"
         else:
             logger.error(
@@ -587,7 +586,7 @@ async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") 
             )
             return f"[自动回复] 在忙，有事请留言 ({status_code})"
     except Exception as e:
-        logger.error(f"❌ OpenRouter调用失败: 未知错误: {e}")
+        logger.error(f"OpenRouter调用失败: 未知错误: {e}")
         return ""
 
 
@@ -603,7 +602,7 @@ async def stream_reply_ai_by_gemini(
     # 若失败或无有效输出，则回退调用 stream_reply_ai(gemini-2.5-pro)
     max_retries = 0
 
-    logger.debug(f"🔄 正在使用模型进行 stream_reply_ai_by_gemini(): {model}")
+    logger.debug(f"正在使用模型进行 stream_reply_ai_by_gemini(): {model}")
 
     headers = {
         "Content-Type": "application/json",
@@ -657,9 +656,9 @@ async def stream_reply_ai_by_gemini(
         try:
             full_url = f"{GEMINI_API_URL}/{model}:streamGenerateContent?alt=sse"
             if retry_count > 0:
-                logger.warning(f"🔄 第 {retry_count} 次重试请求: {full_url}")
+                logger.warning(f"第 {retry_count} 次重试请求: {full_url}")
             else:
-                logger.debug(f"🚀 开始向 Gemini API 发送请求: {full_url}")
+                logger.debug(f"开始向 Gemini API 发送请求: {full_url}")
 
             # 超时：首包严格由 connect 决定；连上后 read 宽松
             timeout = httpx.Timeout(
@@ -672,7 +671,7 @@ async def stream_reply_ai_by_gemini(
                 async with client.stream(
                     "POST", full_url, headers=headers, json=payload
                 ) as response:
-                    logger.debug(f"🌐 Gemini API 响应状态码: {response.status_code}")
+                    logger.debug(f"Gemini API 响应状态码: {response.status_code}")
                     response.raise_for_status()
 
                     async for raw_line in response.aiter_lines():
@@ -722,7 +721,7 @@ async def stream_reply_ai_by_gemini(
                             if not text:
                                 continue
                             yielded_any = True
-                            logger.debug(f"生成器 yielding: '{text}'")
+                            logger.debug(f"生成器 yielding:'{text}'")
                             yield text
 
             # 请求完成
@@ -741,16 +740,16 @@ async def stream_reply_ai_by_gemini(
                     yield seg
                 return
             else:
-                logger.debug("✅ Gemini API 调用成功并已流式输出")
+                logger.debug("Gemini API 调用成功并已流式输出")
                 break
 
         except Exception as e:
             # 如果已经输出了部分内容，就不再重试，避免重复/拼接混乱
             if yielded_any:
-                logger.error(f"❌ 流式过程中断，但已产生部分输出，停止重试: {str(e)}")
+                logger.error(f"流式过程中断，但已产生部分输出，停止重试: {str(e)}")
                 break
             if retry_count < max_retries:
-                logger.error(f"❌ 第 {retry_count + 1} 次请求失败: {str(e)}，将重试...")
+                logger.error(f"第 {retry_count + 1} 次请求失败: {str(e)}，将重试...")
                 continue
             else:
                 fallback_message = f"❌ 经过 {max_retries + 1} 次尝试后仍然失败: {str(e)}，回退到 stream_reply_ai(gemini-2.5-pro)"  # $#$
@@ -766,7 +765,7 @@ async def stream_reply_ai_by_gemini(
                     yield seg
                 return
 
-    logger.debug("✅ Gemini API 流式请求完成")
+    logger.debug("Gemini API 流式请求完成")
 
 
 async def call_gemini(messages, model="gemini-2.5-flash") -> str:
@@ -806,7 +805,7 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
     }
 
     async def _call_request():
-        logger.info(f"🔄 正在使用模型进行 call_gemini(): {model}")
+        logger.info(f"正在使用模型进行 call_gemini(): {model}")
         async with httpx.AsyncClient(timeout=60) as client:
             full_url = f"{GEMINI_API_URL}/{model}:generateContent"
             response = await client.post(
@@ -814,8 +813,8 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
                 headers=headers,
                 json=payload,
             )
-            logger.debug(f"[ai] 状态码: {response.status_code}")
-            logger.debug(f"[ai] 返回内容: {response.text}")
+            logger.debug(f"状态码: {response.status_code}")
+            logger.debug(f"返回内容: {response.text}")
             response.raise_for_status()
             # Gemini API 的响应结构不同
             return response.json()["candidates"][0]["content"]["parts"][0]["text"]
@@ -825,7 +824,7 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
     except httpx.HTTPStatusError as http_err:
         status_code = http_err.response.status_code
         if status_code == 429:
-            logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+            logger.error(f"模型 {model} 触发速率限制 (429)")
             return "⚠️ API调用频率限制，请稍后再试。"
         else:
             try:
@@ -841,7 +840,7 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
             )
             return f"[自动回复] 在忙，有事请留言 ({status_code})"
     except Exception as e:
-        logger.error(f"❌ Gemini 调用失败: 未知错误: {e}")
+        logger.error(f"Gemini 调用失败: 未知错误: {e}")
         return ""
 
 
@@ -864,15 +863,15 @@ async def call_openai(messages, model="gpt-4o-mini") -> str:
     }
 
     async def _call_request():
-        logger.info(f"🔄 正在使用模型进行 call_openai(): {model}")
+        logger.info(f"正在使用模型进行 call_openai(): {model}")
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
                 SUMMARY_API_URL,
                 headers=headers,
                 json=payload,
             )
-            logger.debug(f"[ai] 状态码: {response.status_code}")
-            logger.debug(f"[ai] 返回内容: {response.text}")
+            logger.debug(f"状态码: {response.status_code}")
+            logger.debug(f"返回内容: {response.text}")
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]
 
@@ -881,7 +880,7 @@ async def call_openai(messages, model="gpt-4o-mini") -> str:
     except httpx.HTTPStatusError as http_err:
         status_code = http_err.response.status_code
         if status_code == 429:
-            logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+            logger.error(f"模型 {model} 触发速率限制 (429)")
             return "⚠️ API调用频率限制，请稍后再试。"
         else:
             try:
@@ -897,7 +896,7 @@ async def call_openai(messages, model="gpt-4o-mini") -> str:
             )
             return f"[自动回复] 在忙，有事请留言 ({status_code})"
     except Exception as e:
-        logger.error(f"❌ OpenAI 调用失败: 未知错误: {e}")
+        logger.error(f"OpenAI 调用失败: 未知错误: {e}")
         return ""
 
 
@@ -907,7 +906,7 @@ async def call_ai_summary(prompt: str) -> str:
     """
     messages = [{"role": "user", "content": prompt}]
     model = "mistralai/mistral-7b-instruct:free"
-    logger.info(f"[ai] 开始 call_ai_summary 模型={model}")
+    logger.info(f"开始 call_ai_summary 模型={model}")
     # 你可以根据需求自由切换模型名
     return await call_openrouter(messages, model)
 
@@ -945,7 +944,7 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
     }
 
     async def _call_api():
-        logger.info(f"🔄 结构化生成调用: {STRUCTURED_API_MODEL}")
+        logger.info(f"结构化生成调用: {STRUCTURED_API_MODEL}")
         try:
             async with httpx.AsyncClient(timeout=360.0) as client:  # 增加超时到360秒
                 response = await client.post(
@@ -954,10 +953,10 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
                 response.raise_for_status()
                 return response.json()
         except httpx.ReadTimeout:
-            logger.warning(f"⚠️ 结构化生成调用超时 (模型: {STRUCTURED_API_MODEL})")
+            logger.warning(f"结构化生成调用超时 (模型: {STRUCTURED_API_MODEL})")
             raise  # 重新抛出异常以便重试机制处理
         except Exception as e:
-            logger.error(f"❌ 结构化生成调用异常: {type(e).__name__}: {str(e)}")
+            logger.error(f"结构化生成调用异常: {type(e).__name__}: {str(e)}")
             raise
 
     for attempt in range(max_retries):
@@ -1002,7 +1001,7 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
                     else:
                         raise  # 重新抛出异常
             except (json.JSONDecodeError, ValueError) as e:
-                logger.error(f"❌ JSON解析失败 (尝试 {attempt + 1}/{max_retries}): {e}")
+                logger.error(f"JSON解析失败 (尝试 {attempt + 1}/{max_retries}): {e}")
 
                 # 最后一次尝试时返回错误
                 if attempt == max_retries - 1:
@@ -1021,7 +1020,7 @@ async def call_structured_generation(messages: list, max_retries: int = 3) -> di
             status_code = e.response.status_code
             error_msg = f"HTTP错误 {status_code}"
             if status_code == 429:
-                logger.warning(f"⚠️ 速率限制 (尝试 {attempt + 1}/{max_retries})")
+                logger.warning(f"速率限制 (尝试 {attempt + 1}/{max_retries})")
                 await asyncio.sleep(2**attempt)  # 指数退避
                 continue
             else:
@@ -1081,10 +1080,10 @@ def get_weather_info(date: str, location: str = "") -> str:
     ]
     if not location:
         location = random.choice(default_locations)
-        logger.debug(f"[ai.weather] 使用随机位置ID: {location} 查询 {date} 天气")
+        logger.debug(f"ai.weather 使用随机位置ID: {location} 查询 {date} 天气")
 
     try:
-        logger.info(f"[ai.weather] 开始获取天气 date={date} location={location}")
+        logger.info(f"ai.weather 开始获取天气 date={date} location={location}")
         url = (
             "https://"
             + os.getenv("HEFENG_API_HOST", "have_no_api_host")
@@ -1095,13 +1094,13 @@ def get_weather_info(date: str, location: str = "") -> str:
             "key": os.getenv("HEFENG_API_KEY"),
             "lang": "zh",
         }
-        logger.debug(f"[ai.weather] 请求参数: {params}")
+        logger.debug(f"ai.weather 请求参数: {params}")
 
         response = httpx.get(url, params=params, timeout=10)
         response.raise_for_status()
 
         data = response.json()
-        logger.debug(f"[ai.weather] 响应: {data}")
+        logger.debug(f"ai.weather 响应: {data}")
 
         if data.get("code") != "200":
             error_msg = f"API错误代码: {data.get('code')}"
@@ -1122,7 +1121,7 @@ def get_weather_info(date: str, location: str = "") -> str:
                     f"日出：{day.get('sunrise')}，日落：{day.get('sunset')}，"
                     f"月升：{day.get('moonrise')}，月落：{day.get('moonset')}。"
                 )
-                logger.info(f"[ai.weather] 成功获取 {date} 天气")
+                logger.info(f"ai.weather 成功获取 {date} 天气")
                 return result
 
         logger.warning(f"未找到 {date} 的天气数据，使用最后一天数据替代")
@@ -1139,7 +1138,7 @@ def get_weather_info(date: str, location: str = "") -> str:
             f"日出：{day.get('sunrise')}，日落：{day.get('sunset')}，"
             f"月升：{day.get('moonrise')}，月落：{day.get('moonset')}。"
         )
-        logger.debug(f"[ai.weather] 使用最后一天数据作为 {date} 天气: {result[:50]}...")
+        logger.debug(f"ai.weather 使用最后一天数据作为 {date} 天气: {result[:50]}...")
         return result
     except httpx.HTTPError as e:
         logger.error(f"HTTP请求失败: {e}")
@@ -1153,13 +1152,13 @@ def get_weather_info(date: str, location: str = "") -> str:
     # 回退：使用伪随机天气
     seed = int(hashlib.md5(f"{date}-{location}".encode()).hexdigest()[:8], 16)
     random.seed(seed)
-    logger.warning(f"⚠️ 回退到伪随机天气 (种子: {seed})")
+    logger.warning(f"回退到伪随机天气 (种子: {seed})")
 
     weather_options = ["晴天", "阴天", "雨天", "雪天", "雾天"]
     weather_weights = [0.4, 0.25, 0.2, 0.05, 0.1]
 
     result = random.choices(weather_options, weights=weather_weights)[0]
-    logger.debug(f"[ai.weather] 生成伪随机天气: {result}")
+    logger.debug(f"ai.weather 生成伪随机天气: {result}")
     return result
 
 
@@ -1246,10 +1245,10 @@ async def generate_daily_schedule(
 
         return result
     except json.JSONDecodeError:
-        logger.error(f"❌ generate_daily_schedule: AI返回的不是有效的JSON: {response}")
+        logger.error(f"generate_daily_schedule: AI返回的不是有效的JSON: {response}")
         return {"error": "AI返回格式错误", "raw_response": response}
     except Exception as e:
-        logger.error(f"❌ generate_daily_schedule: 调用失败: {e}")
+        logger.error(f"generate_daily_schedule: 调用失败: {e}")
         return {"error": f"调用失败: {str(e)}"}
 
 
@@ -1334,10 +1333,10 @@ async def generate_major_event(
 
         return result
     except json.JSONDecodeError:
-        logger.error(f"❌ generate_major_event: AI返回的不是有效的JSON: {response}")
+        logger.error(f"generate_major_event: AI返回的不是有效的JSON: {response}")
         return {"error": "AI返回格式错误", "raw_response": response}
     except Exception as e:
-        logger.error(f"❌ generate_major_event: 调用失败: {e}")
+        logger.error(f"generate_major_event: 调用失败: {e}")
         return {"error": f"调用失败: {str(e)}"}
 
 
@@ -1431,10 +1430,10 @@ async def generate_micro_experiences(
 
         return response["items"]
     except json.JSONDecodeError:
-        logger.error("❌ generate_micro_experiences: AI返回的不是有效的JSON")
+        logger.error("generate_micro_experiences: AI返回的不是有效的JSON")
         return [{"error": "AI返回格式错误"}]
     except Exception as e:
-        logger.error(f"❌ generate_micro_experiences: 调用失败: {e}")
+        logger.error(f"generate_micro_experiences: 调用失败: {e}")
         return [{"error": f"调用失败: {str(e)}"}]
 
 
@@ -1470,5 +1469,5 @@ async def summarize_past_micro_experiences(experiences: list) -> str:
         # response = await call_openai(messages, model="gpt-4o-mini")
         return response
     except Exception as e:
-        logger.error(f"❌ summarize_past_micro_experiences: 调用失败: {e}")
+        logger.error(f"summarize_past_micro_experiences: 调用失败: {e}")
         return f"故事生成失败: {str(e)}"

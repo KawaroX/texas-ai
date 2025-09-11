@@ -1,5 +1,10 @@
 .env
 __pycache__/
+*.pyc
+*.pyo
+*.log
+logs/
+celerybeat-schedule*
 data/postgres
 .DS_Store
 data/.DS_Store

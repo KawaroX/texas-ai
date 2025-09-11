@@ -6,7 +6,9 @@
 import asyncio
 import sys
 import os
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -16,32 +18,31 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
 
 def test_imports():
     """测试所有必要的导入"""
-    logger.info("🔍 测试导入...")
+    logger.info("测试导入...")
     
     try:
         from app.config import settings
-        logger.info("✅ settings导入成功")
+        logger.info("settings导入成功")
     except Exception as e:
-        logger.error(f"❌ settings导入失败: {e}")
+        logger.error(f"settings导入失败: {e}")
         return False
     
     try:
         from services.bark_notifier import bark_notifier
-        logger.info("✅ bark_notifier导入成功")
-        logger.info(f"   bark_notifier.api_key = {getattr(bark_notifier, 'api_key', 'NOT_FOUND')}")
+        logger.info("bark_notifier导入成功")
+        logger.info(f"bark_notifier.api_key = {getattr(bark_notifier,'api_key', 'NOT_FOUND')}")
     except Exception as e:
-        logger.error(f"❌ bark_notifier导入失败: {e}")
+        logger.error(f"bark_notifier导入失败: {e}")
         return False
     
     try:
         from services.image_generation_service import image_generation_service
-        logger.info("✅ image_generation_service导入成功")
+        logger.info("image_generation_service导入成功")
     except Exception as e:
-        logger.error(f"❌ image_generation_service导入失败: {e}")
+        logger.error(f"image_generation_service导入失败: {e}")
         return False
         
     return True
@@ -61,14 +62,14 @@ async def test_basic_image_generation():
         image_path = await image_generation_service.generate_image_from_prompt(test_content)
         
         if image_path:
-            logger.info(f"✅ 场景图生成成功: {image_path}")
+            logger.info(f"场景图生成成功: {image_path}")
             return True
         else:
-            logger.warning("⚠️ 场景图生成返回None")
+            logger.warning("场景图生成返回None")
             return False
             
     except Exception as e:
-        logger.error(f"❌ 图片生成测试失败: {e}", exc_info=True)
+        logger.error(f"图片生成测试失败: {e}", exc_info=True)
         return False
 
 
@@ -85,14 +86,14 @@ async def test_selfie_generation():
         image_path = await image_generation_service.generate_selfie(test_content)
         
         if image_path:
-            logger.info(f"✅ 自拍生成成功: {image_path}")
+            logger.info(f"自拍生成成功: {image_path}")
             return True
         else:
-            logger.warning("⚠️ 自拍生成返回None")
+            logger.warning("自拍生成返回None")
             return False
             
     except Exception as e:
-        logger.error(f"❌ 自拍生成测试失败: {e}", exc_info=True)
+        logger.error(f"自拍生成测试失败: {e}", exc_info=True)
         return False
 
 
@@ -104,8 +105,8 @@ def test_bark_notifier():
         from services.bark_notifier import bark_notifier
         
         # 测试属性
-        logger.info(f"bark_notifier.base_url = {getattr(bark_notifier, 'base_url', 'NOT_FOUND')}")
-        logger.info(f"bark_notifier.api_key = {getattr(bark_notifier, 'api_key', 'NOT_FOUND')}")
+        logger.info(f"bark_notifier.base_url = {getattr(bark_notifier,'base_url', 'NOT_FOUND')}")
+        logger.info(f"bark_notifier.api_key = {getattr(bark_notifier,'api_key', 'NOT_FOUND')}")
         
         # 尝试异步调用
         async def test_notification():
@@ -116,11 +117,11 @@ def test_bark_notifier():
             )
         
         asyncio.run(test_notification())
-        logger.info("✅ Bark通知测试完成")
+        logger.info("Bark通知测试完成")
         return True
         
     except Exception as e:
-        logger.error(f"❌ Bark通知测试失败: {e}", exc_info=True)
+        logger.error(f"Bark通知测试失败: {e}", exc_info=True)
         return False
 
 
@@ -131,28 +132,28 @@ def test_config():
     try:
         from app.config import settings
         
-        logger.info(f"OPENAI_API_KEY存在: {bool(getattr(settings, 'OPENAI_API_KEY', None))}")
-        logger.info(f"REDIS_URL存在: {bool(getattr(settings, 'REDIS_URL', None))}")
+        logger.info(f"OPENAI_API_KEY存在: {bool(getattr(settings,'OPENAI_API_KEY', None))}")
+        logger.info(f"REDIS_URL存在: {bool(getattr(settings,'REDIS_URL', None))}")
         
         return True
         
     except Exception as e:
-        logger.error(f"❌ 配置测试失败: {e}")
+        logger.error(f"配置测试失败: {e}")
         return False
 
 
 async def main():
     """主函数"""
-    logger.info("🚀 开始图片生成调试")
+    logger.info("开始图片生成调试")
     
     # 1. 测试导入
     if not test_imports():
-        logger.error("❌ 导入测试失败，停止测试")
+        logger.error("导入测试失败，停止测试")
         return
     
     # 2. 测试配置
     if not test_config():
-        logger.error("❌ 配置测试失败，停止测试")
+        logger.error("配置测试失败，停止测试")
         return
     
     # 3. 测试Bark通知

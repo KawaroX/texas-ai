@@ -1,3 +1,7 @@
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 from celery import Celery
 from celery.schedules import crontab
 from app.config import settings

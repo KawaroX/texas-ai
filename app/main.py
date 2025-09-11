@@ -1,4 +1,7 @@
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 from fastapi import FastAPI, HTTPException, Depends, Query, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.exception_handlers import http_exception_handler
@@ -18,6 +21,17 @@ from app.life_system import (
 )
 from datetime import date
 
+# 统一日志配置
+from utils.logging_config import setup_logging, get_logger
+
+# 配置日志系统
+setup_logging(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    log_file=os.getenv("LOG_FILE", "logs/texas-ai.log"),
+    console_output=True
+)
+logger = get_logger(__name__)
+
 # 创建全局配置管理器实例
 gemini_config = GeminiConfigManager()
 
@@ -36,12 +50,6 @@ DEFAULT_GEMINI_CFG_2 = {
 
 DEFAULT_GEMINI_CFG = gemini_config.get_default_config()
 ALLOWED_KEYS = set(DEFAULT_GEMINI_CFG.keys())
-
-# 配置日志：时间戳、级别、模块、函数、行号、消息
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s:%(funcName)s:%(lineno)d - %(message)s",
-)
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
@@ -72,13 +80,17 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if request.headers.get("upgrade", "").lower() == "websocket":
             return await call_next(request)
         
+        client_ip = request.client.host if request.client else "unknown"
+        
         # 检查是否为恶意路径
         if request.url.path in self.MALICIOUS_PATHS:
+            logger.warning(f"阻止恶意扫描请求: {request.url.path} from {client_ip}")
             return Response(status_code=404, content="")
         
         # 检查可疑查询参数
         for param, value in self.SUSPICIOUS_PARAMS.items():
             if request.query_params.get(param) == value:
+                logger.warning(f"阻止可疑查询参数: {param}={value} from {client_ip}")
                 return Response(status_code=404, content="")
         
         # 对根路径的非正常请求静默处理
@@ -86,6 +98,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             # 检查User-Agent是否像爬虫/扫描器
             user_agent = request.headers.get("user-agent", "").lower()
             if any(bot in user_agent for bot in ["bot", "crawler", "spider", "scanner", "curl", "wget"]):
+                logger.info(f"阻止爬虫/扫描器访问根路径: {user_agent[:50]} from {client_ip}")
                 return Response(status_code=404, content="")
         
         return await call_next(request)
@@ -94,15 +107,29 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理器"""
-    # 启动事件
-    ws_client = MattermostWebSocketClient()
-    asyncio.create_task(ws_client.connect())
+    logger.info("德克萨斯AI系统启动中...")
     
-    # 启动 Redis 清理服务
-    asyncio.create_task(cleanup_service.start_cleanup_scheduler())
-    
-    yield
-    # 关闭事件（如果需要的话可以在这里添加清理代码）
+    try:
+        # 启动事件
+        logger.info("初始化 Mattermost WebSocket 客户端")
+        ws_client = MattermostWebSocketClient()
+        asyncio.create_task(ws_client.connect())
+        
+        # 启动 Redis 清理服务
+        logger.info("启动 Redis 清理服务")
+        asyncio.create_task(cleanup_service.start_cleanup_scheduler())
+        
+        logger.info("所有服务已启动，系统就绪")
+        
+        yield
+        
+        # 关闭事件
+        logger.info("德克萨斯AI系统正在关闭...")
+        logger.info("系统已安全关闭")
+        
+    except Exception as e:
+        logger.critical(f"系统启动失败: {e}", exc_info=True)
+        raise
 
 
 app = FastAPI(title=settings.BOT_NAME, lifespan=lifespan)
@@ -187,7 +214,6 @@ async def replace_gemini_cfg(payload: dict, _=Depends(check_k)):
         return {"ok": True, "config": new_cfg}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
 
 
 # Keep root path returning 404 (not accessible)

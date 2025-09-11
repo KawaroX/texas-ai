@@ -27,7 +27,9 @@
 """
 
 import httpx
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import os
 import uuid
 import redis
@@ -42,7 +44,6 @@ from .character_manager import character_manager
 # 监控功能在 tasks 层使用，这里不需要导入
 # from .image_generation_monitor import image_generation_monitor
 
-logger = logging.getLogger(__name__)
 
 IMAGE_SAVE_DIR = "/app/generated_content/images"  # 在 Docker 容器内的路径
 os.makedirs(IMAGE_SAVE_DIR, exist_ok=True)
@@ -77,7 +78,7 @@ class ImageGenerationService:
             # 使用本地图片管理器随机选择底图
             new_path = selfie_manager.get_random_local_image()
             if not new_path:
-                logger.error("❌ 没有可用的本地自拍底图")
+                logger.error("没有可用的本地自拍底图")
                 return None
 
             self.redis_client.set(redis_key, new_path, ex=90000)  # 25小时过期
@@ -238,10 +239,10 @@ class ImageGenerationService:
                 response.raise_for_status()
                 return response.content
         except httpx.HTTPStatusError as e:
-            logger.error(f"❌ 下载图片失败 (HTTP Status): {e.response.status_code} for URL: {url}")
+            logger.error(f"下载图片失败 (HTTP Status): {e.response.status_code} for URL: {url}")
             return None
         except Exception as e:
-            logger.error(f"❌ 下载图片时发生未知异常: {e} for URL: {url}")
+            logger.error(f"下载图片时发生未知异常: {e} for URL: {url}")
             return None
 
     def _save_image(self, image_data: bytes, extension: str = "png") -> str:
@@ -259,18 +260,18 @@ class ImageGenerationService:
         """根据经历描述生成图片"""
         await bark_notifier.send_notification("德克萨斯AI-开始生成场景图", f"内容: {experience_description[:50]}...", "TexasAIPics")
         if not self.api_key:
-            logger.warning("⚠️ 未配置 OPENAI_API_KEY，跳过图片生成。")
+            logger.warning("未配置 OPENAI_API_KEY，跳过图片生成。")
             await bark_notifier.send_notification("德克萨斯AI-生成场景图失败", "错误: 未配置OPENAI_API_KEY", "TexasAIPics")
             return None
 
         # 🆕 优先使用AI预分析的角色检测结果
         if scene_analysis:
             detected_characters = scene_analysis.get("characters", [])
-            logger.info(f"🔍 使用AI预分析检测到的角色: {detected_characters}")
+            logger.info(f"使用AI预分析检测到的角色: {detected_characters}")
         else:
             # 回退到传统角色检测方法
             detected_characters = character_manager.detect_characters_in_text(experience_description)
-            logger.info(f"🔍 使用传统方法检测到场景中的角色: {detected_characters}")
+            logger.info(f"使用传统方法检测到场景中的角色: {detected_characters}")
 
         # 如果检测到角色，尝试使用角色图片增强生成
         if detected_characters:
@@ -338,14 +339,14 @@ class ImageGenerationService:
                         await bark_notifier.send_notification("德克萨斯AI-生成场景图成功", f"图片已保存到 {filepath}", "TexasAIPics")
                         return filepath
                     except Exception as decode_error:
-                        logger.error(f"❌ base64解码失败: {decode_error}")
+                        logger.error(f"base64解码失败: {decode_error}")
 
                 # 如果两种格式都没有
-                logger.error(f"❌ 图片生成API未返回有效的图片数据: {result}")
+                logger.error(f"图片生成API未返回有效的图片数据: {result}")
                 await bark_notifier.send_notification("德克萨斯AI-生成场景图失败", f"错误: API未返回有效数据。响应: {str(result)[:50]}...", "TexasAIPics")
                 return None
         except Exception as e:
-            logger.error(f"❌ 调用图片生成API时发生未知异常: {e}")
+            logger.error(f"调用图片生成API时发生未知异常: {e}")
             await bark_notifier.send_notification("德克萨斯AI-生成场景图异常", f"错误: {str(e)[:100]}...", "TexasAIPics")
             return None
 
@@ -358,16 +359,16 @@ class ImageGenerationService:
         character_image_path = character_manager.get_character_image_path(main_character)
 
         if not character_image_path:
-            logger.warning(f"❌ 未找到角色 {main_character} 的本地图片，回退到普通场景生成")
+            logger.warning(f"未找到角色 {main_character} 的本地图片，回退到普通场景生成")
             return await self._generate_scene_without_characters(experience_description)
 
         # 读取角色图片
         try:
             with open(character_image_path, 'rb') as f:
                 character_image_data = f.read()
-            logger.info(f"✅ 成功读取角色图片: {main_character} -> {character_image_path}")
+            logger.info(f"成功读取角色图片: {main_character} -> {character_image_path}")
         except Exception as e:
-            logger.error(f"❌ 无法读取角色图片: {e}")
+            logger.error(f"无法读取角色图片: {e}")
             return await self._generate_scene_without_characters(experience_description, scene_analysis)
 
         # 🆕 构建增强的提示词，结合AI预分析和传统方法
@@ -474,13 +475,13 @@ class ImageGenerationService:
                         await bark_notifier.send_notification("德克萨斯AI-多角色场景图成功", f"包含角色: {', '.join(detected_characters)}", "TexasAIPics")
                         return filepath
                     except Exception as decode_error:
-                        logger.error(f"❌ base64解码失败: {decode_error}")
+                        logger.error(f"base64解码失败: {decode_error}")
 
-                logger.error(f"❌ 多角色场景图生成API未返回有效数据: {result}")
+                logger.error(f"多角色场景图生成API未返回有效数据: {result}")
                 return None
 
         except Exception as e:
-            logger.error(f"❌ 多角色场景图生成异常: {e}")
+            logger.error(f"多角色场景图生成异常: {e}")
             await bark_notifier.send_notification("德克萨斯AI-多角色场景图失败", f"错误: {str(e)[:100]}...", "TexasAIPics")
             return None
 
@@ -510,7 +511,7 @@ class ImageGenerationService:
         """根据经历描述和每日基础图片生成自拍，并加入季节性服装要求。"""
         await bark_notifier.send_notification("德克萨斯AI-开始生成自拍", f"内容: {experience_description[:50]}...", "TexasAIPics")
         if not self.api_key:
-            logger.warning("⚠️ 未配置 OPENAI_API_KEY，跳过自拍生成。")
+            logger.warning("未配置 OPENAI_API_KEY，跳过自拍生成。")
             await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", "错误: 未配置OPENAI_API_KEY", "TexasAIPics")
             return None
 
@@ -523,9 +524,9 @@ class ImageGenerationService:
         try:
             with open(base_image_path, 'rb') as f:
                 base_image_data = f.read()
-            logger.info(f"✅ 成功读取本地底图: {base_image_path}")
+            logger.info(f"成功读取本地底图: {base_image_path}")
         except Exception as e:
-            logger.error(f"❌ 无法读取本地基础自拍图片: {e}")
+            logger.error(f"无法读取本地基础自拍图片: {e}")
             await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", f"错误: 无法读取底图文件 {base_image_path}", "TexasAIPics")
             return None
 
@@ -535,14 +536,14 @@ class ImageGenerationService:
             # 自拍模式确保包含德克萨斯（预分析中应该已处理，这里做双重保险）
             if "德克萨斯" not in detected_characters:
                 detected_characters.append("德克萨斯")
-            logger.info(f"🔍 使用AI预分析检测到的自拍角色: {detected_characters}")
+            logger.info(f"使用AI预分析检测到的自拍角色: {detected_characters}")
         else:
             # 回退到传统角色检测
             detected_characters = character_manager.detect_characters_in_text(experience_description)
             # 自拍模式确保包含德克萨斯
             if "德克萨斯" not in detected_characters:
                 detected_characters.append("德克萨斯")
-            logger.info(f"🔍 使用传统方法检测到的自拍角色: {detected_characters}")
+            logger.info(f"使用传统方法检测到的自拍角色: {detected_characters}")
 
         # 构建其他角色描述（排除德克萨斯）
         other_characters = [char for char in detected_characters if char != "德克萨斯"]
@@ -657,14 +658,14 @@ class ImageGenerationService:
                         await bark_notifier.send_notification("德克萨斯AI-生成自拍成功", f"图片已保存到 {filepath}", "TexasAIPics")
                         return filepath
                     except Exception as decode_error:
-                        logger.error(f"❌ 自拍base64解码失败: {decode_error}")
+                        logger.error(f"自拍base64解码失败: {decode_error}")
 
                 # 如果两种格式都没有
-                logger.error(f"❌ 自拍生成API未返回有效的图片数据: {result}")
+                logger.error(f"自拍生成API未返回有效的图片数据: {result}")
                 await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", f"错误: API未返回有效数据。响应: {str(result)[:50]}...", "TexasAIPics")
                 return None
         except Exception as e:
-            logger.error(f"❌ 调用自拍生成API时发生未知异常: {e}")
+            logger.error(f"调用自拍生成API时发生未知异常: {e}")
             await bark_notifier.send_notification("德克萨斯AI-生成自拍异常", f"错误: {str(e)[:100]}...", "TexasAIPics")
             return None
 

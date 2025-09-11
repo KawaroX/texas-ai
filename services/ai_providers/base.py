@@ -1,4 +1,8 @@
 """
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 AI Provider 抽象基类
 
 定义了所有AI服务提供商必须实现的统一接口。

@@ -8,13 +8,14 @@ import os
 import json
 import httpx
 import asyncio
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from typing import AsyncGenerator, Dict, Any, Optional
 
 from .base import ConfigurableProvider
 from .utils import retry_with_backoff
 
-logger = logging.getLogger(__name__)
 
 # 配置常量
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -159,7 +160,7 @@ class OpenAIProvider(ConfigurableProvider):
             except httpx.HTTPStatusError as http_err:
                 status_code = http_err.response.status_code
                 if status_code == 429:
-                    logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+                    logger.error(f"模型 {model} 触发速率限制 (429)")
                     if attempt < max_retries - 1:
                         delay = base_delay * (2**attempt)
                         logger.warning(
@@ -196,7 +197,7 @@ class OpenAIProvider(ConfigurableProvider):
                     await asyncio.sleep(delay)
                     continue
                 else:
-                    logger.error(f"❌ OpenAI流式调用失败: 未知错误: {e}")
+                    logger.error(f"OpenAI流式调用失败: 未知错误: {e}")
                     yield ""
                     return
 
@@ -235,7 +236,7 @@ class OpenAIProvider(ConfigurableProvider):
         except httpx.HTTPStatusError as http_err:
             status_code = http_err.response.status_code
             if status_code == 429:
-                logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+                logger.error(f"模型 {model} 触发速率限制 (429)")
                 return "⚠️ API调用频率限制，请稍后再试。"
             else:
                 try:
@@ -251,7 +252,7 @@ class OpenAIProvider(ConfigurableProvider):
                 )
                 return f"[自动回复] 在忙，有事请留言 ({status_code})"
         except Exception as e:
-            logger.error(f"❌ OpenAI 调用失败: 未知错误: {e}")
+            logger.error(f"OpenAI 调用失败: 未知错误: {e}")
             return ""
     
     async def call_structured_generation(self, messages: list, max_retries: int = 3) -> dict:
@@ -302,16 +303,16 @@ class OpenAIProvider(ConfigurableProvider):
                             result = json.loads(json_str)
                             if not isinstance(result, dict):
                                 raise ValueError("提取的JSON不是对象")
-                            logger.warning("⚠️ 从响应中提取JSON对象")
+                            logger.warning("从响应中提取JSON对象")
                             return result
                         else:
                             raise  # 重新抛出异常
                 except (json.JSONDecodeError, ValueError) as e:
-                    logger.warning(f"⚠️ JSON解析失败: {e}")
+                    logger.warning(f"JSON解析失败: {e}")
                     return {"raw_content": content, "parse_error": str(e)}
 
         try:
             return await retry_with_backoff(_call_request, max_retries, self._config["base_delay"])
         except Exception as e:
-            logger.error(f"❌ 结构化生成失败: {e}")
+            logger.error(f"结构化生成失败: {e}")
             return {"error": str(e)}

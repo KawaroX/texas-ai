@@ -36,12 +36,13 @@
 
 import os
 import json
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 
-logger = logging.getLogger(__name__)
 
 @dataclass
 class ImageGenerationRecord:
@@ -90,10 +91,10 @@ class ImageGenerationMonitor:
             with open(log_path, 'a', encoding='utf-8') as f:
                 json.dump(record.to_dict(), f, ensure_ascii=False)
                 f.write('\n')
-            logger.debug(f"✅ 图片生成记录已保存: {record.experience_id}")
+            logger.debug(f"图片生成记录已保存: {record.experience_id}")
             return True
         except Exception as e:
-            logger.error(f"❌ 保存图片生成记录失败: {e}")
+            logger.error(f"保存图片生成记录失败: {e}")
             return False
     
     def record_generation_attempt(self, 
@@ -124,7 +125,7 @@ class ImageGenerationMonitor:
             
             return self.record_generation(record)
         except Exception as e:
-            logger.error(f"❌ 创建图片生成记录失败: {e}")
+            logger.error(f"创建图片生成记录失败: {e}")
             return False
     
     def _load_daily_records(self, date: str = None) -> List[Dict[str, Any]]:
@@ -143,7 +144,7 @@ class ImageGenerationMonitor:
                         records.append(json.loads(line))
             return records
         except Exception as e:
-            logger.error(f"❌ 读取每日记录失败: {e}")
+            logger.error(f"读取每日记录失败: {e}")
             return records
     
     def generate_daily_summary(self, date: str = None) -> Dict[str, Any]:
@@ -212,7 +213,7 @@ class ImageGenerationMonitor:
                 json.dump(summary, f, ensure_ascii=False, indent=2)
             logger.info(f"📊 每日汇总已生成: {date} - 成功率 {summary['success_rate']:.2%}")
         except Exception as e:
-            logger.error(f"❌ 保存每日汇总失败: {e}")
+            logger.error(f"保存每日汇总失败: {e}")
         
         return summary
     
@@ -233,7 +234,7 @@ class ImageGenerationMonitor:
                         summary = json.load(f)
                         summaries.append(summary)
                 except Exception as e:
-                    logger.error(f"❌ 读取汇总文件失败 {date}: {e}")
+                    logger.error(f"读取汇总文件失败 {date}: {e}")
         
         return summaries
 

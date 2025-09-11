@@ -1,5 +1,7 @@
 import asyncio
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import os
 
 # 确保脚本可以找到 app 模块
@@ -22,12 +24,11 @@ def create_test_svg_image(path: str):
     '''
     with open(path, 'w') as f:
         f.write(svg_content)
-    logging.info(f"✅ 已在 {path} 创建测试SVG图片。")
+    logger.info(f"已在 {path} 创建测试SVG图片。")
 
 async def main():
     """测试发送带图片的消息到 kawaro 的私聊频道。"""
     setup_logging()
-    logger = logging.getLogger(__name__)
     
     logger.info("--- 开始执行图片发送测试脚本 ---")
 
@@ -43,14 +44,14 @@ async def main():
     logger.info("Mattermost 客户端已初始化。")
 
     # 3. 获取与 kawaro 的私聊频道信息
-    logger.info("正在获取 'kawaro' 的私聊频道信息...")
+    logger.info("正在获取'kawaro' 的私聊频道信息...")
     kawaro_info = await ws_client.get_kawaro_user_and_dm_info()
     if not kawaro_info or not kawaro_info.get("channel_id"):
-        logger.error("❌ 未能获取到 'kawaro' 的私聊频道信息，测试终止。")
+        logger.error("未能获取到'kawaro' 的私聊频道信息，测试终止。")
         return
     
     channel_id = kawaro_info["channel_id"]
-    logger.info(f"✅ 成功获取到私聊频道 ID: {channel_id}")
+    logger.info(f"成功获取到私聊频道 ID: {channel_id}")
 
     # 4. 调用发送带图片消息的方法
     logger.info(f"准备向频道 {channel_id} 发送图片 {test_image_path}...")
@@ -60,9 +61,9 @@ async def main():
             message=test_message,
             image_path=test_image_path
         )
-        logger.info("✅ 图片消息发送调用完成。请检查 Mattermost 是否收到。")
+        logger.info("图片消息发送调用完成。请检查 Mattermost 是否收到。")
     except Exception as e:
-        logger.error(f"❌ 调用 post_message_with_image 时发生异常: {e}", exc_info=True)
+        logger.error(f"调用 post_message_with_image 时发生异常: {e}", exc_info=True)
     finally:
         # 清理测试图片
         if os.path.exists(test_image_path):

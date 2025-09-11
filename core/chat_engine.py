@@ -1,11 +1,11 @@
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from typing import List, Dict, Optional, Tuple
 
 from core.context_merger import merge_context
 from services.ai_service import stream_ai_chat
 from core.persona import get_texas_system_prompt
-
-logger = logging.getLogger(__name__)
 
 
 class ChatEngine:
@@ -58,7 +58,7 @@ class ChatEngine:
         # 2. 获取整合的系统提示词和完整消息列表
         if context_info:
             # 如果提供了 context_info，说明已经预先调用了 merge_context
-            logger.debug("[chat_engine] 使用预提供的 context_info")
+            logger.debug("使用预提供的 context_info")
 
             if isinstance(context_info, tuple) and len(context_info) == 2:
                 # 如果 context_info 是 merge_context 返回的元组格式
@@ -94,11 +94,11 @@ class ChatEngine:
         # 3. 替换 dynamic_system_prompt 中的 <BgInfo> 占位符
         if "<BgInfo>" in dynamic_system_prompt:
             final_system_prompt = dynamic_system_prompt.replace("<BgInfo>", bg_info)
-            logger.debug("[chat_engine] 已替换 <BgInfo> 占位符")
+            logger.debug("已替换 <BgInfo> 占位符")
         else:
             # 如果没有占位符，直接追加背景信息
             final_system_prompt = f"{dynamic_system_prompt}\n\n{bg_info}"
-            logger.debug("[chat_engine] 无 <BgInfo> 占位符，直接追加背景信息")
+            logger.debug("无 <BgInfo> 占位符，直接追加背景信息")
 
         # 4. 构建新的消息结构：system + 完整的对话历史
         prompt_messages = [
@@ -125,7 +125,7 @@ class ChatEngine:
         # 4. 流式调用 AI 模型
         async for segment in stream_ai_chat(prompt_messages, "gemini-2.5-pro"):
             yield segment
-        logger.info(f"[chat_engine] 流式生成回复完成 channel={channel_id}")
+        logger.info(f"流式生成回复完成 channel={channel_id}")
 
     # 为了向后兼容，保留原有的单消息接口
     async def stream_reply_single(

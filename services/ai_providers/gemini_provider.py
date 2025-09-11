@@ -7,14 +7,15 @@ Gemini AI服务提供商
 import os
 import json
 import httpx
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from typing import AsyncGenerator, Dict, Any, Optional
 
 from .base import AIProviderBase
 from .utils import summarize_payload_for_log, retry_with_backoff
 from ..ai_config.gemini_config import GeminiConfigManager
 
-logger = logging.getLogger(__name__)
 
 # 配置常量
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -71,7 +72,7 @@ class GeminiProvider(AIProviderBase):
         cfg = await self.config_manager.load_config()
         model = model or cfg["model"]
         
-        logger.debug(f"🔄 正在使用模型进行 Gemini 流式对话: {model}")
+        logger.debug(f"正在使用模型进行 Gemini 流式对话: {model}")
         
         headers = self._build_headers()
         system_instruction, gemini_contents = self._convert_messages_to_gemini(messages)
@@ -107,9 +108,9 @@ class GeminiProvider(AIProviderBase):
             try:
                 full_url = f"{GEMINI_API_URL}/{model}:streamGenerateContent?alt=sse"
                 if retry_count > 0:
-                    logger.warning(f"🔄 第 {retry_count} 次重试请求: {full_url}")
+                    logger.warning(f"第 {retry_count} 次重试请求: {full_url}")
                 else:
-                    logger.debug(f"🚀 开始向 Gemini API 发送请求: {full_url}")
+                    logger.debug(f"开始向 Gemini API 发送请求: {full_url}")
                 
                 # 超时配置
                 timeout = httpx.Timeout(
@@ -123,7 +124,7 @@ class GeminiProvider(AIProviderBase):
                     async with client.stream(
                         "POST", full_url, headers=headers, json=payload
                     ) as response:
-                        logger.debug(f"🌐 Gemini API 响应状态码: {response.status_code}")
+                        logger.debug(f"Gemini API 响应状态码: {response.status_code}")
                         response.raise_for_status()
                         
                         async for raw_line in response.aiter_lines():
@@ -168,10 +169,10 @@ class GeminiProvider(AIProviderBase):
                                 continue
                         
                         if yielded_any:
-                            logger.debug("✅ Gemini流式调用成功完成")
+                            logger.debug("Gemini流式调用成功完成")
                             return
                         else:
-                            logger.warning("⚠️ Gemini流式调用未产生任何输出")
+                            logger.warning("Gemini流式调用未产生任何输出")
                             yield ""
                             return
                             
@@ -190,7 +191,7 @@ class GeminiProvider(AIProviderBase):
                 return
                 
             except Exception as e:
-                logger.error(f"❌ Gemini流式调用失败: 未知错误: {e}")
+                logger.error(f"Gemini流式调用失败: 未知错误: {e}")
                 yield ""
                 return
     
@@ -214,7 +215,7 @@ class GeminiProvider(AIProviderBase):
         }
         
         async def _call_request():
-            logger.info(f"🔄 正在使用模型进行 Gemini 非流式调用: {model}")
+            logger.info(f"正在使用模型进行 Gemini 非流式调用: {model}")
             async with httpx.AsyncClient(timeout=60) as client:
                 full_url = f"{GEMINI_API_URL}/{model}:generateContent"
                 response = await client.post(
@@ -222,8 +223,8 @@ class GeminiProvider(AIProviderBase):
                     headers=headers,
                     json=payload,
                 )
-                logger.debug(f"[Gemini] 状态码: {response.status_code}")
-                logger.debug(f"[Gemini] 返回内容: {response.text}")
+                logger.debug(f"状态码: {response.status_code}")
+                logger.debug(f"返回内容: {response.text}")
                 response.raise_for_status()
                 # Gemini API 的响应结构
                 return response.json()["candidates"][0]["content"]["parts"][0]["text"]
@@ -233,7 +234,7 @@ class GeminiProvider(AIProviderBase):
         except httpx.HTTPStatusError as http_err:
             status_code = http_err.response.status_code
             if status_code == 429:
-                logger.error(f"❌ 模型 {model} 触发速率限制 (429)")
+                logger.error(f"模型 {model} 触发速率限制 (429)")
                 return "⚠️ API调用频率限制，请稍后再试。"
             else:
                 try:
@@ -249,5 +250,5 @@ class GeminiProvider(AIProviderBase):
                 )
                 return f"[自动回复] 在忙，有事请留言 ({status_code})"
         except Exception as e:
-            logger.error(f"❌ Gemini 调用失败: 未知错误: {e}")
+            logger.error(f"Gemini 调用失败: 未知错误: {e}")
             return ""

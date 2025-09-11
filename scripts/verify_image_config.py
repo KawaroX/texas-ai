@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 验证图片生成API Key配置的脚本
 """
 

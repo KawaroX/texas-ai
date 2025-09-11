@@ -1,3 +1,7 @@
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from typing import List
@@ -31,4 +35,26 @@ class Settings(BaseSettings):
     IMAGE_GENERATION_API_KEY: str = ""
     IMAGE_GENERATION_API_URL: str = "https://yunwu.ai/v1/images"
 
-settings = Settings()
+try:
+    settings = Settings()
+    logger.info(f"配置加载成功 - BOT: {settings.BOT_NAME}")
+    logger.debug(f"数据库连接: {settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}")
+    logger.debug(f"Mattermost主机: {settings.MATTERMOST_HOST}")
+    
+    # 记录API密钥状态（不记录密钥本身）
+    api_status = []
+    if settings.OPENAI_API_KEY:
+        api_status.append("OpenAI")
+    if settings.CLAUDE_API_KEY:
+        api_status.append("Claude") 
+    if settings.IMAGE_GENERATION_API_KEY:
+        api_status.append("ImageGen")
+    
+    if api_status:
+        logger.info(f"已配置的API服务: {', '.join(api_status)}")
+    else:
+        logger.warning("未配置任何API密钥")
+        
+except Exception as e:
+    logger.error(f"配置加载失败: {e}")
+    raise

@@ -2,12 +2,13 @@ import os
 import json
 import hashlib
 import httpx
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
 
 class SelfieBaseImageManager:
     """德克萨斯自拍底图本地化管理器"""
@@ -49,7 +50,7 @@ class SelfieBaseImageManager:
                 with open(self.manifest_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception as e:
-                logger.error(f"❌ 加载清单文件失败: {e}")
+                logger.error(f"加载清单文件失败: {e}")
         
         # 返回默认清单结构
         return {
@@ -65,7 +66,7 @@ class SelfieBaseImageManager:
                 json.dump(manifest, f, ensure_ascii=False, indent=2)
             logger.info(f"📄 清单文件已保存: {self.manifest_file}")
         except Exception as e:
-            logger.error(f"❌ 保存清单文件失败: {e}")
+            logger.error(f"保存清单文件失败: {e}")
     
     async def download_image(self, url: str, filename: str) -> bool:
         """下载单张图片"""
@@ -80,11 +81,11 @@ class SelfieBaseImageManager:
                 with open(filepath, 'wb') as f:
                     f.write(response.content)
                 
-                logger.info(f"✅ 底图下载成功: {filename} ({len(response.content)} bytes)")
+                logger.info(f"底图下载成功: {filename} ({len(response.content)} bytes)")
                 return True
                 
         except Exception as e:
-            logger.error(f"❌ 下载底图失败 {url}: {e}")
+            logger.error(f"下载底图失败 {url}: {e}")
             # 如果文件已创建但下载失败，删除不完整的文件
             if filepath.exists():
                 filepath.unlink()
@@ -144,7 +145,7 @@ class SelfieBaseImageManager:
                 if filepath.exists():
                     local_paths.append(str(filepath))
                 else:
-                    logger.warning(f"⚠️ 清单中的文件不存在: {filepath}")
+                    logger.warning(f"清单中的文件不存在: {filepath}")
         
         logger.info(f"📂 找到 {len(local_paths)} 张本地底图")
         return local_paths
@@ -153,7 +154,7 @@ class SelfieBaseImageManager:
         """随机获取一张本地底图路径"""
         local_paths = self.get_local_image_paths()
         if not local_paths:
-            logger.error("❌ 没有可用的本地底图")
+            logger.error("没有可用的本地底图")
             return None
         
         import random

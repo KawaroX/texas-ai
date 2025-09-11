@@ -7,7 +7,9 @@
 import asyncio
 import sys
 import os
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -19,7 +21,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
 
 async def main():
     """主函数"""

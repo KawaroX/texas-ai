@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 手动清理图片文件的脚本
 支持按日期范围、文件大小等条件清理图片
 """

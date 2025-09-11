@@ -1,5 +1,7 @@
 import json
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import redis
 import os
 from datetime import datetime
@@ -9,7 +11,6 @@ from app.config import settings
 from app.mattermost_client import MattermostWebSocketClient
 from core.context_merger import merge_context
 
-logger = logging.getLogger(__name__)
 
 # 初始化 Redis 客户端
 from utils.redis_manager import get_redis_client
@@ -34,16 +35,16 @@ def process_scheduled_interactions():
 
     # 如果 Redis 中没有该 key，先触发一次采集请求
     if not redis_client.exists(today_key):
-        logger.warning(f"⚠️ Redis 中不存在 key: {today_key}，将尝试采集交互事件")
+        logger.warning(f"Redis 中不存在 key: {today_key}，将尝试采集交互事件")
         try:
             import httpx
 
             response = httpx.get("http://bot:8000/collect-interactions", timeout=10.0)
             logger.debug(f"[interactions] 采集接口返回状态: {response.status_code}")
             if response.status_code != 200:
-                logger.warning("⚠️ 采集接口未成功响应，后续可能仍无数据")
+                logger.warning("采集接口未成功响应，后续可能仍无数据")
         except Exception as e:
-            logger.error(f"❌ 请求采集接口失败: {e}")
+            logger.error(f"请求采集接口失败: {e}")
 
     # 获取所有到期事件
     expired_events = redis_client.zrangebyscore(today_key, 0, current_timestamp)
@@ -70,7 +71,7 @@ def process_scheduled_interactions():
         finally:
             loop.close()
     except Exception as e:
-        logger.error(f"❌ 运行异步任务时发生错误: {e}")
+        logger.error(f"运行异步任务时发生错误: {e}")
 
     logger.info("[interactions] 定时主动交互任务完成")
 
@@ -85,7 +86,7 @@ async def _process_events_async(
     if ws_client.user_id is None:
         await ws_client.fetch_bot_user_id()
         if ws_client.user_id is None:
-            logger.error("❌ 无法获取 BOT user ID，跳过主动交互事件处理。")
+            logger.error("无法获取 BOT user ID，跳过主动交互事件处理。")
             return
 
     # 获取 kawaro 的用户 ID 和私聊频道 ID
@@ -100,19 +101,19 @@ async def _process_events_async(
             break
 
     if not kawaro_user_id:
-        logger.error("❌ 未找到 'kawaro' 用户 ID，无法发送主动交互消息。")
+        logger.error("未找到'kawaro' 用户 ID，无法发送主动交互消息。")
         return
 
     try:
         kawaro_dm_channel_id = await ws_client.create_direct_channel(kawaro_user_id)
         if not kawaro_dm_channel_id:
-            logger.error("❌ 无法获取或创建与 'kawaro' 的私聊频道。")
+            logger.error("无法获取或创建与'kawaro' 的私聊频道。")
             return
     except Exception as e:
-        logger.error(f"❌ 获取 'kawaro' 私聊频道时发生错误: {e}")
+        logger.error(f"获取'kawaro' 私聊频道时发生错误: {e}")
         return
 
-    logger.debug(f"[interactions] 已获取 'kawaro' 私聊频道 ID: {kawaro_dm_channel_id}")
+    logger.debug(f"[interactions] 已获取'kawaro' 私聊频道 ID: {kawaro_dm_channel_id}")
 
     # 辅助函数：将 HH:MM 格式的时间字符串转换为当天的 datetime 对象
     def time_str_to_datetime(date_obj: datetime.date, time_str: str) -> datetime:
@@ -142,7 +143,7 @@ async def _process_events_async(
                 and start_time_str
                 and end_time_str
             ):
-                logger.warning(f"⚠️ 事件数据缺少必要字段，跳过: {event_json_str}")
+                logger.warning(f"事件数据缺少必要字段，跳过: {event_json_str}")
                 print(
                     f"DEBUG: 缺少字段 - interaction_content: {bool(interaction_content)}, experience_id: {bool(experience_id)}, start_time: {bool(start_time_str)}, end_time: {bool(end_time_str)}"
                 )
@@ -198,16 +199,16 @@ async def _process_events_async(
             image_path = redis_client.hget(PROACTIVE_IMAGES_KEY, experience_id)
             
             # 🔍 添加详细调试日志
-            logger.info(f"[interactions] 🔍 调试信息 - experience_id: {experience_id}")
-            logger.info(f"[interactions] 🔍 从Redis获取的image_path: {image_path}")
+            logger.info(f"[interactions] 调试信息 - experience_id: {experience_id}")
+            logger.info(f"[interactions] 从Redis获取的image_path: {image_path}")
             if image_path:
                 file_exists = os.path.exists(image_path)
-                logger.info(f"[interactions] 🔍 文件是否存在: {file_exists} (路径: {image_path})")
+                logger.info(f"[interactions] 文件是否存在: {file_exists} (路径: {image_path})")
             else:
-                logger.info(f"[interactions] 🔍 Redis中没有找到该事件的图片映射")
+                logger.info(f"[interactions] Redis中没有找到该事件的图片映射")
             
             has_image = image_path and os.path.exists(image_path)
-            logger.info(f"[interactions] 🔍 最终has_image判断结果: {has_image}")
+            logger.info(f"[interactions] 最终has_image判断结果: {has_image}")
             
             # 统一处理：无论有无图片，都使用相同的AI消息生成逻辑
             try:
@@ -224,12 +225,12 @@ async def _process_events_async(
                 # 成功发送后，如果有图片，从Redis中移除已使用的图片映射
                 if has_image:
                     redis_client.hdel(PROACTIVE_IMAGES_KEY, experience_id)
-                    logger.info(f"[interactions] ✅ 成功发送带图片的主动交互消息，移除图片映射: {experience_id}")
+                    logger.info(f"[interactions] 成功发送带图片的主动交互消息，移除图片映射: {experience_id}")
                 else:
-                    logger.info(f"[interactions] ✅ 成功发送主动交互消息")
+                    logger.info(f"[interactions] 成功发送主动交互消息")
                     
             except Exception as send_error:
-                logger.error(f"❌ 发送主动交互消息失败: {send_error}")
+                logger.error(f"发送主动交互消息失败: {send_error}")
                 # 如果有图片映射，清理它
                 if has_image:
                     redis_client.hdel(PROACTIVE_IMAGES_KEY, experience_id)
@@ -252,9 +253,9 @@ async def _process_events_async(
             print(f"DEBUG: 成功处理事件 {experience_id}，已添加到交互记录")
 
         except json.JSONDecodeError as e:
-            logger.error(f"❌ 解析事件 JSON 失败，跳过: {event_json_str} - {e}")
+            logger.error(f"解析事件 JSON 失败，跳过: {event_json_str} - {e}")
         except Exception as e:
-            logger.error(f"❌ 处理主动交互事件时发生错误: {event_json_str} - {e}")
+            logger.error(f"处理主动交互事件时发生错误: {event_json_str} - {e}")
             # 考虑是否需要重试机制或将失败事件放入死信队列
 
     logger.info(f"[interactions] 主动交互处理完成 count={processed_count}")

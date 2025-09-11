@@ -34,7 +34,9 @@
 
 import os
 import httpx
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import json
 import asyncio
 import base64
@@ -50,7 +52,6 @@ GEMINI_API_URL = os.getenv("GEMINI_API_URL111", "https://yunwu.ai/v1beta/models/
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-logger = logging.getLogger(__name__)
 
 # Redis 客户端 - 迁移自 image_content_analyzer.py
 from utils.redis_manager import get_redis_client
@@ -74,7 +75,7 @@ async def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0
                     await asyncio.sleep(delay)
                     continue
                 else:
-                    logger.error("❌ 达到最大重试次数，放弃重试")
+                    logger.error("达到最大重试次数，放弃重试")
                     raise
             else:
                 # 其他HTTP错误直接抛出，不重试
@@ -89,7 +90,7 @@ async def retry_with_backoff(func, max_retries: int = 3, base_delay: float = 1.0
                 await asyncio.sleep(delay)
                 continue
             else:
-                logger.error("❌ 达到最大重试次数，放弃重试")
+                logger.error("达到最大重试次数，放弃重试")
                 raise
 
 
@@ -169,7 +170,7 @@ async def get_image_description(
     }
 
     async def _call_request():
-        logger.info(f"🔄 正在使用模型进行 get_image_description(): {model}")
+        logger.info(f"正在使用模型进行 get_image_description(): {model}")
         async with httpx.AsyncClient(timeout=120) as client:
             full_url = f"{GEMINI_API_URL}{model}:generateContent?key={OPENAI_API_KEY}"
             response = await client.post(
@@ -209,7 +210,7 @@ async def get_image_description(
         )
         return f"[图片处理失败: HTTP {status_code}]"
     except Exception as e:
-        logger.error(f"❌ Gemini Vision 调用失败: 未知错误: {e}")
+        logger.error(f"Gemini Vision 调用失败: 未知错误: {e}")
         return "[图片处理失败: 未知错误]"
 
 
@@ -290,7 +291,7 @@ def compress_image_if_needed(image_data: bytes, max_size_mb: float = 3.0) -> Tup
             compressed_size_mb = len(compressed_data) / (1024 * 1024)
             
             if compressed_size_mb <= max_size_mb:
-                logger.info(f"[image_service] ✅ 压缩成功：{current_size_mb:.2f}MB → {compressed_size_mb:.2f}MB（质量:{quality}）")
+                logger.info(f"[image_service] 压缩成功：{current_size_mb:.2f}MB → {compressed_size_mb:.2f}MB（质量:{quality}）")
                 return compressed_data, "image/jpeg"
         
         # 如果还是太大，再次缩小尺寸
@@ -305,15 +306,15 @@ def compress_image_if_needed(image_data: bytes, max_size_mb: float = 3.0) -> Tup
             compressed_size_mb = len(compressed_data) / (1024 * 1024)
             
             if compressed_size_mb <= max_size_mb:
-                logger.info(f"[image_service] ✅ 极限压缩成功：{current_size_mb:.2f}MB → {compressed_size_mb:.2f}MB（缩放:{scale}）")
+                logger.info(f"[image_service] 极限压缩成功：{current_size_mb:.2f}MB → {compressed_size_mb:.2f}MB（缩放:{scale}）")
                 return compressed_data, "image/jpeg"
         
         # 实在压缩不下去，返回最后一次尝试的结果
-        logger.warning(f"⚠️ [image_service] 压缩后仍然较大：{compressed_size_mb:.2f}MB，但已尽力压缩")
+        logger.warning(f"[image_service] 压缩后仍然较大：{compressed_size_mb:.2f}MB，但已尽力压缩")
         return compressed_data, "image/jpeg"
         
     except Exception as e:
-        logger.error(f"❌ [image_service] 图片压缩失败：{e}")
+        logger.error(f"[image_service] 图片压缩失败：{e}")
         return image_data, "image/png"
 
 
@@ -342,5 +343,5 @@ async def get_image_description_by_path(image_path: str) -> Optional[str]:
             return None
             
     except Exception as e:
-        logger.error(f"❌ [image_service] 获取图片描述时出错: {e}")
+        logger.error(f"[image_service] 获取图片描述时出错: {e}")
         return None

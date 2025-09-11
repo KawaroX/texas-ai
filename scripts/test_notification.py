@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 测试图片分析通知功能
 
 ⚠️ 注意：此测试脚本已废弃

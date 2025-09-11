@@ -6,13 +6,14 @@ Docker环境中的图片内容分析功能测试脚本
 import asyncio
 import os
 import sys
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 from pathlib import Path
 import hashlib
 
 # 设置日志
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def test_hash_function():

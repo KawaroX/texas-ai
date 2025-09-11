@@ -5,10 +5,10 @@ import time  # 导入time模块用于延迟
 from datetime import datetime
 import pytz
 from typing import Dict, List
-import logging
-import redis  # 添加Redis支持
+from utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+import redis  # 添加Redis支持
 
 
 class MemorySummarizer:

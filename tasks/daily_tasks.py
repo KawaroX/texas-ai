@@ -6,13 +6,13 @@ from services.memory_data_collector import MemoryDataCollector
 from services.memory_summarizer import MemorySummarizer
 from services.memory_storage import MemoryStorage
 from typing import List, Dict
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import shutil
 import os
 from datetime import date
 import glob
-
-logger = logging.getLogger(__name__)
 
 
 @shared_task
@@ -28,7 +28,7 @@ def generate_daily_memories():
             ("schedule", collector.get_yesterday_schedule_experiences),
             ("event", collector.get_major_events),
         ]:
-            logger.info(f"[daily_tasks] 开始处理 {data_type} 数据")
+            logger.info(f"开始处理 {data_type} 数据")
             data = collector_method()
             if data:
                 # 提取ID用于后续标记
@@ -59,7 +59,7 @@ def generate_daily_memories():
         logger.error(f"生成每日记忆失败: {str(e)}")
         raise
 
-    logger.info("[daily_tasks] 每日记忆生成任务完成")
+    logger.info("每日记忆生成任务完成")
 
 
 @shared_task
@@ -74,7 +74,7 @@ def generate_chat_memories():
         all_chats = collector.get_unembedded_chats()
 
         if not all_chats:
-            logger.debug("[daily_tasks] 没有未嵌入的聊天记录需要处理")
+            logger.debug("没有未嵌入的聊天记录需要处理")
             return
 
         # 按时间分段处理（如果时间跨度超过3小时）
@@ -139,7 +139,7 @@ def generate_chat_memories():
         logger.error(f"生成聊天记录记忆失败: {str(e)}")
         raise
 
-    logger.info("[daily_tasks] 聊天记录记忆生成任务完成")
+    logger.info("聊天记录记忆生成任务完成")
 
 
 def process_chat_batch(
@@ -179,7 +179,7 @@ def clean_generated_content():
     try:
         dir_path = "generated_content"
         if not os.path.exists(dir_path):
-            logger.debug(f"[daily_tasks] 目录不存在: {dir_path}")
+            logger.debug(f"目录不存在: {dir_path}")
             return {"status": "success", "removed": 0}
         yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
         pattern = os.path.join(dir_path, f"*{yesterday}*")
@@ -189,16 +189,16 @@ def clean_generated_content():
             try:
                 # 跳过 images 目录和其中的文件
                 if "images" in file_path:
-                    logger.debug(f"[daily_tasks] 跳过图片文件（永久保留）: {file_path}")
+                    logger.debug(f"跳过图片文件（永久保留）: {file_path}")
                     continue
                     
                 if os.path.isfile(file_path):
                     os.remove(file_path)
-                    logger.debug(f"[daily_tasks] 已删除文件: {file_path}")
+                    logger.debug(f"已删除文件: {file_path}")
                     removed_count += 1
                 elif os.path.isdir(file_path):
                     shutil.rmtree(file_path)
-                    logger.debug(f"[daily_tasks] 已删除文件夹: {file_path}")
+                    logger.debug(f"已删除文件夹: {file_path}")
                     removed_count += 1
             except Exception as file_err:
                 logger.error(f"删除文件失败: {file_path}: {file_err}")
@@ -218,7 +218,7 @@ def generate_daily_life_task(date: str | None = None):
         if not date:
             date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")  # 明天
 
-        logger.info(f"[daily_tasks] 开始触发生成日程 date={date}")
+        logger.info(f"开始触发生成日程 date={date}")
         response = httpx.get(
             f"http://bot:8000/generate-daily-life?target_date={date}",
             headers={"Authorization": f"Bearer {settings.INTERNAL_API_KEY}"},

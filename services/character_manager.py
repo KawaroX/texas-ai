@@ -4,12 +4,13 @@
 """
 import os
 import hashlib
-import logging
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 import httpx
 import json
 from typing import Dict, List, Optional
 
-logger = logging.getLogger(__name__)
 
 class CharacterManager:
     """角色图片管理器"""
@@ -74,11 +75,11 @@ class CharacterManager:
                 with open(filepath, 'wb') as f:
                     f.write(response.content)
                 
-                logger.info(f"✅ 角色图片下载成功: {character_name} -> {filename} ({len(response.content)} bytes)")
+                logger.info(f"角色图片下载成功: {character_name} -> {filename} ({len(response.content)} bytes)")
                 return filepath
                 
         except Exception as e:
-            logger.error(f"❌ 下载角色图片失败 {character_name}: {e}")
+            logger.error(f"下载角色图片失败 {character_name}: {e}")
             return None
     
     async def download_all_characters(self):
