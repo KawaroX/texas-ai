@@ -37,6 +37,9 @@ class TexasLogFormatter(logging.Formatter):
         self.use_symbols = use_symbols
         
     def format(self, record: logging.LogRecord) -> str:
+        # 格式化时间戳
+        record.asctime = self.formatTime(record, self.datefmt)
+        
         # 获取符号
         symbol = self.LEVEL_SYMBOLS.get(record.levelno, "") if self.use_symbols else ""
         
