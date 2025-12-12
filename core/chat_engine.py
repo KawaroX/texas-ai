@@ -123,7 +123,7 @@ class ChatEngine:
         # logger.info(f"Content length: {len(m['content'])} characters\n")
 
         # 4. 流式调用 AI 模型
-        async for segment in stream_ai_chat(prompt_messages, "gemini-2.5-pro"):
+        async for segment in stream_ai_chat(prompt_messages, "claude-opus-4-5-20251101"):
             yield segment
         logger.info(f"流式生成回复完成 channel={channel_id}")
 

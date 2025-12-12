@@ -56,7 +56,7 @@ class ImageGenerationRecord:
     image_path: Optional[str]
     prompt_length: int
     detected_characters: List[str]
-    api_model: str = "gpt-image-1"
+    api_model: str = "gpt-image-1-all"
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

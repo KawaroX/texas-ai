@@ -265,7 +265,7 @@ async def stream_openrouter(
                     logger.error(
                         "❌ OpenRouter流式调用失败: API调用频率限制 (429 Too Many Requests)"
                     )
-                    yield "⚠️ API调用频率限制，请稍后再试。"
+                    yield "[自动回复] 在忙，有事请留言（429）。"
                     return
             else:
                 try:
@@ -326,7 +326,7 @@ async def stream_reply_ai(
                 }
             },
         }
-    elif model == "gpt-5-2025-08-07":
+    elif model == "gpt-5-chat-latest":
         payload = {
             "model": model,
             "messages": messages,
@@ -410,7 +410,7 @@ async def stream_reply_ai(
                     logger.error(
                         "❌ Reply AI流式调用失败: API调用频率限制 (429 Too Many Requests)"
                     )
-                    yield "⚠️ API调用频率限制，请稍后再试。"
+                    yield "[自动回复] 在忙，有事请留言（429）。"
                     return
             else:
                 try:
@@ -579,7 +579,7 @@ async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") 
         status_code = http_err.response.status_code
         if status_code == 429:
             logger.error(f"模型 {model} 触发速率限制 (429)")
-            return "⚠️ API调用频率限制，请稍后再试。"
+            return "[自动回复] 在忙，有事请留言（429）。"
         else:
             logger.error(
                 f"❌ OpenRouter调用失败: HTTP错误: {status_code} - {http_err.response.text}"
@@ -825,7 +825,7 @@ async def call_gemini(messages, model="gemini-2.5-flash") -> str:
         status_code = http_err.response.status_code
         if status_code == 429:
             logger.error(f"模型 {model} 触发速率限制 (429)")
-            return "⚠️ API调用频率限制，请稍后再试。"
+            return "[自动回复] 在忙，有事请留言（429）。"
         else:
             try:
                 error_content = await http_err.response.aread()
@@ -881,7 +881,7 @@ async def call_openai(messages, model="gpt-4o-mini") -> str:
         status_code = http_err.response.status_code
         if status_code == 429:
             logger.error(f"模型 {model} 触发速率限制 (429)")
-            return "⚠️ API调用频率限制，请稍后再试。"
+            return "[自动回复] 在忙，有事请留言（429）。"
         else:
             try:
                 error_content = await http_err.response.aread()
@@ -920,7 +920,7 @@ async def call_ai_summary(prompt: str) -> str:
 # else:
 STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
 STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", OPENAI_API_URL)
-STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-pro")  # 日程生成
+STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-flash")  # 日程生成
 
 
 async def call_structured_generation(messages: list, max_retries: int = 3) -> dict:

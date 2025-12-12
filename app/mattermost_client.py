@@ -849,6 +849,8 @@ class MattermostWebSocketClient:
         clean_text = text.replace("。", "").strip()
         if "距离上一条消息过去了" in clean_text:
             clean_text = clean_text.split("\n")[-1].strip()
+            clean_text = clean_text.split("德克萨斯：")[-1].strip()
+            clean_text = clean_text.split("德克萨斯:")[-1].strip()
         if "\n" in clean_text:
             clean_text = clean_text.replace("\n", "")
         if "\\n" in clean_text:

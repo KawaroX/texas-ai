@@ -311,7 +311,7 @@ class ImageGenerationService:
             prompt = f"{base_prompt}场景描述: {enhanced_desc}"
         else:
             prompt = f"{base_prompt}场景描述: {experience_description}"
-        payload = {"size": "1024x1536", "prompt": prompt, "model": "gpt-image-1", "n": 1}
+        payload = {"size": "1024x1536", "prompt": prompt, "model": "gpt-image-1-all", "n": 1}
 
         try:
             async with httpx.AsyncClient() as client:

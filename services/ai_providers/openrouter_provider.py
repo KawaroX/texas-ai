@@ -115,7 +115,7 @@ class OpenRouterProvider(ConfigurableProvider):
                         logger.error(
                             "❌ OpenRouter流式调用失败: API调用频率限制 (429 Too Many Requests)"
                         )
-                        yield "⚠️ API调用频率限制，请稍后再试。"
+                        yield "[自动回复] 在忙，有事请留言（429）。"
                         return
                 else:
                     try:
@@ -172,7 +172,7 @@ class OpenRouterProvider(ConfigurableProvider):
             status_code = http_err.response.status_code
             if status_code == 429:
                 logger.error(f"模型 {model} 触发速率限制 (429)")
-                return "⚠️ API调用频率限制，请稍后再试。"
+                return "[自动回复] 在忙，有事请留言（429）。"
             else:
                 logger.error(
                     f"❌ OpenRouter调用失败: HTTP错误: {status_code} - {http_err.response.text}"

@@ -235,7 +235,7 @@ class GeminiProvider(AIProviderBase):
             status_code = http_err.response.status_code
             if status_code == 429:
                 logger.error(f"模型 {model} 触发速率限制 (429)")
-                return "⚠️ API调用频率限制，请稍后再试。"
+                return "[自动回复] 在忙，有事请留言（429）。"
             else:
                 try:
                     error_content = await http_err.response.aread()

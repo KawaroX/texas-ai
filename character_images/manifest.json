@@ -1,0 +1,34 @@
+{
+  "characters": {
+    "能天使": {
+      "url": "https://patchwiki.biligame.com/images/arknights/5/51/mcykogoq3phi70qshmt51bajjf5fblq.png",
+      "filename": "e4a83b92abf264da2ef0b597bc2d27fd.png",
+      "filepath": "/app/character_images/images/e4a83b92abf264da2ef0b597bc2d27fd.png",
+      "size": 1311815
+    },
+    "可颂": {
+      "url": "https://patchwiki.biligame.com/images/arknights/e/e7/t5q4xgmeqag752f43jsfh0ipyv4ubh0.png",
+      "filename": "58f82e5b9e177971d4632b287e335b3b.png",
+      "filepath": "/app/character_images/images/58f82e5b9e177971d4632b287e335b3b.png",
+      "size": 352144
+    },
+    "空": {
+      "url": "https://media.prts.wiki/f/f0/%E7%AB%8B%E7%BB%98_%E7%A9%BA_1.png?image_process=format,webp/quality,Q_90",
+      "filename": "7e1abd116d8c569796575d8531c88f72.png",
+      "filepath": "/app/character_images/images/7e1abd116d8c569796575d8531c88f72.png",
+      "size": 144992
+    },
+    "拉普兰德": {
+      "url": "https://patchwiki.biligame.com/images/arknights/e/ef/bki1qocy5xla53tf3l93dxhbky2glk0.png",
+      "filename": "cdce574630d6dba8ff62e1dd7676c0ca.png",
+      "filepath": "/app/character_images/images/cdce574630d6dba8ff62e1dd7676c0ca.png",
+      "size": 391128
+    },
+    "大帝": {
+      "url": "https://bkimg.cdn.bcebos.com/pic/9922720e0cf3d7ca7bcbbbeb8549a9096b63f72403ad?x-bce-process=image/format,f_auto/watermark,image_d2F0ZXIvYmFpa2UyNzI,g_7,xp_5,yp_5,P_20/resize,m_lfit,limit_1,h_1080",
+      "filename": "5fe628a2f9f96ea9cfa321b0ebf20338.png",
+      "filepath": "/app/character_images/images/5fe628a2f9f96ea9cfa321b0ebf20338.png",
+      "size": 236338
+    }
+  }
+}

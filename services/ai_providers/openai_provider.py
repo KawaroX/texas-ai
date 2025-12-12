@@ -29,7 +29,7 @@ SUMMARY_API_URL = os.getenv(
 
 STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
 STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", OPENAI_API_URL)
-STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-pro")
+STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-flash")
 
 
 class OpenAIProvider(ConfigurableProvider):
@@ -66,38 +66,49 @@ class OpenAIProvider(ConfigurableProvider):
             "stream": stream,
         }
         
-        if model == "gemini-2.5-pro":
-            base_payload.update({
-                "frequency_penalty": 0.3,
-                "temperature": 0.75,
-                "presence_penalty": 0.3,
-                "top_p": 0.95,
-                "extra_body": {
-                    "google": {
-                        "thinking_config": {
-                            "thinking_budget": 32768,
-                            "include_thoughts": False,
-                        }
-                    }
-                },
-            })
-        elif model == "gpt-5-2025-08-07":
-            base_payload.update({
-                "reasoning_effort": "high",
-                "verbosity": "medium",
-                "frequency_penalty": 0.3,
-                "temperature": 0.75,
-                "presence_penalty": 0.3,
-                "max_tokens": 512,
-            })
-        else:
-            base_payload.update({
-                "frequency_penalty": 0.3,
-                "temperature": 0.75,
-                "presence_penalty": 0.3,
-                "top_p": 0.95,
-                "max_tokens": 512,
-            })
+        # if model == "gemini-2.5-pro":
+        #     base_payload.update({
+        #         "frequency_penalty": 0.3,
+        #         "temperature": 0.75,
+        #         "presence_penalty": 0.3,
+        #         "top_p": 0.95,
+        #         "extra_body": {
+        #             "google": {
+        #                 "thinking_config": {
+        #                     "thinking_budget": 32768,
+        #                     "include_thoughts": False,
+        #                 }
+        #             }
+        #         },
+        #     })
+        # elif model == "gemini-2.5-flash":
+        #     base_payload.update({
+        #         "frequency_penalty": 0.3,
+        #         "temperature": 0.75,
+        #         "presence_penalty": 0.3,
+        #         "top_p": 0.95,
+        #         "extra_body": {
+        #             "google": {
+        #                 "thinking_config": {
+        #                     "thinking_budget": 24576,
+        #                     "include_thoughts": False,
+        #                 }
+        #             }
+        #         },
+        #     })
+        # elif model == "gpt-5-2025-08-07":
+        #     base_payload.update({
+        #         "reasoning_effort": "high",
+        #         "verbosity": "medium",
+        #         "frequency_penalty": 0.3,
+        #         "temperature": 0.75,
+        #         "presence_penalty": 0.3,
+        #         "max_tokens": 512,
+        #     })
+        # else:
+        #     base_payload.update({
+        #         "max_tokens": 512,
+        #     })
         
         return base_payload
     
@@ -172,7 +183,7 @@ class OpenAIProvider(ConfigurableProvider):
                         logger.error(
                             "❌ OpenAI流式调用失败: API调用频率限制 (429 Too Many Requests)"
                         )
-                        yield "⚠️ API调用频率限制，请稍后再试。"
+                        yield "[自动回复] 在忙，有事请留言（429）。"
                         return
                 else:
                     try:
@@ -237,7 +248,7 @@ class OpenAIProvider(ConfigurableProvider):
             status_code = http_err.response.status_code
             if status_code == 429:
                 logger.error(f"模型 {model} 触发速率限制 (429)")
-                return "⚠️ API调用频率限制，请稍后再试。"
+                return "[自动回复] 在忙，有事请留言（429）。"
             else:
                 try:
                     error_content = await http_err.response.aread()

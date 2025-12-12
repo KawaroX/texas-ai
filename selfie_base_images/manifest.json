@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-09-02T20:16:47.010763",
+  "images": {
+    "https://media.prts.wiki/6/65/%E7%AB%8B%E7%BB%98_%E7%BC%84%E9%BB%98%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_1.png?image_process=format,webp/quality,Q_90": {
+      "filename": "0e67267a00775be9c1b7cb54182cfbf5.png",
+      "downloaded_at": "2025-09-02T20:16:46.179837",
+      "file_size": 402772
+    },
+    "https://media.prts.wiki/f/fc/%E7%AB%8B%E7%BB%98_%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_1.png?image_process=format,webp/quality,Q_90": {
+      "filename": "49f6877aae996114d7ab33eaa95c2dbb.png",
+      "downloaded_at": "2025-09-02T20:16:46.433911",
+      "file_size": 117300
+    },
+    "https://media.prts.wiki/1/1f/%E7%AB%8B%E7%BB%98_%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_skin1.png?image_process=format,webp/quality,Q_90": {
+      "filename": "bb153e80b4621a87f7f98fb09a800701.png",
+      "downloaded_at": "2025-09-02T20:16:46.715122",
+      "file_size": 431322
+    },
+    "https://media.prts.wiki/2/2b/%E7%AB%8B%E7%BB%98_%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_skin2.png?image_process=format,webp/quality,Q_90": {
+      "filename": "b668bb807e0f46c5f0c63ce1e29091b8.png",
+      "downloaded_at": "2025-09-02T20:16:47.010715",
+      "file_size": 403724
+    }
+  }
+}

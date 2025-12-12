@@ -22,7 +22,9 @@ services:
       - ${KEY_PATH}:/etc/nginx/certs/key.pem:ro
       - shared-webroot:/usr/share/nginx/html:ro
       - /etc/nginx/ssl/blog.kawaro.space:/etc/nginx/ssl/blog.kawaro.space:ro
+      - /etc/nginx/ssl/check.kawaro.space:/etc/nginx/ssl/check.kawaro.space:ro
       - /opt/1panel/apps/halo/halo/live2d/live2d_api/model:/srv/live2d/model:ro
+      - /opt/smartcheck/dist:/var/www/smartcheck:ro
     environment:
       # timezone inside container
       - TZ
