@@ -55,7 +55,7 @@ class ImageGenerationService:
         self.api_key = settings.IMAGE_GENERATION_API_KEY
         base_url = settings.IMAGE_GENERATION_API_URL
         self.generation_url = f"{base_url}/generations"
-        self.edit_url = f"{base_url}/edits"
+        # 🔄 SeeDream统一使用/generations端点，不再需要/edits端点
 
         # 超时配置 (秒)
         self.generation_timeout = 300  # 场景图生成超时（从120秒增加到300秒/5分钟）
@@ -175,61 +175,13 @@ class ImageGenerationService:
 
         return f"{clothing_prompt} {style_suggestion}"
 
-    async def _build_multipart_data(self, image_data: bytes, prompt: str) -> Dict:
-        """构建multipart/form-data格式的请求体，参考API最佳实践"""
-        import uuid
-        # 生成boundary，使用更简单的格式
-        boundary = f"wL36Yn{uuid.uuid4().hex[:12]}SA4n1v9T"
-
-        # 按示例格式构建dataList
-        dataList = []
-
-        # 图片部分
-        dataList.append(f'--{boundary}'.encode('utf-8'))
-        dataList.append('Content-Disposition: form-data; name=image; filename=base_image.png'.encode('utf-8'))
-        dataList.append('Content-Type: image/png'.encode('utf-8'))
-        dataList.append(b'')
-        dataList.append(image_data)
-
-        # prompt部分
-        dataList.append(f'--{boundary}'.encode('utf-8'))
-        dataList.append('Content-Disposition: form-data; name=prompt;'.encode('utf-8'))
-        dataList.append('Content-Type: text/plain'.encode('utf-8'))
-        dataList.append(b'')
-        dataList.append(prompt.encode('utf-8'))
-
-        # model部分
-        dataList.append(f'--{boundary}'.encode('utf-8'))
-        dataList.append('Content-Disposition: form-data; name=model;'.encode('utf-8'))
-        dataList.append('Content-Type: text/plain'.encode('utf-8'))
-        dataList.append(b'')
-        dataList.append('gpt-image-1-all'.encode('utf-8'))
-
-        # n部分
-        dataList.append(f'--{boundary}'.encode('utf-8'))
-        dataList.append('Content-Disposition: form-data; name=n;'.encode('utf-8'))
-        dataList.append('Content-Type: text/plain'.encode('utf-8'))
-        dataList.append(b'')
-        dataList.append('1'.encode('utf-8'))
-
-        # size部分
-        dataList.append(f'--{boundary}'.encode('utf-8'))
-        dataList.append('Content-Disposition: form-data; name=size;'.encode('utf-8'))
-        dataList.append('Content-Type: text/plain'.encode('utf-8'))
-        dataList.append(b'')
-        dataList.append('1024x1536'.encode('utf-8'))
-
-        # 结束boundary
-        dataList.append(f'--{boundary}--'.encode('utf-8'))
-        dataList.append(b'')
-
-        # 组合body
-        body = b'\r\n'.join(dataList)
-
-        return {
-            "body": body,
-            "content_type": f"multipart/form-data; boundary={boundary}"
-        }
+    def _convert_image_to_base64_url(self, image_data: bytes) -> str:
+        """将图片二进制数据转换为base64 data URL格式，用于SeeDream API"""
+        import base64
+        base64_data = base64.b64encode(image_data).decode('utf-8')
+        data_url = f"data:image/png;base64,{base64_data}"
+        logger.info(f"已将图片转换为base64 data URL，长度: {len(data_url)} chars")
+        return data_url
 
     async def _download_image(self, url: str) -> Optional[bytes]:
         """下载图片内容"""
@@ -280,8 +232,8 @@ class ImageGenerationService:
             return await self._generate_scene_without_characters(experience_description, scene_analysis)
 
     async def _generate_scene_without_characters(self, experience_description: str, scene_analysis: Optional[Dict] = None) -> Optional[str]:
-        """生成不包含特定角色的场景图"""
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "Accept": "application/json"}
+        """生成不包含特定角色的场景图（使用SeeDream纯文字生成）"""
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
         # 🆕 使用AI预分析增强提示词
         base_prompt = (
@@ -319,7 +271,14 @@ class ImageGenerationService:
             prompt = f"{base_prompt}场景描述: {enhanced_desc}"
         else:
             prompt = f"{base_prompt}场景描述: {experience_description}"
-        payload = {"size": "1024x1536", "prompt": prompt, "model": "gpt-image-1-all", "n": 1}
+
+        # 🔄 SeeDream API payload（纯文字生成，不需要image参数）
+        payload = {
+            "model": "doubao-seedream-4-5-251128",
+            "prompt": prompt,
+            "size": "2K",
+            "watermark": False
+        }
 
         try:
             async with httpx.AsyncClient() as client:
@@ -452,20 +411,28 @@ class ImageGenerationService:
         prompt = f"{base_prompt}{character_prompt}{clothing_prompt}{expression_prompt}动作姿态要求：角色的动作和姿态要自然融入场景，展现真实的互动感和生活感。避免死板的pose，要有生动的肢体语言和场景互动，体现角色间的关系。场景融合要求：确保所有角色都真实自然地参与到场景中，服装、动作、表情都要与环境完美匹配，营造生动的生活画面。场景描述: {enhanced_scene_desc}"
 
         try:
-            # 使用类似自拍的multipart上传方式
-            multipart_data = await self._build_multipart_data(character_image_data, prompt)
+            # 🔄 转换图片为base64 data URL
+            image_data_url = self._convert_image_to_base64_url(character_image_data)
 
-            headers_multipart = {
+            # 🔄 SeeDream API payload（Image-to-Image）
+            payload = {
+                "model": "doubao-seedream-4-5-251128",
+                "prompt": prompt,
+                "image": image_data_url,
+                "size": "2K",
+                "watermark": False
+            }
+
+            headers = {
                 "Authorization": f"Bearer {self.api_key}",
-                "Accept": "application/json",
-                "Content-Type": multipart_data["content_type"]
+                "Content-Type": "application/json"
             }
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    self.edit_url,  # 使用edit端点，类似自拍
-                    headers=headers_multipart,
-                    content=multipart_data["body"],
+                    self.generation_url,  # 🔄 SeeDream统一使用generation端点
+                    headers=headers,
+                    json=payload,
                     timeout=self.multi_character_timeout  # 使用更长的超时时间
                 )
                 response.raise_for_status()
@@ -658,20 +625,28 @@ class ImageGenerationService:
         prompt = f"{base_selfie_prompt}{other_characters_desc}{expression_prompt}{pose_prompt}{clothing_prompt}构图要求：Selfie pose with one arm extended holding phone (but don't show the phone/camera in frame)，一只手臂自然伸出做自拍手势但画面中不要显示手机或相机设备。画面构图要突出人物魅力和身材曲线。场景融合：姿势、神态和背景需要完全融入新的场景，营造性感自然的自拍效果。场景描述: {enhanced_scene_desc}"
 
         try:
-            # 使用优化的multipart上传方式，参考API最佳实践
-            multipart_data = await self._build_multipart_data(base_image_data, prompt)
+            # 🔄 转换图片为base64 data URL
+            image_data_url = self._convert_image_to_base64_url(base_image_data)
 
-            headers_multipart = {
+            # 🔄 SeeDream API payload（Image-to-Image）
+            payload = {
+                "model": "doubao-seedream-4-5-251128",
+                "prompt": prompt,
+                "image": image_data_url,
+                "size": "2K",
+                "watermark": False
+            }
+
+            headers = {
                 "Authorization": f"Bearer {self.api_key}",
-                "Accept": "application/json",
-                "Content-Type": multipart_data["content_type"]
+                "Content-Type": "application/json"
             }
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    self.edit_url,
-                    headers=headers_multipart,
-                    content=multipart_data["body"],
+                    self.generation_url,  # 🔄 SeeDream统一使用generation端点
+                    headers=headers,
+                    json=payload,
                     timeout=self.selfie_timeout
                 )
                 response.raise_for_status()

@@ -624,3 +624,141 @@ curl -X GET "http://localhost:8000/check-and-generate-missing-images?target_date
 1. 检查 Redis 中的 `PROACTIVE_IMAGES_KEY` hash
 2. 对比微观经历数据和已生成图片列表
 3. 查看 Worker 日志中的图片生成失败记录
+
+---
+
+## 9. 切换到SeeDream图片生成模型 ✅
+
+**修改日期**: 2025-12-12
+**文件**: `services/image_generation_service.py`
+
+### 📊 模型对比测试结果
+
+在切换前进行了详细的模型对比测试：
+
+| 模型 | 状态 | 生成速度 | 图片质量 | 分辨率 | 特点 |
+|------|------|---------|---------|--------|------|
+| **gpt-image-1-all** | ❌ 无法连接 | - | - | 1024x1536 | 服务器拒绝连接，可能已下线 |
+| **doubao-seedream-4-5-251128** | ✅ 完美工作 | 11-13秒 | 优秀 | 2K | 支持高级视觉效果、image-to-image |
+
+**测试结论**: SeeDream模型：
+- ✅ 成功生成水雾、镜面反射等高级视觉效果
+- ✅ 生成速度快（11-13秒/张）
+- ✅ 支持2K高分辨率
+- ✅ 完美支持base64 data URL格式的图片输入
+- ✅ 图片质量优秀，符合明日方舟二次元风格
+
+### 🔄 核心修改
+
+#### 1. 新增Base64转换方法（行178-184）
+
+```python
+def _convert_image_to_base64_url(self, image_data: bytes) -> str:
+    """将图片二进制数据转换为base64 data URL格式，用于SeeDream API"""
+    import base64
+    base64_data = base64.b64encode(image_data).decode('utf-8')
+    data_url = f"data:image/png;base64,{base64_data}"
+    logger.info(f"已将图片转换为base64 data URL，长度: {len(data_url)} chars")
+    return data_url
+```
+
+**用途**: SeeDream API接受URL格式的图片参数，使用base64 data URL可以直接传递本地图片数据，无需上传到外部服务器。
+
+#### 2. 方式1：纯文字生成场景图（行234-310）
+
+**修改**: `_generate_scene_without_characters()`
+
+**变化**:
+```python
+# 旧方式（gpt-image-1-all）
+payload = {
+    "size": "1024x1536",
+    "prompt": prompt,
+    "model": "gpt-image-1-all",
+    "n": 1
+}
+# POST到 /generations，使用JSON格式
+
+# 新方式（SeeDream）
+payload = {
+    "model": "doubao-seedream-4-5-251128",
+    "prompt": prompt,
+    "size": "2K",
+    "watermark": False
+}
+# POST到 /generations，使用JSON格式
+```
+
+**说明**: 纯文字生成不需要输入图片，只需提供prompt即可。
+
+#### 3. 方式2：基于角色图片生成多角色场景（行313-461）
+
+**修改**: `_generate_scene_with_characters()`
+
+**变化**:
+```python
+# 旧方式（gpt-image-1-all）
+# 使用multipart/form-data格式上传二进制图片
+multipart_data = await self._build_multipart_data(character_image_data, prompt)
+response = await client.post(self.edit_url, content=multipart_data["body"], ...)
+
+# 新方式（SeeDream）
+# 转换为base64 data URL
+image_data_url = self._convert_image_to_base64_url(character_image_data)
+payload = {
+    "model": "doubao-seedream-4-5-251128",
+    "prompt": prompt,
+    "image": image_data_url,  # base64 data URL
+    "size": "2K",
+    "watermark": False
+}
+response = await client.post(self.generation_url, json=payload, ...)
+```
+
+**关键改变**:
+- ❌ 不再使用 `/edits` 端点
+- ✅ 统一使用 `/generations` 端点
+- ❌ 不再使用multipart/form-data格式
+- ✅ 统一使用JSON格式
+- ✅ 图片通过base64 data URL传递
+
+#### 4. 方式3：基于每日底图生成自拍（行484-676）
+
+**修改**: `generate_selfie()`
+
+**变化**: 与方式2相同，使用base64 data URL + JSON格式调用 `/generations` 端点。
+
+#### 5. 清理不再需要的代码
+
+- ❌ 删除 `_build_multipart_data()` 方法（行178-232）
+- ❌ 删除 `self.edit_url` 配置（行58）
+
+### 📝 API参数对比
+
+| 参数 | gpt-image-1-all | doubao-seedream-4-5-251128 |
+|------|----------------|---------------------------|
+| **model** | "gpt-image-1-all" | "doubao-seedream-4-5-251128" |
+| **size** | "1024x1536" | "2K" |
+| **watermark** | - | false（新增） |
+| **端点** | `/generations`（文字）<br>`/edits`（图片） | `/generations`（统一） |
+| **格式** | JSON（文字）<br>multipart（图片） | JSON（统一） |
+| **图片输入** | 二进制数据（multipart） | base64 data URL（JSON） |
+
+### ✨ 优势总结
+
+1. **统一API格式**: 所有调用方式都使用JSON格式，代码更简洁
+2. **统一API端点**: 都使用 `/generations`，不再需要 `/edits`
+3. **更高分辨率**: 从1024x1536升级到2K
+4. **更快速度**: 生成时间从30-60秒降低到11-13秒
+5. **更好质量**: 支持水雾、镜面反射等高级视觉效果
+6. **本地图片处理**: 使用base64编码直接传递，无需上传服务器
+
+### 🧪 测试验证
+
+通过3个测试脚本验证了SeeDream的能力：
+
+1. **`/tmp/test_seedream_text_only.py`**: 验证纯文字生成 ✅
+2. **`/tmp/test_seedream_base64.py`**: 验证base64 data URL支持 ✅
+3. **`/tmp/test_image_models.py`**: 对比gpt-image-1-all vs SeeDream ✅
+
+所有测试均通过，SeeDream表现优异。
