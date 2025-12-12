@@ -255,7 +255,12 @@ async def _store_enhanced_interaction_data(target_date: date, micro_experiences:
                     "thoughts": exp.get("thoughts"),
                     "need_interaction": exp.get("need_interaction"),
                     "interaction_content": exp.get("interaction_content"),
-                    
+
+                    # 🖼️ 图片生成相关字段
+                    "need_image": exp.get("need_image", False),
+                    "image_type": exp.get("image_type"),
+                    "image_reason": exp.get("image_reason"),
+
                     # 关联的schedule_item数据（增强信息）
                     "schedule_context": {
                         "item_id": related_item_id,
@@ -265,10 +270,10 @@ async def _store_enhanced_interaction_data(target_date: date, micro_experiences:
                         "companions": related_schedule_item.get("companions", []) if related_schedule_item else [],
                         "category": related_schedule_item.get("category") if related_schedule_item else None,
                     },
-                    
+
                     # 大事件背景信息
                     "major_event_context": major_event_context,
-                    
+
                     # 派生信息
                     "date": date_str,
                     "time_period": _get_time_period(exp.get("start_time")),
