@@ -222,6 +222,7 @@ def generate_daily_life_task(date: str | None = None):
         response = httpx.get(
             f"http://bot:8000/generate-daily-life?target_date={date}",
             headers={"Authorization": f"Bearer {settings.INTERNAL_API_KEY}"},
+            timeout=300.0,  # 设置 5 分钟超时，生成日程可能需要较长时间
         )
         response.raise_for_status()
         return {"status": "success", "response": response.json()}

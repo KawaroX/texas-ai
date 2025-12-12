@@ -1,39 +1,92 @@
-.env
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Logs
 *.log
 logs/
-celerybeat-schedule*
-data/postgres
-.DS_Store
-data/.DS_Store
-app/.DS_Store
-.DS_Store
 image_generation_logs/
 
-volumes
-backups
-generated_content
-data
-certs
+# Celery
+celerybeat-schedule*
+celerybeat.pid
+
+# Data & Volumes
+data/
+volumes/
+backups/
+generated_content/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
 docker-compose.override.yml
 docker-compose.override.yaml
+
+# Certificates
+certs/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# Temporary & Backup Files
+*_副本.py
+*_backup.py
+*.bak
+*.tmp
+*~
+
+# Test & Debug Files
 test_message_format.py
 test_simplified.py
 tp.py
-docker-compose.yml
-.gitignore
-celerybeat-schedule
-app/mattermost_client_副本.py
-app/mattermost_client_副本2.py
-services/memory_summarizer.py
-scripts/prebuild_script.sh
-scripts/scp_update_script.sh
-dev.yml
-nginx
-CLAUDE.md
-DEPLOYMENT.md
-ROLLBACK_GUIDE.md
-CODE_STRUCTURE_OPTIMIZATION_INFO.md
-CODE_STRUCTURE_REFACTOR_PLAN.md
+woker-logs.txt
+worker-logs.txt
+*.log.txt
+
+# Documentation (if you want to keep these out of Git)
+# Remove the # if you don't want these in version control
+# DEPLOYMENT.md
+# ROLLBACK_GUIDE.md
+# CODE_STRUCTURE_OPTIMIZATION_INFO.md
+# CODE_STRUCTURE_REFACTOR_PLAN.md
+
+# Deployment scripts (if contain sensitive info)
+scripts/*_script.sh
+
+# Nginx configs (may contain sensitive info)
+nginx/

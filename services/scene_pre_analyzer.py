@@ -11,10 +11,43 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 
-# API 配置 - 复用image_content_analyzer的配置
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_API_KEY2 = os.getenv("GEMINI_API_KEY2", "")
-GEMINI_API_URL = "https://gemini-v.kawaro.space/v1beta/models/gemini-2.5-flash-lite:generateContent"
+# API 配置 - 🆕 使用和生成日程完全相同的 API 方式
+STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
+STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", "https://yunwu.ai/v1/chat/completions")
+STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-flash")
+
+# 🆕 根据生成日程的模型，自动选择对应的 lite 版本
+def get_scene_analyzer_model(base_model: str) -> str:
+    """
+    根据生成日程的模型，返回用于场景分析的模型。
+
+    规则：
+    - 如果是 gemini-2.5-flash，返回 gemini-2.5-flash-lite
+    - 如果是其他 gemini 模型，尝试返回对应的 lite 版本
+    - 如果不是 gemini 模型，返回原模型
+    """
+    if "gemini" in base_model.lower():
+        # 如果已经是 lite 版本，直接返回
+        if "-lite" in base_model.lower():
+            return base_model
+        # 否则，尝试添加 -lite 后缀
+        # 例如：gemini-2.5-flash -> gemini-2.5-flash-lite
+        #       gemini-2.5-pro -> gemini-2.5-pro-lite
+        if base_model.endswith("-flash"):
+            return base_model + "-lite"
+        elif base_model.endswith("-pro"):
+            # pro 系列可能没有 lite 版本，直接用 flash-lite
+            return base_model.replace("-pro", "-flash-lite")
+        else:
+            # 兜底：添加 -lite
+            return base_model + "-lite"
+    else:
+        # 非 gemini 模型，保持一致
+        return base_model
+
+SCENE_ANALYZER_MODEL = get_scene_analyzer_model(STRUCTURED_API_MODEL)
+
+logger.info(f"[scene_analyzer] 场景分析配置：URL={STRUCTURED_API_URL}, 生成日程模型={STRUCTURED_API_MODEL}，场景分析模型={SCENE_ANALYZER_MODEL}")
 
 # Redis 客户端
 from utils.redis_manager import get_redis_client
@@ -168,11 +201,11 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
             logger.debug(f"[scene_analyzer] 使用缓存的场景分析结果")
             return json.loads(cached_result)
 
-        # 构建提示词
+        # 🆕 构建 OpenAI 兼容格式的提示词
         scene_json_str = json.dumps(scene_data, ensure_ascii=False, indent=2)
 
         if is_selfie:
-            prompt = f"""你现在正在扮演德克萨斯，你正在处于下面的这个场景中，并有着下面这样的想法：
+            user_prompt = f"""你现在正在扮演德克萨斯，你正在处于下面的这个场景中，并有着下面这样的想法：
 
 {scene_json_str}
 
@@ -183,10 +216,34 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
 2. 分析画面构图、光线、色彩、氛围等视觉要素
 3. 根据场景推测可能出现的其他角色及其表情
 4. 考虑德克萨斯的性格特点：内敛温和，表情平静安详，常有淡淡的微笑或温和的神情
+5. **🎨 创意性视觉效果分析**：根据场景特点，主动建议适合的高级视觉效果（如：浴室场景→水雾+镜面反射，室外场景→景深+逆光，夜晚场景→霓虹灯光+光晕效果等）
+6. **📸 摄影艺术指导**：为这张自拍提供专业的摄影建议（构图技巧、光影运用、氛围营造等）
+7. **💃 姿态和表现力**：根据场景氛围，建议更有表现力、更大胆、更性感的姿态和服装细节，展现角色的魅力和自信
 
-请用中文详细分析并填写所有字段。"""
+请严格按照以下 JSON 格式输出，不要包含任何其他文本：
+{{
+  "description": "详细的场景描述",
+  "characters": ["德克萨斯", "其他角色..."],
+  "location": "地点",
+  "time_atmosphere": "时间氛围",
+  "emotional_state": "情感状态",
+  "weather_context": "天气背景",
+  "activity_background": "活动背景",
+  "lighting_mood": "光线氛围",
+  "composition_style": "构图风格",
+  "color_tone": "色彩基调",
+  "scene_focus": "场景焦点",
+  "visual_effects": "特殊视觉效果（如：水雾、镜面反射、光束、雨滴、蒸汽、玻璃折射、bokeh散景、光晕、逆光轮廓、长曝光光轨等），根据场景自然融入",
+  "photographic_technique": "摄影技巧（如：浅景深、大光圈bokeh、逆光剪影、HDR、长曝光、仰拍/俯拍、三分构图、对角线构图、框架构图等）",
+  "artistic_style": "整体艺术风格（如：电影感、时尚杂志风、Instagram网红风、复古胶片质感、赛博朋克、梦幻柔焦、高对比度等）",
+  "pose_suggestion": "姿态建议（自拍专用：更有表现力、更大胆、更性感的姿态，如：撩发、回眸、侧身展现曲线、慵懒姿态、自信站姿等，展现角色魅力）",
+  "clothing_details": "服装细节建议（根据场景氛围，建议更有魅力、更时尚、更性感的服装细节，如：露肩、V领、开叉、透视元素、贴身剪裁等，符合角色性格但更大胆）",
+  "character_expressions": [
+    {{"name": "角色名", "expression": "表情描述"}}
+  ]
+}}"""
         else:
-            prompt = f"""你现在正在扮演德克萨斯，你正在处于下面的这个场景中，并有着下面这样的想法：
+            user_prompt = f"""你现在正在扮演德克萨斯，你正在处于下面的这个场景中，并有着下面这样的想法：
 
 {scene_json_str}
 
@@ -197,102 +254,45 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
 2. 重点分析环境场景、可能出现的其他角色
 3. 分析画面构图、光线、色彩、氛围等视觉要素
 4. 如果场景中有其他角色，请分析他们的表情和状态
+5. **🎨 创意性视觉效果分析**：根据场景特点，主动建议适合的高级视觉效果（如：雨天→雨滴+地面倒影，咖啡店→景深+暖色光晕，夜景→霓虹灯+长曝光光轨，室内→阳光透过窗帘的光束等）
+6. **📸 摄影艺术指导**：为这张场景照提供专业的摄影建议（构图技巧、光影运用、氛围营造等）
 
-请用中文详细分析并填写所有字段。"""
+请严格按照以下 JSON 格式输出，不要包含任何其他文本：
+{{
+  "description": "详细的场景描述",
+  "characters": ["场景中的角色..."],
+  "location": "地点",
+  "time_atmosphere": "时间氛围",
+  "emotional_state": "情感状态",
+  "weather_context": "天气背景",
+  "activity_background": "活动背景",
+  "lighting_mood": "光线氛围",
+  "composition_style": "构图风格",
+  "color_tone": "色彩基调",
+  "scene_focus": "场景焦点",
+  "visual_effects": "特殊视觉效果（如：水雾、镜面反射、光束、雨滴、蒸汽、玻璃折射、bokeh散景、光晕、逆光轮廓、长曝光光轨、地面倒影等），根据场景自然融入",
+  "photographic_technique": "摄影技巧（如：浅景深、大光圈bokeh、逆光剪影、HDR、长曝光、仰拍/俯拍、三分构图、对角线构图、框架构图、前景虚化等）",
+  "artistic_style": "整体艺术风格（如：电影感、纪实摄影风、Instagram网红风、复古胶片质感、赛博朋克、梦幻柔焦、高对比度、Cinematic等）",
+  "character_expressions": [
+    {{"name": "角色名", "expression": "表情描述"}}
+  ]
+}}"""
 
-        # 构建请求payload
+        # 🆕 构建 OpenAI 兼容格式的 payload
         payload = {
-            "contents": [
+            "model": SCENE_ANALYZER_MODEL,
+            "messages": [
                 {
                     "role": "user",
-                    "parts": [
-                        {
-                            "text": prompt
-                        }
-                    ]
+                    "content": user_prompt
                 }
             ],
-            "generationConfig": {
-                "thinkingConfig": {
-                    "thinkingBudget": -1,
-                },
-                "responseMimeType": "application/json",
-                "responseSchema": {
-                    "type": "object",
-                    "properties": {
-                        "description": {
-                            "type": "string"
-                        },
-                        "characters": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        },
-                        "location": {
-                            "type": "string"
-                        },
-                        "time_atmosphere": {
-                            "type": "string"
-                        },
-                        "emotional_state": {
-                            "type": "string"
-                        },
-                        "weather_context": {
-                            "type": "string"
-                        },
-                        "activity_background": {
-                            "type": "string"
-                        },
-                        "lighting_mood": {
-                            "type": "string"
-                        },
-                        "composition_style": {
-                            "type": "string"
-                        },
-                        "color_tone": {
-                            "type": "string"
-                        },
-                        "scene_focus": {
-                            "type": "string"
-                        },
-                        "character_expressions": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "name": {
-                                        "type": "string"
-                                    },
-                                    "expression": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": ["name", "expression"]
-                            }
-                        }
-                    },
-                    "required": [
-                        "description",
-                        "characters",
-                        "location",
-                        "time_atmosphere",
-                        "emotional_state",
-                        "weather_context",
-                        "activity_background",
-                        "lighting_mood",
-                        "composition_style",
-                        "color_tone",
-                        "scene_focus",
-                        "character_expressions"
-                    ]
-                }
-            }
+            "response_format": {"type": "json_object"},
+            "stream": False
         }
 
-        # 决定使用哪个API key
-        api_key = GEMINI_API_KEY if GEMINI_API_KEY else GEMINI_API_KEY2
-        if not api_key:
+        # 🆕 使用 STRUCTURED_API_KEY
+        if not STRUCTURED_API_KEY:
             error_msg = "没有可用的Gemini API密钥"
             logger.error(f"[scene_analyzer] {error_msg}")
 
@@ -306,20 +306,21 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
 
             return None
 
+        # 🆕 使用 OpenAI 兼容的 Authorization header
         headers = {
             "Content-Type": "application/json",
-            "x-goog-api-key": api_key
+            "Authorization": f"Bearer {STRUCTURED_API_KEY}"
         }
 
         scene_id = scene_data.get('id', 'unknown')
         mode = "自拍" if is_selfie else "场景"
         logger.info(f"[scene_analyzer] 开始{mode}模式场景分析: {scene_id}")
 
-        # 发送API请求
+        # 🆕 发送 OpenAI 兼容格式的 API 请求
         async with httpx.AsyncClient(timeout=60) as client:
             try:
                 response = await client.post(
-                    GEMINI_API_URL,
+                    STRUCTURED_API_URL,
                     headers=headers,
                     json=payload
                 )
@@ -327,14 +328,13 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
 
                 response_json = response.json()
 
-                # 提取响应内容
-                if (response_json.get("candidates") and
-                    len(response_json["candidates"]) > 0 and
-                    response_json["candidates"][0].get("content") and
-                    response_json["candidates"][0]["content"].get("parts") and
-                    len(response_json["candidates"][0]["content"]["parts"]) > 0):
+                # 🆕 提取响应内容 (OpenAI 格式: choices[0].message.content)
+                if (response_json.get("choices") and
+                    len(response_json["choices"]) > 0 and
+                    response_json["choices"][0].get("message") and
+                    response_json["choices"][0]["message"].get("content")):
 
-                    result_text = response_json["candidates"][0]["content"]["parts"][0].get("text", "").strip()
+                    result_text = response_json["choices"][0]["message"]["content"].strip()
 
                     if result_text:
                         try:

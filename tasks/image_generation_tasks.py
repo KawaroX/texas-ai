@@ -104,6 +104,131 @@ redis_client = get_redis_client()
 # 新的 Redis Hash Key，用于存储 interaction_id -> image_path 的映射
 PROACTIVE_IMAGES_KEY = "proactive_interaction_images"
 
+
+async def check_missing_images_for_date(target_date: str):
+    """
+    检查指定日期是否有缺失的图片。
+
+    Args:
+        target_date: 日期字符串，格式 YYYY-MM-DD
+
+    Returns:
+        dict: {
+            "has_data": bool,  # 是否有数据
+            "total_need_image": int,  # 需要生成图片的经历总数
+            "already_generated": int,  # 已经生成的数量
+            "missing_count": int,  # 缺失的数量
+            "has_missing": bool,  # 是否有缺失
+            "missing_ids": list  # 缺失的经历ID列表
+        }
+    """
+    logger.info(f"[check_missing] 开始检查 {target_date} 的图片生成情况")
+
+    try:
+        # 🆕 优先尝试读取增强数据
+        enhanced_key = f"interaction_needed_enhanced:{target_date}"
+        original_key = f"interaction_needed:{target_date}"
+
+        events = None
+        data_source = None
+
+        # 先尝试增强数据
+        if redis_client.exists(enhanced_key):
+            events = redis_client.zrange(enhanced_key, 0, -1)
+            data_source = "enhanced"
+            logger.info(f"[check_missing] 使用增强数据源")
+        # 回退到原始数据
+        elif redis_client.exists(original_key):
+            events = redis_client.zrange(original_key, 0, -1)
+            data_source = "original"
+            logger.info(f"[check_missing] 使用原始数据源")
+
+        if not events:
+            logger.warning(f"[check_missing] {target_date} 没有找到微观经历数据")
+            return {
+                "has_data": False,
+                "total_need_image": 0,
+                "already_generated": 0,
+                "missing_count": 0,
+                "has_missing": False,
+                "missing_ids": []
+            }
+
+        # 统计需要生成图片的经历
+        need_image_experiences = []
+        for event_json_str in events:
+            try:
+                event_data = json.loads(event_json_str)
+                experience_id = event_data.get("id")
+                need_image = event_data.get("need_image", False)
+
+                if need_image and experience_id:
+                    need_image_experiences.append({
+                        "id": experience_id,
+                        "image_type": event_data.get("image_type"),
+                        "image_reason": event_data.get("image_reason", "")
+                    })
+            except json.JSONDecodeError as e:
+                logger.warning(f"[check_missing] 解析事件数据失败: {e}")
+                continue
+
+        total_need_image = len(need_image_experiences)
+
+        if total_need_image == 0:
+            logger.info(f"[check_missing] {target_date} 没有需要生成图片的经历")
+            return {
+                "has_data": True,
+                "total_need_image": 0,
+                "already_generated": 0,
+                "missing_count": 0,
+                "has_missing": False,
+                "missing_ids": []
+            }
+
+        # 检查哪些经历已经生成了图片
+        missing_experiences = []
+        already_generated = 0
+
+        for exp in need_image_experiences:
+            exp_id = exp["id"]
+            if redis_client.hexists(PROACTIVE_IMAGES_KEY, exp_id):
+                already_generated += 1
+            else:
+                missing_experiences.append(exp)
+
+        missing_count = len(missing_experiences)
+        has_missing = missing_count > 0
+
+        result = {
+            "has_data": True,
+            "total_need_image": total_need_image,
+            "already_generated": already_generated,
+            "missing_count": missing_count,
+            "has_missing": has_missing,
+            "missing_ids": [exp["id"] for exp in missing_experiences],
+            "missing_details": missing_experiences[:5]  # 只返回前5个详细信息
+        }
+
+        logger.info(
+            f"[check_missing] {target_date} 检查完成: "
+            f"总计{total_need_image}个, 已生成{already_generated}个, 缺失{missing_count}个"
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"[check_missing] 检查缺失图片时发生错误: {e}")
+        return {
+            "has_data": False,
+            "total_need_image": 0,
+            "already_generated": 0,
+            "missing_count": 0,
+            "has_missing": False,
+            "missing_ids": [],
+            "error": str(e)
+        }
+
+
 @shared_task
 def prepare_images_for_proactive_interactions():
     """
@@ -271,201 +396,194 @@ async def _do_image_generation():
                 logger.debug(f"[image_gen] 事件 {experience_id} 已存在关联图片，跳过。")
                 continue
 
-            # 🌅🌙 识别首末事件（早安/晚安）并设置特殊概率
-            is_first_or_last = (index == 0 or index == total_events - 1)
+            # 🆕 读取 AI 生成的图片决策字段（优先使用增强数据，回退到原始数据）
+            need_image = event_data.get("need_image", False)
+            image_type = event_data.get("image_type")  # "selfie" | "scene" | null
+            image_reason = event_data.get("image_reason", "")
 
-            if is_first_or_last:
-                generation_probability = 1.0    # 首末事件100%生成图片
-                selfie_probability = 0.6        # 60%自拍40%场景
-                event_type = "早安" if index == 0 else "晚安"
-                logger.info(f"[image_gen] 🌅🌙 检测到{event_type}经历 {experience_id}，固定生成图片")
-            else:
-                generation_probability = 0.3   # 其他事件45%概率
-                selfie_probability = 0.4        # 40%自拍60%场景
+            # 如果 AI 决定不需要生成图片，跳过
+            if not need_image:
+                logger.debug(f"[image_gen] 事件 {experience_id} AI决定不生成图片，跳过。")
+                continue
 
-            # 应用动态概率判断
-            if random.random() < generation_probability:
-                if is_first_or_last:
-                    logger.info(f"[image_gen] 🎲 {event_type}事件 {experience_id} 固定触发图片生成")
-                else:
-                    logger.info(f"[image_gen] 🎲 事件 {experience_id} 触发图片生成（45%概率）")
+            # 如果 image_type 无效，跳过
+            if image_type not in ["selfie", "scene"]:
+                logger.warning(f"[image_gen] 事件 {experience_id} 的 image_type 无效: {image_type}，跳过。")
+                continue
 
-                # 使用动态自拍率
-                is_selfie = random.random() < selfie_probability
+            # 根据 AI 决策设置图片类型
+            is_selfie = (image_type == "selfie")
+            logger.info(f"[image_gen] ✨ AI决定为事件 {experience_id} 生成{image_type}图片，原因: {image_reason}")
 
-                image_path = None
-                generation_start_time = datetime.now()
-                generation_type = "selfie" if is_selfie else "scene"
-                error_msg = None
-                max_retries = 2  # 最多重试2次（总共3次尝试）
+            image_path = None
+            generation_start_time = datetime.now()
+            generation_type = "selfie" if is_selfie else "scene"
+            error_msg = None
+            max_retries = 2  # 最多重试2次（总共3次尝试）
 
-                # 🆕 使用AI预分析系统替代旧的增强内容构建（安全导入和异常捕获）
+            # 🆕 使用AI预分析系统替代旧的增强内容构建（安全导入和异常捕获）
+            scene_analysis = None
+            try:
+                from services.scene_pre_analyzer import analyze_scene
+                logger.info(f"[image_gen] 开始AI场景预分析: {experience_id}")
+                scene_analysis = await analyze_scene(event_data, is_selfie=is_selfie)
+            except ImportError as import_error:
+                logger.error(f"[image_gen] 场景预分析模块导入失败，使用传统方法: {import_error}")
                 scene_analysis = None
-                try:
-                    from services.scene_pre_analyzer import analyze_scene
-                    logger.info(f"[image_gen] 开始AI场景预分析: {experience_id}")
-                    scene_analysis = await analyze_scene(event_data, is_selfie=is_selfie)
-                except ImportError as import_error:
-                    logger.error(f"[image_gen] 场景预分析模块导入失败，使用传统方法: {import_error}")
-                    scene_analysis = None
-                except Exception as analysis_error:
-                    logger.error(f"[image_gen] AI预分析系统异常，使用传统方法: {analysis_error}")
-                    scene_analysis = None
+            except Exception as analysis_error:
+                logger.error(f"[image_gen] AI预分析系统异常，使用传统方法: {analysis_error}")
+                scene_analysis = None
 
-                # 🛡️ 强化回退逻辑：确保所有路径都有安全的默认值
-                if scene_analysis and isinstance(scene_analysis, dict):
-                    # 使用AI生成的高质量描述，带安全检查
-                    enhanced_content = scene_analysis.get("description")
-                    if not enhanced_content or not isinstance(enhanced_content, str):
-                        logger.warning(f"[image_gen] AI预分析返回无效描述，使用原始内容")
-                        enhanced_content = interaction_content
+            # 🛡️ 强化回退逻辑：确保所有路径都有安全的默认值
+            if scene_analysis and isinstance(scene_analysis, dict):
+                # 使用AI生成的高质量描述，带安全检查
+                enhanced_content = scene_analysis.get("description")
+                if not enhanced_content or not isinstance(enhanced_content, str):
+                    logger.warning(f"[image_gen] AI预分析返回无效描述，使用原始内容")
+                    enhanced_content = interaction_content
 
-                    detected_chars = scene_analysis.get("characters", [])
-                    if not isinstance(detected_chars, list):
-                        logger.warning(f"[image_gen] AI预分析返回无效角色列表，使用空列表")
-                        detected_chars = []
-
-                    logger.info(f"[image_gen] AI预分析成功，检测到角色: {detected_chars}")
-                    # 🚀 追踪：AI预分析成功
-                    process_tracker.track_prompt_enhancement(success=True)
-                else:
-                    # 回退到旧的增强内容构建
-                    logger.warning(f"[image_gen] AI预分析失败或返回无效数据，回退到传统方法")
-
-                    # 安全调用传统方法
-                    try:
-                        enhanced_content = _build_enhanced_content(
-                            interaction_content,
-                            enhanced_info,
-                            "selfie" if is_selfie else "scene"
-                        )
-                        # 确保返回值安全
-                        if not enhanced_content or not isinstance(enhanced_content, str):
-                            enhanced_content = interaction_content
-                    except Exception as fallback_error:
-                        logger.error(f"[image_gen] 传统方法也失败，使用原始内容: {fallback_error}")
-                        enhanced_content = interaction_content
-
+                detected_chars = scene_analysis.get("characters", [])
+                if not isinstance(detected_chars, list):
+                    logger.warning(f"[image_gen] AI预分析返回无效角色列表，使用空列表")
                     detected_chars = []
-                    # 🚀 追踪：AI预分析失败
-                    process_tracker.track_prompt_enhancement(success=False)
 
-                # 🔒 最终安全检查
-                if not enhanced_content:
-                    logger.error(f"[image_gen] 所有描述生成方法都失败，使用最后的安全默认值")
-                    enhanced_content = f"图片生成请求: {experience_id}"
+                logger.info(f"[image_gen] AI预分析成功，检测到角色: {detected_chars}")
+                # 🚀 追踪：AI预分析成功
+                process_tracker.track_prompt_enhancement(success=True)
+            else:
+                # 回退到旧的增强内容构建
+                logger.warning(f"[image_gen] AI预分析失败或返回无效数据，回退到传统方法")
 
-                for attempt in range(max_retries + 1):
-                    try:
-                        if attempt > 0:
-                            logger.info(f"[image_gen] 事件 {experience_id} 重试第 {attempt} 次图片生成")
-
-                        if is_selfie:
-                            if attempt == 0:
-                                logger.info(f"[image_gen] 📸 尝试为事件 {experience_id} 生成自拍。")
-                            # 为自拍生成设置更长的超时时间（8分钟）
-                            image_path = await asyncio.wait_for(
-                                image_generation_service.generate_selfie(enhanced_content, scene_analysis),
-                                timeout=480.0
-                            )
-                        else:
-                            if attempt == 0:
-                                logger.info(f"[image_gen] 🎨 尝试为事件 {experience_id} 生成场景图片。")
-                            # 为场景图设置超时时间（5分钟）
-                            image_path = await asyncio.wait_for(
-                                image_generation_service.generate_image_from_prompt(enhanced_content, scene_analysis),
-                                timeout=300.0
-                            )
-
-                        # 成功生成，跳出重试循环
-                        if image_path:
-                            if attempt > 0:
-                                logger.info(f"[image_gen] 事件 {experience_id} 重试第 {attempt} 次成功")
-                            break
-
-                    except asyncio.TimeoutError:
-                        error_msg = f"Generation timeout (attempt {attempt + 1}/{max_retries + 1})"
-                        logger.error(f"⏱️ 事件 {experience_id} 图片生成超时（第 {attempt + 1} 次尝试）")
-                        if attempt == max_retries:
-                            image_path = None
-                    except Exception as e:
-                        error_msg = f"{str(e)} (attempt {attempt + 1}/{max_retries + 1})"
-                        logger.error(f"事件 {experience_id} 图片生成失败（第 {attempt + 1} 次尝试）: {e}")
-                        if attempt == max_retries:
-                            image_path = None
-
-                # 记录监控数据（失败不影响主流程）
+                # 安全调用传统方法
                 try:
-                    # 🆕 使用AI预分析的角色检测结果
-                    if scene_analysis:
-                        # 使用AI预分析的角色检测结果
-                        used_ai_detection = True
-                        logger.debug(f"[image_gen] ✨ 使用AI预分析角色检测: {detected_chars}")
-                        # 🚀 追踪：使用AI角色检测
-                        process_tracker.track_character_detection(used_companions=True)
+                    enhanced_content = _build_enhanced_content(
+                        interaction_content,
+                        enhanced_info,
+                        "selfie" if is_selfie else "scene"
+                    )
+                    # 确保返回值安全
+                    if not enhanced_content or not isinstance(enhanced_content, str):
+                        enhanced_content = interaction_content
+                except Exception as fallback_error:
+                    logger.error(f"[image_gen] 传统方法也失败，使用原始内容: {fallback_error}")
+                    enhanced_content = interaction_content
+
+                detected_chars = []
+                # 🚀 追踪：AI预分析失败
+                process_tracker.track_prompt_enhancement(success=False)
+
+            # 🔒 最终安全检查
+            if not enhanced_content:
+                logger.error(f"[image_gen] 所有描述生成方法都失败，使用最后的安全默认值")
+                enhanced_content = f"图片生成请求: {experience_id}"
+
+            for attempt in range(max_retries + 1):
+                try:
+                    if attempt > 0:
+                        logger.info(f"[image_gen] 事件 {experience_id} 重试第 {attempt} 次图片生成")
+
+                    if is_selfie:
+                        if attempt == 0:
+                            logger.info(f"[image_gen] 📸 尝试为事件 {experience_id} 生成自拍。")
+                        # 为自拍生成设置更长的超时时间（8分钟）
+                        image_path = await asyncio.wait_for(
+                            image_generation_service.generate_selfie(enhanced_content, scene_analysis),
+                            timeout=480.0
+                        )
                     else:
-                        # 回退：使用增强数据或字符串匹配
-                        used_ai_detection = False
-                        if enhanced_info and enhanced_info.get("schedule_context"):
-                            companions = enhanced_info["schedule_context"].get("companions", [])
-                            if companions:
-                                detected_chars = companions
-                                logger.debug(f"[image_gen] 📦 使用增强数据检测角色: {detected_chars}")
-                            else:
-                                from services.character_manager import character_manager
-                                detected_chars = character_manager.detect_characters_in_text(interaction_content)
-                                logger.debug(f"[image_gen] 📦 使用字符串匹配检测角色: {detected_chars}")
+                        if attempt == 0:
+                            logger.info(f"[image_gen] 🎨 尝试为事件 {experience_id} 生成场景图片。")
+                        # 为场景图设置超时时间（5分钟）
+                        image_path = await asyncio.wait_for(
+                            image_generation_service.generate_image_from_prompt(enhanced_content, scene_analysis),
+                            timeout=300.0
+                        )
+
+                    # 成功生成，跳出重试循环
+                    if image_path:
+                        if attempt > 0:
+                            logger.info(f"[image_gen] 事件 {experience_id} 重试第 {attempt} 次成功")
+                        break
+
+                except asyncio.TimeoutError:
+                    error_msg = f"Generation timeout (attempt {attempt + 1}/{max_retries + 1})"
+                    logger.error(f"⏱️ 事件 {experience_id} 图片生成超时（第 {attempt + 1} 次尝试）")
+                    if attempt == max_retries:
+                        image_path = None
+                except Exception as e:
+                    error_msg = f"{str(e)} (attempt {attempt + 1}/{max_retries + 1})"
+                    logger.error(f"事件 {experience_id} 图片生成失败（第 {attempt + 1} 次尝试）: {e}")
+                    if attempt == max_retries:
+                        image_path = None
+
+            # 记录监控数据（失败不影响主流程）
+            try:
+                # 🆕 使用AI预分析的角色检测结果
+                if scene_analysis:
+                    # 使用AI预分析的角色检测结果
+                    logger.debug(f"[image_gen] ✨ 使用AI预分析角色检测: {detected_chars}")
+                    # 🚀 追踪：使用AI角色检测
+                    process_tracker.track_character_detection(used_companions=True)
+                else:
+                    # 回退：使用增强数据或字符串匹配
+                    if enhanced_info and enhanced_info.get("schedule_context"):
+                        companions = enhanced_info["schedule_context"].get("companions", [])
+                        if companions:
+                            detected_chars = companions
+                            logger.debug(f"[image_gen] 📦 使用增强数据检测角色: {detected_chars}")
                         else:
                             from services.character_manager import character_manager
                             detected_chars = character_manager.detect_characters_in_text(interaction_content)
                             logger.debug(f"[image_gen] 📦 使用字符串匹配检测角色: {detected_chars}")
-                        # 🚀 追踪：回退到传统角色检测
-                        process_tracker.track_character_detection(used_companions=False)
-
-                    # 如果检测到角色，更新生成类型
-                    if detected_chars and not is_selfie:
-                        generation_type = "scene_with_characters"
-
-                    image_generation_monitor.record_generation_attempt(
-                        experience_id=experience_id,
-                        generation_type=generation_type,
-                        start_time=generation_start_time,
-                        success=image_path is not None,
-                        image_path=image_path,
-                        error=error_msg,
-                        prompt_length=len(enhanced_content),  # 🆕 使用增强内容的长度
-                        detected_characters=detected_chars
-                    )
-                except Exception as monitor_error:
-                    logger.warning(f"记录监控数据失败（不影响主流程）: {monitor_error}")
-
-                if image_path:
-                    # 将 experience_id 和 image_path 存入 Redis Hash
-                    redis_client.hset(PROACTIVE_IMAGES_KEY, experience_id, image_path)
-                    logger.info(f"[image_gen] 成功关联图片 {image_path} 到事件 {experience_id}")
-
-                    # 🆕 存储图片路径到场景分析结果的映射，用于发送时获取AI描述
-                    if scene_analysis:
-                        image_filename = os.path.basename(image_path)
-                        image_metadata_key = f"image_metadata:{image_filename}"
-
-                        # 存储完整的场景分析结果，48小时过期
-                        redis_client.setex(
-                            image_metadata_key,
-                            172800,  # 48小时 = 172800秒
-                            json.dumps(scene_analysis, ensure_ascii=False)
-                        )
-
-                        scene_desc = scene_analysis.get("description", "")
-                        logger.info(f"[image_gen] 已存储图片元数据映射: {image_filename} -> AI描述({len(scene_desc)}字符)")
-                        logger.debug(f"[image_gen] 场景描述预览: {scene_desc[:50]}...")
                     else:
-                        logger.info("[image_gen] 未使用AI预分析，将使用传统描述方法")
+                        from services.character_manager import character_manager
+                        detected_chars = character_manager.detect_characters_in_text(interaction_content)
+                        logger.debug(f"[image_gen] 📦 使用字符串匹配检测角色: {detected_chars}")
+                    # 🚀 追踪：回退到传统角色检测
+                    process_tracker.track_character_detection(used_companions=False)
 
+                # 如果检测到角色，更新生成类型
+                if detected_chars and not is_selfie:
+                    generation_type = "scene_with_characters"
+
+                image_generation_monitor.record_generation_attempt(
+                    experience_id=experience_id,
+                    generation_type=generation_type,
+                    start_time=generation_start_time,
+                    success=image_path is not None,
+                    image_path=image_path,
+                    error=error_msg,
+                    prompt_length=len(enhanced_content),  # 🆕 使用增强内容的长度
+                    detected_characters=detected_chars
+                )
+            except Exception as monitor_error:
+                logger.warning(f"记录监控数据失败（不影响主流程）: {monitor_error}")
+
+            if image_path:
+                # 将 experience_id 和 image_path 存入 Redis Hash
+                redis_client.hset(PROACTIVE_IMAGES_KEY, experience_id, image_path)
+                logger.info(f"[image_gen] 成功关联图片 {image_path} 到事件 {experience_id}")
+
+                # 🆕 存储图片路径到场景分析结果的映射，用于发送时获取AI描述
+                if scene_analysis:
+                    image_filename = os.path.basename(image_path)
+                    image_metadata_key = f"image_metadata:{image_filename}"
+
+                    # 存储完整的场景分析结果，48小时过期
+                    redis_client.setex(
+                        image_metadata_key,
+                        172800,  # 48小时 = 172800秒
+                        json.dumps(scene_analysis, ensure_ascii=False)
+                    )
+
+                    scene_desc = scene_analysis.get("description", "")
+                    logger.info(f"[image_gen] 已存储图片元数据映射: {image_filename} -> AI描述({len(scene_desc)}字符)")
+                    logger.debug(f"[image_gen] 场景描述预览: {scene_desc[:50]}...")
                 else:
-                    logger.error(f"未能为事件 {experience_id} 生成图片。")
+                    logger.info("[image_gen] 未使用AI预分析，将使用传统描述方法")
+
             else:
-                logger.debug(f"[image_gen] 🎲 事件 {experience_id} 未触发图片生成（概率未命中）。")
+                logger.error(f"未能为事件 {experience_id} 生成图片。")
 
         except json.JSONDecodeError:
             logger.error(f"解析事件JSON失败: {event_json_str[:100]}...")

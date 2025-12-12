@@ -288,7 +288,7 @@ class ImageGenerationService:
             f"请根据下面的体验和想法或者经历，生成一张第一人称视角的场景图片。"
             f"视角要求：以拍摄者的第一人称视角构图，重点展现所处的环境、场景和氛围，画面中不要出现拍摄者本人。"
             f"构图重点：突出场景环境、物品、建筑、风景等，而非人物角色。如果场景中确实需要其他人物，应作为背景元素而非主体。"
-            f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格，色彩明亮，构图富有故事感。"
+            # f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格，色彩明亮，构图富有故事感。"
         )
 
         # 构建增强的场景描述
@@ -306,6 +306,14 @@ class ImageGenerationService:
                 enhanced_details.append(f"构图风格: {scene_analysis['composition_style']}")
             if scene_analysis.get("weather_context"):
                 enhanced_details.append(f"天气环境: {scene_analysis['weather_context']}")
+
+            # 🎨 新增：高级视觉效果
+            if scene_analysis.get("visual_effects"):
+                enhanced_details.append(f"✨ 特殊视觉效果: {scene_analysis['visual_effects']}")
+            if scene_analysis.get("photographic_technique"):
+                enhanced_details.append(f"📸 摄影技巧: {scene_analysis['photographic_technique']}")
+            if scene_analysis.get("artistic_style"):
+                enhanced_details.append(f"🎬 艺术风格: {scene_analysis['artistic_style']}")
 
             enhanced_desc = " | ".join(enhanced_details) if enhanced_details else experience_description
             prompt = f"{base_prompt}场景描述: {enhanced_desc}"
@@ -427,6 +435,14 @@ class ImageGenerationService:
                 scene_details.append(f"构图风格: {scene_analysis['composition_style']}")
             if scene_analysis.get("emotional_state"):
                 scene_details.append(f"场景氛围: {scene_analysis['emotional_state']}")
+
+            # 🎨 新增：高级视觉效果
+            if scene_analysis.get("visual_effects"):
+                scene_details.append(f"✨ 特殊视觉效果: {scene_analysis['visual_effects']}")
+            if scene_analysis.get("photographic_technique"):
+                scene_details.append(f"📸 摄影技巧: {scene_analysis['photographic_technique']}")
+            if scene_analysis.get("artistic_style"):
+                scene_details.append(f"🎬 艺术风格: {scene_analysis['artistic_style']}")
 
             enhanced_scene_desc = " | ".join(scene_details) if scene_details else experience_description
         else:
@@ -559,8 +575,15 @@ class ImageGenerationService:
             char_descriptions = [f"{char}（{character_traits.get(char, '明日方舟角色')}）" for char in other_characters]
             other_characters_desc = f"场景中的其他角色：{', '.join(char_descriptions)}。"
 
-        # 🆕 服装建议：结合AI预分析和天气系统
+        # 💃 服装建议：结合AI预分析、天气系统和性感元素
         clothing_parts = []
+
+        # 🎨 优先使用AI预分析的服装细节建议（包含性感元素）
+        if scene_analysis and scene_analysis.get("clothing_details"):
+            clothing_parts.append(f"💃 AI建议服装细节: {scene_analysis['clothing_details']}")
+        else:
+            # 如果没有AI建议，使用更开放大胆的默认建议
+            clothing_parts.append("服装风格：展现身材曲线的时尚服装，可以包含露肩、V领、开叉、贴身剪裁等性感元素，体现自信魅力")
 
         # 添加天气情况描述（来自AI预分析）
         if scene_analysis and scene_analysis.get("weather_context"):
@@ -570,18 +593,26 @@ class ImageGenerationService:
         traditional_clothing = await self._get_weather_based_clothing_prompt()
         clothing_parts.append(traditional_clothing)
 
-        clothing_parts.append("体现德克萨斯的个性特色")
+        clothing_parts.append("整体风格：时尚、性感、自信，同时保持角色的高冷气质")
         clothing_prompt = f"服装设计要求：{' '.join(clothing_parts)}"
 
-        # 🆕 构建增强的自拍提示词
+        # 💃 构建增强的自拍提示词（更加开放、大胆、性感）
         base_selfie_prompt = (
-            f"请将这张人物图片作为基础，根据以下场景描述，生成一张人物在该场景下的高质量二次元风格自拍照片。"
-            f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格。"
+            f"请将这张人物图片作为基础，根据以下场景描述，生成一张充满魅力和自信的高质量二次元风格自拍照片。"
+            f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格，注重展现角色的性感魅力和身材曲线。"
             f"主角特征要求：德克萨斯（黑色头发，兽耳），必须保持独特的渐变色眼眸，BOTH EYES must have gradient colors from blue (top) to orange (bottom)，两只眼睛都是从蓝色（上半部分）渐变到橙色（下半部分），这是区别于其他角色的重要特征。"
             f"人物的面部特征、黑色发型和整体风格需要与原图保持高度一致。"
+            f"💃 身材展现：注重展现优美的身材曲线和线条，姿态要优雅性感，体现女性魅力和自信气场。"
         )
 
-        # 🆕 使用AI预分析的表情建议或传统表情描述
+        # 💃 姿态建议：优先使用AI预分析的建议
+        if scene_analysis and scene_analysis.get("pose_suggestion"):
+            pose_prompt = f"💃 姿态要求：{scene_analysis['pose_suggestion']}。姿态要自然流畅，充满表现力和魅力，展现自信和性感。"
+        else:
+            # 默认的性感姿态建议
+            pose_prompt = f"💃 姿态要求：采用更有表现力、更大胆、更性感的自拍姿态，如：撩发、回眸、侧身展现曲线、慵懒斜倚、挺胸展现身材等。姿态要自然流畅，充满魅力和自信，避免僵硬。"
+
+        # 🆕 使用AI预分析的表情建议（保持高冷但更有魅力）
         if scene_analysis and scene_analysis.get("character_expressions"):
             # 查找德克萨斯的表情建议
             texas_expression = None
@@ -591,13 +622,13 @@ class ImageGenerationService:
                     break
 
             if texas_expression:
-                expression_prompt = f"性格表情要求：德克萨斯{texas_expression}，体现其高冷内敛的性格特点，表情应该贴合当前场景情境。"
+                expression_prompt = f"性格表情要求：德克萨斯{texas_expression}，高冷中带着魅力，眼神要有吸引力和自信，表情性感而不失优雅。"
             else:
-                expression_prompt = f"性格表情要求：德克萨斯保持平静温和的表情，可以有淡淡的微笑或安详的神情。体现其内敛但不失温柔的性格特点，表情自然贴合当前场景情境。"
+                expression_prompt = f"性格表情要求：德克萨斯保持高冷气质，但眼神更有魅力和吸引力，可以有微笑、媚眼、或性感的眼神，展现冷艳美人的独特魅力。"
         else:
-            expression_prompt = f"性格表情要求：德克萨斯保持平静温和的表情，可以有淡淡的微笑或安详的神情。体现其内敛但不失温柔的性格特点，表情自然贴合当前场景情境。"
+            expression_prompt = f"性格表情要求：德克萨斯保持高冷气质，但眼神更有魅力和吸引力，可以有微笑、媚眼、或性感的眼神，展现冷艳美人的独特魅力。"
 
-        # 🆕 构建增强的场景描述
+        # 🎨 构建增强的场景描述（包含新的视觉效果）
         if scene_analysis:
             scene_details = []
             if scene_analysis.get("location"):
@@ -611,12 +642,20 @@ class ImageGenerationService:
             if scene_analysis.get("emotional_state"):
                 scene_details.append(f"情感氛围: {scene_analysis['emotional_state']}")
 
+            # 🎨 新增：高级视觉效果
+            if scene_analysis.get("visual_effects"):
+                scene_details.append(f"✨ 特殊视觉效果: {scene_analysis['visual_effects']}")
+            if scene_analysis.get("photographic_technique"):
+                scene_details.append(f"📸 摄影技巧: {scene_analysis['photographic_technique']}")
+            if scene_analysis.get("artistic_style"):
+                scene_details.append(f"🎬 艺术风格: {scene_analysis['artistic_style']}")
+
             enhanced_scene_desc = " | ".join(scene_details) if scene_details else experience_description
         else:
             enhanced_scene_desc = experience_description
 
         # 组合完整的自拍提示词
-        prompt = f"{base_selfie_prompt}{other_characters_desc}{expression_prompt}{clothing_prompt}构图要求：Selfie pose with one arm extended holding phone (but don't show the phone/camera in frame)，一只手臂自然伸出做自拍手势但画面中不要显示手机或相机设备。场景融合：姿势、神态和背景需要完全融入新的场景，营造自然的自拍效果。场景描述: {enhanced_scene_desc}"
+        prompt = f"{base_selfie_prompt}{other_characters_desc}{expression_prompt}{pose_prompt}{clothing_prompt}构图要求：Selfie pose with one arm extended holding phone (but don't show the phone/camera in frame)，一只手臂自然伸出做自拍手势但画面中不要显示手机或相机设备。画面构图要突出人物魅力和身材曲线。场景融合：姿势、神态和背景需要完全融入新的场景，营造性感自然的自拍效果。场景描述: {enhanced_scene_desc}"
 
         try:
             # 使用优化的multipart上传方式，参考API最佳实践

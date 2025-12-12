@@ -269,3 +269,64 @@ async def collect_interactions_endpoint(target_date: str = None):
         }
 
 
+@app.get("/check-and-generate-missing-images")
+async def check_and_generate_missing_images_endpoint(target_date: str = None):
+    """
+    检查指定日期是否有缺失的图片，如果有则触发生成。
+
+    检测逻辑：
+    1. 读取当天所有 need_image=true 的微观经历
+    2. 检查这些经历是否已经生成了图片
+    3. 如果有缺失，触发图片生成任务
+    4. 返回检测结果和生成状态
+    """
+    if target_date:
+        try:
+            target_date_obj = date.fromisoformat(target_date)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail="日期格式不正确，请使用 YYYY-MM-DD 格式。"
+            )
+    else:
+        target_date_obj = date.today()
+
+    # 导入检测函数
+    from tasks.image_generation_tasks import check_missing_images_for_date, prepare_images_for_proactive_interactions
+
+    # 检测缺失图片
+    check_result = await check_missing_images_for_date(target_date_obj.strftime('%Y-%m-%d'))
+
+    if not check_result["has_data"]:
+        return {
+            "status": "no_data",
+            "message": f"{target_date_obj.strftime('%Y-%m-%d')} 没有找到微观经历数据",
+            "date": target_date_obj.strftime('%Y-%m-%d')
+        }
+
+    if not check_result["has_missing"]:
+        return {
+            "status": "complete",
+            "message": f"{target_date_obj.strftime('%Y-%m-%d')} 所有需要的图片都已生成",
+            "date": target_date_obj.strftime('%Y-%m-%d'),
+            "total_need_image": check_result["total_need_image"],
+            "already_generated": check_result["already_generated"],
+            "missing_count": 0
+        }
+
+    # 有缺失图片，触发生成任务
+    logger.info(f"[API] 检测到 {target_date_obj.strftime('%Y-%m-%d')} 有 {check_result['missing_count']} 张图片缺失，触发生成任务")
+
+    # 异步触发 Celery 任务
+    prepare_images_for_proactive_interactions.delay()
+
+    return {
+        "status": "triggered",
+        "message": f"检测到 {check_result['missing_count']} 张图片缺失，已触发生成任务（4:50 任务）",
+        "date": target_date_obj.strftime('%Y-%m-%d'),
+        "total_need_image": check_result["total_need_image"],
+        "already_generated": check_result["already_generated"],
+        "missing_count": check_result["missing_count"],
+        "missing_ids": check_result["missing_ids"][:10]  # 只返回前10个缺失的ID
+    }
+
+
