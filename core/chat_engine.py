@@ -125,46 +125,27 @@ class ChatEngine:
 
         # 4. 流式调用 AI 模型，并收集完整回复用于事件检测
         full_response = ""
-        buffered_segment = ""  # 缓冲区用于检测标记
+        segments_list = []  # 收集所有segments
         marker = "[EVENT_DETECTED]"
 
+        # 先收集所有segments
         async for segment in stream_ai_chat(prompt_messages, "claude-opus-4-5-20251101"):
             full_response += segment
-            buffered_segment += segment
+            segments_list.append(segment)
 
-            # 检查缓冲区是否包含标记
-            if marker in buffered_segment:
-                # 找到标记位置
-                marker_pos = buffered_segment.find(marker)
-                # 输出标记之前的内容
-                if marker_pos > 0:
-                    yield buffered_segment[:marker_pos]
-                # 输出标记之后的内容（如果有）
-                after_marker = buffered_segment[marker_pos + len(marker):]
-                if after_marker:
-                    yield after_marker
-                buffered_segment = ""
-                continue
+        # 检查是否包含标记，并从segments中移除
+        if marker in full_response:
+            # 找到包含标记的segment并移除标记
+            for i, seg in enumerate(segments_list):
+                if marker in seg:
+                    segments_list[i] = seg.replace(marker, "")
+                    logger.info(f"[chat_engine] 从segment {i} 中移除事件标记")
 
-            # 如果缓冲区很长，输出大部分内容，只保留足够检测标记的长度
-            if len(buffered_segment) > len(marker) * 2:
-                safe_output = len(buffered_segment) - len(marker)
-                yield buffered_segment[:safe_output]
-                buffered_segment = buffered_segment[safe_output:]
+        # 输出所有segments（保持原有分段逻辑）
+        for seg in segments_list:
+            yield seg
 
-        # 输出剩余缓冲区
-        if buffered_segment:
-            if marker in buffered_segment:
-                marker_pos = buffered_segment.find(marker)
-                if marker_pos > 0:
-                    yield buffered_segment[:marker_pos]
-                after_marker = buffered_segment[marker_pos + len(marker):]
-                if after_marker:
-                    yield after_marker
-            else:
-                yield buffered_segment
-
-        logger.info(f"[chat_engine] 流式生成回复完成 channel={channel_id}, 回复长度={len(full_response)}")
+        logger.info(f"[chat_engine] 流式生成回复完成 channel={channel_id}, 回复长度={len(full_response)}, segments数量={len(segments_list)}")
         logger.debug(f"[chat_engine] 完整回复内容: {full_response[:200]}...")
 
         # 5. 检测事件标记并触发异步处理
