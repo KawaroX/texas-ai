@@ -134,20 +134,35 @@ class ChatEngine:
 
             # 检查缓冲区是否包含标记
             if marker in buffered_segment:
-                # 移除标记并输出剩余内容
-                clean_segment = buffered_segment.replace(marker, "")
-                if clean_segment:
-                    yield clean_segment
+                # 找到标记位置
+                marker_pos = buffered_segment.find(marker)
+                # 输出标记之前的内容
+                if marker_pos > 0:
+                    yield buffered_segment[:marker_pos]
+                # 输出标记之后的内容（如果有）
+                after_marker = buffered_segment[marker_pos + len(marker):]
+                if after_marker:
+                    yield after_marker
                 buffered_segment = ""
-            elif len(buffered_segment) >= len(marker):
-                # 缓冲区足够长但没有标记，输出并保留可能的部分标记
-                output_length = len(buffered_segment) - len(marker) + 1
-                yield buffered_segment[:output_length]
-                buffered_segment = buffered_segment[output_length:]
+                continue
 
-        # 输出剩余缓冲区（如果没有标记）
-        if buffered_segment and marker not in buffered_segment:
-            yield buffered_segment
+            # 如果缓冲区很长，输出大部分内容，只保留足够检测标记的长度
+            if len(buffered_segment) > len(marker) * 2:
+                safe_output = len(buffered_segment) - len(marker)
+                yield buffered_segment[:safe_output]
+                buffered_segment = buffered_segment[safe_output:]
+
+        # 输出剩余缓冲区
+        if buffered_segment:
+            if marker in buffered_segment:
+                marker_pos = buffered_segment.find(marker)
+                if marker_pos > 0:
+                    yield buffered_segment[:marker_pos]
+                after_marker = buffered_segment[marker_pos + len(marker):]
+                if after_marker:
+                    yield after_marker
+            else:
+                yield buffered_segment
 
         logger.info(f"流式生成回复完成 channel={channel_id}")
 
