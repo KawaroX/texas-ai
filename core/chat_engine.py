@@ -164,7 +164,8 @@ class ChatEngine:
             else:
                 yield buffered_segment
 
-        logger.info(f"流式生成回复完成 channel={channel_id}")
+        logger.info(f"[chat_engine] 流式生成回复完成 channel={channel_id}, 回复长度={len(full_response)}")
+        logger.debug(f"[chat_engine] 完整回复内容: {full_response[:200]}...")
 
         # 5. 检测事件标记并触发异步处理
         await self._process_event_detection(
@@ -193,11 +194,14 @@ class ChatEngine:
             context_messages: 对话上下文
             user_info: 用户信息
         """
+        logger.debug(f"[chat_engine] 检查事件标记，回复长度={len(ai_response)}, 包含标记={'[EVENT_DETECTED]' in ai_response}")
+
         # 检查事件标记
         if "[EVENT_DETECTED]" not in ai_response:
+            logger.debug(f"[chat_engine] 未检测到事件标记")
             return
 
-        logger.info(f"[chat_engine] 检测到事件标记，开始异步提取 channel={channel_id}")
+        logger.info(f"[chat_engine] ✅ 检测到事件标记，开始异步提取 channel={channel_id}")
 
         # 启动异步任务处理事件提取（不阻塞主流程）
         asyncio.create_task(
