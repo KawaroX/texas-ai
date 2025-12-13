@@ -861,7 +861,10 @@ async def merge_context(
             f"(距离上一条消息过去了：{texas_time_diff_str}) [{texas_time_str}] 德克萨斯：\n\n"
             "(If you think no reply is necessary right now, simply respond with:\n(no messages)\n\n)"
             "(Once your message is fully composed and complete, append the word SEND at the end of the message to indicate it's ready to be sent. Make sure to include SEND only once and only after all parts of the message are finalized.)"
-            "消息务必使用中文。(注意不要重复之前说过的话，除非你认为作为一个真正的人类，这时候会选择重复)"
+            "消息务必使用中文。(注意不要重复之前说过的话，除非你认为作为一个真正的人类，这时候会选择重复)\n\n"
+            "**IMPORTANT - Event Detection**: If Kawaro mentioned ANY future event or task in his message (从今晚到一年后的任何事情), you MUST add [EVENT_DETECTED] at the very END of your response (after SEND). "
+            "Examples: '明天三点考试', '下周开会', '记得提醒我', '今晚喝酒', '后天派对'. "
+            "This marker is INVISIBLE to Kawaro and CRITICAL for system functionality. Only skip it if the message is about PAST events or purely hypothetical."
         )
 
     messages.append({"role": "user", "content": user_query_content})
