@@ -275,10 +275,11 @@ class ImageGenerationService:
             prompt = f"{base_prompt}场景描述: {experience_description}"
 
         # 🔄 SeeDream API payload（纯文字生成，不需要image参数）
+        # 场景图：16:9横屏4K
         payload = {
             "model": "doubao-seedream-4-5-251128",
             "prompt": prompt,
-            "size": "2K",
+            "size": "4K",  # 16:9横屏4K
             "watermark": False
         }
 
@@ -417,11 +418,12 @@ class ImageGenerationService:
             image_data_url = self._convert_image_to_base64_url(character_image_data)
 
             # 🔄 SeeDream API payload（Image-to-Image）
+            # 场景图（含角色）：16:9横屏4K
             payload = {
                 "model": "doubao-seedream-4-5-251128",
                 "prompt": prompt,
                 "image": image_data_url,
-                "size": "2K",
+                "size": "4K",  # 16:9横屏4K
                 "watermark": False
             }
 
@@ -565,26 +567,26 @@ class ImageGenerationService:
         clothing_parts.append("整体风格：时尚、性感、自信，同时保持角色的高冷气质")
         clothing_prompt = f"服装设计要求：{' '.join(clothing_parts)}"
 
-        # 💃 构建增强的自拍提示词（高冷+性冷淡+身材曲线）
+        # 💃 构建增强的自拍提示词 - 版本B（平衡版）
         base_selfie_prompt = (
             f"请将这张人物图片作为基础，根据以下场景描述，生成一张高质量的自拍照片。"
             # f"艺术风格要求：保持明日方舟游戏的二次元动漫画风，避免过于写实的三次元风格，注重展现角色的性感魅力和身材曲线。"
-            f"艺术风格要求：性冷淡的高级感，简约而不简单，冷艳都市风格。"
+            f"艺术风格要求：冷艳都市风格，简约高级，性感而不失高冷气质。"
             # 🎨 眼睛颜色限制已注释 - SeeDream已能根据训练数据正确生成德克萨斯的渐变色眼睛
             # f"主角特征要求：德克萨斯（黑色头发，兽耳），必须保持独特的渐变色眼眸，BOTH EYES must have gradient colors from blue (top) to orange (bottom)，两只眼睛都是从蓝色（上半部分）渐变到橙色（下半部分），这是区别于其他角色的重要特征。"
             f"主角特征要求：德克萨斯（黑色头发，兽耳），明日方舟角色。"
             f"人物的面部特征、黑色发型和整体风格需要与原图保持高度一致。"
-            f"💃 身材展现：突出展现完美的身材曲线和优美线条，性感但不妩媚，通过身材比例和姿态体现魅力，而非表情。强调纤细腰身、修长双腿、优美体态。"
+            f"💃 身材展现：展现健康性感的身材，超级丰满的胸部（D罩杯），纤细但不过分的腰身、修长双腿。身材比例匀称健康，该有肉的地方丰满，该瘦的地方紧致，通过身材本身的优势体现魅力。"
         )
 
-        # 💃 姿态建议：优先使用AI预分析的建议（强调高冷而非妩媚）
+        # 💃 姿态建议：版本B（平衡版）
         if scene_analysis and scene_analysis.get("pose_suggestion"):
-            pose_prompt = f"💃 姿态要求：{scene_analysis['pose_suggestion']}。姿态要自然流畅，高冷而优雅，展现自信和身材曲线。"
+            pose_prompt = f"💃 姿态要求：{scene_analysis['pose_suggestion']}。姿态流畅优雅，既展现身材优势又保持高冷气场。"
         else:
-            # 默认的高冷性感姿态建议（去掉妩媚元素）
-            pose_prompt = f"💃 姿态要求：采用简约大气的自拍姿态，如：侧身展现曲线、挺胸展现身材、自然站立等。姿态要自然流畅，高冷优雅，通过身材比例体现魅力，避免过于妩媚的动作。"
+            # 默认的平衡姿态建议
+            pose_prompt = f"💃 姿态要求：采用自然而有魅力的自拍姿态，如：侧身展现曲线、挺胸展现身材、自然站立等。姿态流畅优雅，既展现身材优势又保持高冷气场。"
 
-        # 🆕 使用AI预分析的表情建议（强调高冷性冷淡，去掉妩媚）
+        # 🆕 使用AI预分析的表情建议 - 版本B（平衡版）
         if scene_analysis and scene_analysis.get("character_expressions"):
             # 查找德克萨斯的表情建议
             texas_expression = None
@@ -594,11 +596,11 @@ class ImageGenerationService:
                     break
 
             if texas_expression:
-                expression_prompt = f"性格表情要求：德克萨斯{texas_expression}，保持高冷疏离的气质，眼神冷静自信，表情淡然优雅，不要过于妩媚。"
+                expression_prompt = f"性格表情要求：德克萨斯{texas_expression}，保持高冷气质，眼神冷静自信中带一丝吸引力，表情淡然优雅。"
             else:
-                expression_prompt = f"性格表情要求：德克萨斯保持高冷疏离的气质，眼神冷静自信，可以有淡淡的微笑或平静的表情，体现性冷淡的冷艳美感，不要妩媚。"
+                expression_prompt = f"性格表情要求：德克萨斯保持高冷气质，眼神冷静自信中带一丝吸引力，表情淡然优雅，可以有微笑或平静的神态，展现冷艳美人的魅力。"
         else:
-            expression_prompt = f"性格表情要求：德克萨斯保持高冷疏离的气质，眼神冷静自信，可以有淡淡的微笑或平静的表情，体现性冷淡的冷艳美感，不要妩媚。"
+            expression_prompt = f"性格表情要求：德克萨斯保持高冷气质，眼神冷静自信中带一丝吸引力，表情淡然优雅，可以有微笑或平静的神态，展现冷艳美人的魅力。"
 
         # 🎨 构建增强的场景描述（包含新的视觉效果）
         if scene_analysis:
@@ -627,18 +629,19 @@ class ImageGenerationService:
             enhanced_scene_desc = experience_description
 
         # 组合完整的自拍提示词
-        prompt = f"{base_selfie_prompt}{other_characters_desc}{expression_prompt}{pose_prompt}{clothing_prompt}构图要求：Selfie pose with one arm extended holding phone (but don't show the phone/camera in frame)，一只手臂自然伸出做自拍手势但画面中不要显示手机或相机设备。画面构图要突出人物魅力和身材曲线。场景融合：姿势、神态和背景需要完全融入新的场景，营造性感自然的自拍效果。场景描述: {enhanced_scene_desc}"
+        prompt = f"{base_selfie_prompt}{other_characters_desc}{expression_prompt}{pose_prompt}{clothing_prompt}构图要求：自拍视角，画面构图要突出人物魅力和身材曲线。场景融合：姿势、神态和背景需要完全融入新的场景，营造自然的自拍效果。场景描述: {enhanced_scene_desc}"
 
         try:
             # 🔄 转换图片为base64 data URL
             image_data_url = self._convert_image_to_base64_url(base_image_data)
 
             # 🔄 SeeDream API payload（Image-to-Image）
+            # 自拍照：9:16竖屏2K
             payload = {
                 "model": "doubao-seedream-4-5-251128",
                 "prompt": prompt,
                 "image": image_data_url,
-                "size": "2K",
+                "size": "2K",  # 9:16竖屏2K (1080x1920或类似竖屏分辨率)
                 "watermark": False
             }
 
