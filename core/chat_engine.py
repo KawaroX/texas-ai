@@ -132,6 +132,14 @@ class ChatEngine:
         async for segment in stream_ai_chat(prompt_messages, "claude-opus-4-5-20251101"):
             full_response += segment
             segments_list.append(segment)
+            # 调试：每个segment是否包含标记
+            if marker in segment:
+                logger.warning(f"🔍 [DEBUG] segment 包含标记! segment='{segment}'")
+
+        # 调试：完整回复
+        logger.info(f"🔍 [DEBUG] full_response 长度={len(full_response)}")
+        logger.info(f"🔍 [DEBUG] full_response 最后200字符: {full_response[-200:]}")
+        logger.info(f"🔍 [DEBUG] 是否包含标记? {marker in full_response}")
 
         # 检查是否包含标记，并从segments中移除
         has_event_marker = marker in full_response
