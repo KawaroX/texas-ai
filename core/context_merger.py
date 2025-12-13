@@ -66,6 +66,82 @@ async def _summarize_channel(
         return ""
 
 
+def _get_future_events_context(user_id: str = "kawaro", days_ahead: int = 14) -> str:
+    """
+    获取用户的未来事件作为上下文
+
+    Args:
+        user_id: 用户ID
+        days_ahead: 获取未来多少天的事件
+
+    Returns:
+        格式化的事件列表字符串
+    """
+    try:
+        from services.future_event_manager import future_event_manager
+        from datetime import datetime, timedelta
+
+        # 获取活跃事件
+        events = future_event_manager.get_active_events(user_id, days_ahead)
+
+        if not events:
+            logger.debug("[context_merger] 未找到未来事件")
+            return ""
+
+        # 按日期分组和格式化
+        today = datetime.now().date()
+        context_parts = ["【Kawaro的未来事件】"]
+
+        for event in events:
+            # 解析事件时间
+            event_date = event.get('event_date')
+            event_time = event.get('event_time')
+
+            if not event_date:
+                continue
+
+            # 计算距离天数
+            days_diff = (event_date - today).days
+
+            if days_diff == 0:
+                date_desc = "今天"
+            elif days_diff == 1:
+                date_desc = "明天"
+            elif days_diff == 2:
+                date_desc = "后天"
+            elif days_diff < 7:
+                date_desc = f"{days_diff}天后"
+            else:
+                weeks = days_diff // 7
+                date_desc = f"{weeks}周后"
+
+            # 格式化时间
+            time_str = ""
+            if event_time:
+                time_str = f" {event_time.strftime('%H:%M')}"
+
+            # 构建事件描述
+            event_summary = event.get('event_summary', event.get('event_text', '未知事件'))
+            reminder_info = ""
+            if event.get('need_reminder') and event.get('reminder_datetime'):
+                reminder_datetime = datetime.fromisoformat(event['reminder_datetime']) if isinstance(event['reminder_datetime'], str) else event['reminder_datetime']
+                advance_minutes = event.get('reminder_advance_minutes', 30)
+                reminder_info = f"（将提前{advance_minutes}分钟提醒）"
+
+            context_parts.append(
+                f"- {date_desc}{time_str}: {event_summary} {reminder_info}".strip()
+            )
+
+        if len(context_parts) == 1:  # 只有标题，没有事件
+            return ""
+
+        return "\n".join(context_parts)
+
+    except Exception as e:
+        logger.error(f"获取未来事件失败: {e}", exc_info=True)
+        return ""
+
+
 def _get_life_system_context() -> str:
     """获取生活系统数据作为上下文"""
     try:
@@ -645,6 +721,9 @@ async def merge_context(
     # 3. 获取生活系统信息
     life_system_context = _get_life_system_context()
 
+    # 3.5 获取未来事件信息
+    future_events_context = _get_future_events_context(user_id="kawaro", days_ahead=14)
+
     # 4. 获取记忆信息
     from core.rag_decision_system import RAGDecisionMaker
 
@@ -668,6 +747,9 @@ async def merge_context(
 
     if life_system_context:
         system_parts.append(life_system_context)
+
+    if future_events_context:
+        system_parts.append(future_events_context)
 
     if summary_notes:
         system_parts.append("【其他渠道聊天参考资料】\n" + "\n\n".join(summary_notes))

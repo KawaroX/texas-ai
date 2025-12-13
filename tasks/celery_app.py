@@ -16,6 +16,7 @@ celery_app = Celery(
         "tasks.life_data_tasks",
         "tasks.interaction_tasks",
         "tasks.image_generation_tasks",
+        "tasks.reminder_tasks",  # 未来事件提醒任务
     ],
 )
 
@@ -60,6 +61,10 @@ celery_app.conf.update(
         "cleanup-expired-proactive-images": {
             "task": "tasks.image_generation_tasks.cleanup_expired_proactive_images",
             "schedule": crontab(hour=2, minute=30),  # 每天2:30触发，清理过期图片映射
+        },
+        "expire-past-events": {
+            "task": "tasks.reminder_tasks.expire_past_events_task",
+            "schedule": crontab(hour=0, minute=5),  # 每天0:05触发，归档过期事件
         },
     },
 )

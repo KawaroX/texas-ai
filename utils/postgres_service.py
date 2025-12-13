@@ -409,3 +409,314 @@ def delete_micro_experience(experience_id: str):
             return cur.rowcount > 0
     finally:
         conn.close()
+
+
+# ==================== Future Events 表操作 ====================
+
+def insert_future_event(event_data: dict) -> str:
+    """
+    插入未来事件
+
+    Args:
+        event_data: {
+            'event_text': str,
+            'event_summary': str,
+            'event_date': str (YYYY-MM-DD) or None,
+            'event_time': str (HH:MM) or None,
+            'need_reminder': bool,
+            'reminder_datetime': str (ISO format) or None,
+            'reminder_advance_minutes': int,
+            'source_channel': str,
+            'created_by': str,
+            'context_messages': list,
+            'extraction_confidence': float,
+            'metadata': dict
+        }
+
+    Returns:
+        event_id (UUID string)
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO future_events (
+                    event_text, event_summary, event_date, event_time,
+                    need_reminder, reminder_datetime, reminder_advance_minutes,
+                    source_channel, created_by, context_messages,
+                    extraction_confidence, metadata
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id;
+                """,
+                (
+                    event_data['event_text'],
+                    event_data['event_summary'],
+                    event_data.get('event_date'),
+                    event_data.get('event_time'),
+                    event_data.get('need_reminder', False),
+                    event_data.get('reminder_datetime'),
+                    event_data.get('reminder_advance_minutes', 30),
+                    event_data['source_channel'],
+                    event_data['created_by'],
+                    json.dumps(event_data.get('context_messages', [])),
+                    event_data.get('extraction_confidence', 0.5),
+                    json.dumps(event_data.get('metadata', {}))
+                ),
+            )
+            event_id = cur.fetchone()[0]
+            return str(event_id)
+    finally:
+        conn.close()
+
+
+def get_future_event(event_id: str) -> dict:
+    """获取单个未来事件"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, event_text, event_summary, event_date, event_time,
+                       status, need_reminder, reminder_datetime, reminder_sent,
+                       reminder_advance_minutes, source_channel, created_by,
+                       context_messages, extraction_confidence, metadata,
+                       created_at, updated_at, archived_to_mem0, mem0_memory_id
+                FROM future_events
+                WHERE id = %s;
+                """,
+                (event_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+
+            return {
+                'id': str(row[0]),
+                'event_text': row[1],
+                'event_summary': row[2],
+                'event_date': row[3],
+                'event_time': row[4],
+                'status': row[5],
+                'need_reminder': row[6],
+                'reminder_datetime': row[7],
+                'reminder_sent': row[8],
+                'reminder_advance_minutes': row[9],
+                'source_channel': row[10],
+                'created_by': row[11],
+                'context_messages': row[12],
+                'extraction_confidence': row[13],
+                'metadata': row[14],
+                'created_at': row[15],
+                'updated_at': row[16],
+                'archived_to_mem0': row[17],
+                'mem0_memory_id': row[18]
+            }
+    finally:
+        conn.close()
+
+
+def get_active_future_events(user_id: str, days_ahead: int = 7) -> list:
+    """
+    获取用户未来N天的活跃事件
+
+    Args:
+        user_id: 用户ID
+        days_ahead: 未来多少天
+
+    Returns:
+        事件列表
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, event_text, event_summary, event_date, event_time,
+                       status, need_reminder, reminder_datetime, reminder_sent,
+                       source_channel, metadata, created_at
+                FROM future_events
+                WHERE created_by = %s
+                  AND status IN ('pending', 'active')
+                  AND (
+                      event_date IS NULL
+                      OR event_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '%s days'
+                  )
+                ORDER BY
+                    CASE WHEN event_date IS NULL THEN 1 ELSE 0 END,
+                    event_date,
+                    event_time NULLS LAST;
+                """,
+                (user_id, days_ahead),
+            )
+
+            events = []
+            for row in cur.fetchall():
+                events.append({
+                    'id': str(row[0]),
+                    'event_text': row[1],
+                    'event_summary': row[2],
+                    'event_date': row[3],
+                    'event_time': row[4],
+                    'status': row[5],
+                    'need_reminder': row[6],
+                    'reminder_datetime': row[7],
+                    'reminder_sent': row[8],
+                    'source_channel': row[9],
+                    'metadata': row[10],
+                    'created_at': row[11]
+                })
+            return events
+    finally:
+        conn.close()
+
+
+def update_future_event(event_id: str, updates: dict) -> bool:
+    """
+    更新未来事件
+
+    Args:
+        event_id: 事件ID
+        updates: 要更新的字段字典
+
+    Returns:
+        是否成功
+    """
+    if not updates:
+        return False
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # 动态构建UPDATE语句
+            set_clauses = []
+            values = []
+
+            for key, value in updates.items():
+                if key in ['metadata', 'context_messages'] and isinstance(value, (dict, list)):
+                    set_clauses.append(f"{key} = %s")
+                    values.append(json.dumps(value))
+                else:
+                    set_clauses.append(f"{key} = %s")
+                    values.append(value)
+
+            values.append(event_id)
+
+            query = f"""
+                UPDATE future_events
+                SET {', '.join(set_clauses)}
+                WHERE id = %s;
+            """
+
+            cur.execute(query, values)
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def mark_reminder_sent(event_id: str) -> bool:
+    """标记提醒已发送"""
+    return update_future_event(event_id, {'reminder_sent': True})
+
+
+def cancel_future_event(event_id: str, reason: str = None) -> bool:
+    """取消事件"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # 更新事件状态
+            cur.execute(
+                """
+                UPDATE future_events
+                SET status = 'cancelled'
+                WHERE id = %s;
+                """,
+                (event_id,),
+            )
+
+            # 记录历史
+            if reason:
+                cur.execute(
+                    """
+                    INSERT INTO future_events_history (event_id, action, reason)
+                    VALUES (%s, 'cancel', %s);
+                    """,
+                    (event_id, reason),
+                )
+
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def get_upcoming_reminders(start_time, end_time) -> list:
+    """
+    获取指定时间范围内需要发送的提醒
+
+    Args:
+        start_time: 开始时间 (datetime)
+        end_time: 结束时间 (datetime)
+
+    Returns:
+        提醒列表
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, event_text, event_summary, event_date, event_time,
+                       reminder_datetime, source_channel, created_by, metadata
+                FROM future_events
+                WHERE need_reminder = true
+                  AND reminder_sent = false
+                  AND status = 'active'
+                  AND reminder_datetime BETWEEN %s AND %s
+                ORDER BY reminder_datetime;
+                """,
+                (start_time, end_time),
+            )
+
+            reminders = []
+            for row in cur.fetchall():
+                reminders.append({
+                    'id': str(row[0]),
+                    'event_text': row[1],
+                    'event_summary': row[2],
+                    'event_date': row[3],
+                    'event_time': row[4],
+                    'reminder_datetime': row[5],
+                    'source_channel': row[6],
+                    'created_by': row[7],
+                    'metadata': row[8]
+                })
+            return reminders
+    finally:
+        conn.close()
+
+
+def expire_past_events_db() -> list:
+    """调用数据库函数标记过期事件"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM expire_past_events();")
+            expired = []
+            for row in cur.fetchall():
+                expired.append({
+                    'id': str(row[0]),
+                    'event_summary': row[1],
+                    'event_date': row[2],
+                    'event_time': row[3]
+                })
+            return expired
+    finally:
+        conn.close()
+
+
+def archive_event_to_mem0(event_id: str, mem0_memory_id: str) -> bool:
+    """标记事件已归档到Mem0"""
+    return update_future_event(event_id, {
+        'archived_to_mem0': True,
+        'mem0_memory_id': mem0_memory_id
+    })

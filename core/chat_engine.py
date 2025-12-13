@@ -2,6 +2,7 @@ from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 from typing import List, Dict, Optional, Tuple
+import asyncio
 
 from core.context_merger import merge_context
 from services.ai_service import stream_ai_chat
@@ -122,10 +123,137 @@ class ChatEngine:
         # logger.info(f"Content: {m['content']}")
         # logger.info(f"Content length: {len(m['content'])} characters\n")
 
-        # 4. 流式调用 AI 模型
+        # 4. 流式调用 AI 模型，并收集完整回复用于事件检测
+        full_response = ""
+        buffered_segment = ""  # 缓冲区用于检测标记
+        marker = "[EVENT_DETECTED]"
+
         async for segment in stream_ai_chat(prompt_messages, "claude-opus-4-5-20251101"):
-            yield segment
+            full_response += segment
+            buffered_segment += segment
+
+            # 检查缓冲区是否包含标记
+            if marker in buffered_segment:
+                # 移除标记并输出剩余内容
+                clean_segment = buffered_segment.replace(marker, "")
+                if clean_segment:
+                    yield clean_segment
+                buffered_segment = ""
+            elif len(buffered_segment) >= len(marker):
+                # 缓冲区足够长但没有标记，输出并保留可能的部分标记
+                output_length = len(buffered_segment) - len(marker) + 1
+                yield buffered_segment[:output_length]
+                buffered_segment = buffered_segment[output_length:]
+
+        # 输出剩余缓冲区（如果没有标记）
+        if buffered_segment and marker not in buffered_segment:
+            yield buffered_segment
+
         logger.info(f"流式生成回复完成 channel={channel_id}")
+
+        # 5. 检测事件标记并触发异步处理
+        await self._process_event_detection(
+            full_response,
+            channel_id,
+            messages,
+            context_messages,
+            user_info
+        )
+
+    async def _process_event_detection(
+        self,
+        ai_response: str,
+        channel_id: str,
+        user_messages: List[str],
+        context_messages: List[Dict],
+        user_info: Optional[Dict] = None
+    ):
+        """
+        检测AI回复中的事件标记，并异步提取和存储事件
+
+        Args:
+            ai_response: AI的完整回复
+            channel_id: 频道ID
+            user_messages: 用户消息列表
+            context_messages: 对话上下文
+            user_info: 用户信息
+        """
+        # 检查事件标记
+        if "[EVENT_DETECTED]" not in ai_response:
+            return
+
+        logger.info(f"[chat_engine] 检测到事件标记，开始异步提取 channel={channel_id}")
+
+        # 启动异步任务处理事件提取（不阻塞主流程）
+        asyncio.create_task(
+            self._extract_and_store_event(
+                ai_response,
+                channel_id,
+                user_messages,
+                context_messages,
+                user_info
+            )
+        )
+
+    async def _extract_and_store_event(
+        self,
+        ai_response: str,
+        channel_id: str,
+        user_messages: List[str],
+        context_messages: List[Dict],
+        user_info: Optional[Dict] = None
+    ):
+        """
+        异步提取事件详情并存储
+
+        Args:
+            ai_response: AI的完整回复（包含标记）
+            channel_id: 频道ID
+            user_messages: 用户消息列表
+            context_messages: 对话上下文
+            user_info: 用户信息
+        """
+        try:
+            from services.event_extractor import extract_event_details
+            from services.future_event_manager import future_event_manager
+
+            # 移除标记，获取干净的AI回复
+            clean_response = ai_response.replace("[EVENT_DETECTED]", "").strip()
+
+            # 获取用户消息
+            user_message = " ".join(user_messages)
+
+            # 提取事件详情
+            event_data = await extract_event_details(
+                user_message=user_message,
+                ai_response=clean_response,
+                recent_context=context_messages[-10:]  # 最近10条消息作为上下文
+            )
+
+            if not event_data:
+                logger.info("[chat_engine] 事件提取失败或置信度过低，跳过存储")
+                return
+
+            # 获取用户ID
+            user_id = user_info.get('username', 'unknown') if user_info else 'unknown'
+
+            # 创建事件
+            event_id = await future_event_manager.create_event(
+                event_data=event_data,
+                channel_id=channel_id,
+                user_id=user_id,
+                context_messages=context_messages[-5:]  # 保存最近5条消息作为上下文
+            )
+
+            if event_id:
+                logger.info(
+                    f"[chat_engine] 事件创建成功: {event_id} - {event_data.get('event_summary')}"
+                )
+            else:
+                logger.warning("[chat_engine] 事件创建失败")
+
+        except Exception as e:
+            logger.error(f"[chat_engine] 事件提取和存储异常: {e}", exc_info=True)
 
     # 为了向后兼容，保留原有的单消息接口
     async def stream_reply_single(
