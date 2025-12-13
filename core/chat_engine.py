@@ -134,28 +134,32 @@ class ChatEngine:
             segments_list.append(segment)
 
         # 检查是否包含标记，并从segments中移除
-        if marker in full_response:
+        has_event_marker = marker in full_response
+        if has_event_marker:
             # 找到包含标记的segment并移除标记
             for i, seg in enumerate(segments_list):
                 if marker in seg:
                     segments_list[i] = seg.replace(marker, "")
                     logger.info(f"[chat_engine] 从segment {i} 中移除事件标记")
 
+        # 在输出前先触发事件检测（因为generator可能被提前终止）
+        if has_event_marker:
+            logger.info(f"[chat_engine] ✅ 检测到事件标记，开始异步提取 channel={channel_id}")
+            asyncio.create_task(
+                self._extract_and_store_event(
+                    full_response,
+                    channel_id,
+                    messages,
+                    context_messages,
+                    user_info
+                )
+            )
+
         # 输出所有segments（保持原有分段逻辑）
         for seg in segments_list:
             yield seg
 
         logger.info(f"[chat_engine] 流式生成回复完成 channel={channel_id}, 回复长度={len(full_response)}, segments数量={len(segments_list)}")
-        logger.debug(f"[chat_engine] 完整回复内容: {full_response[:200]}...")
-
-        # 5. 检测事件标记并触发异步处理
-        await self._process_event_detection(
-            full_response,
-            channel_id,
-            messages,
-            context_messages,
-            user_info
-        )
 
     async def _process_event_detection(
         self,
