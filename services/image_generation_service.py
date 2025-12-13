@@ -275,11 +275,12 @@ class ImageGenerationService:
             prompt = f"{base_prompt}场景描述: {experience_description}"
 
         # 🔄 SeeDream API payload（纯文字生成，不需要image参数）
-        # 场景图：16:9横屏4K
+        # 场景图：使用AI推荐的尺寸，默认16:9横屏4K
+        recommended_size = scene_analysis.get("recommended_image_size", "3840x2160") if scene_analysis else "3840x2160"
         payload = {
             "model": "doubao-seedream-4-5-251128",
             "prompt": prompt,
-            "size": "4K",  # 16:9横屏4K
+            "size": recommended_size,  # 使用AI决策的具体像素尺寸
             "watermark": False
         }
 
@@ -418,12 +419,13 @@ class ImageGenerationService:
             image_data_url = self._convert_image_to_base64_url(character_image_data)
 
             # 🔄 SeeDream API payload（Image-to-Image）
-            # 场景图（含角色）：16:9横屏4K
+            # 场景图（含角色）：使用AI推荐的尺寸，默认16:9横屏4K
+            recommended_size = scene_analysis.get("recommended_image_size", "3840x2160") if scene_analysis else "3840x2160"
             payload = {
                 "model": "doubao-seedream-4-5-251128",
                 "prompt": prompt,
                 "image": image_data_url,
-                "size": "4K",  # 16:9横屏4K
+                "size": recommended_size,  # 使用AI决策的具体像素尺寸
                 "watermark": False
             }
 
@@ -554,7 +556,7 @@ class ImageGenerationService:
             clothing_parts.append(f"💃 AI建议服装细节: {scene_analysis['clothing_details']}")
         else:
             # 如果没有AI建议，使用更开放大胆的默认建议
-            clothing_parts.append("服装风格：展现身材曲线的时尚服装，可以包含露肩、V领、开叉、贴身剪裁等性感元素，体现自信魅力")
+            clothing_parts.append("服装风格：展现身材曲线的时尚服装，可以包含露肩、开叉、贴身剪裁等性感元素，体现自信魅力")
 
         # 添加天气情况描述（来自AI预分析）
         if scene_analysis and scene_analysis.get("weather_context"):
@@ -636,12 +638,13 @@ class ImageGenerationService:
             image_data_url = self._convert_image_to_base64_url(base_image_data)
 
             # 🔄 SeeDream API payload（Image-to-Image）
-            # 自拍照：9:16竖屏2K
+            # 自拍照：使用AI推荐的尺寸，默认9:16竖屏2K
+            recommended_size = scene_analysis.get("recommended_image_size", "1080x1920") if scene_analysis else "1080x1920"
             payload = {
                 "model": "doubao-seedream-4-5-251128",
                 "prompt": prompt,
                 "image": image_data_url,
-                "size": "2K",  # 9:16竖屏2K (1080x1920或类似竖屏分辨率)
+                "size": recommended_size,  # 使用AI决策的具体像素尺寸（1080x1920竖屏或2560x1440横屏）
                 "watermark": False
             }
 

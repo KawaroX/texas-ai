@@ -11,43 +11,13 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 
-# API 配置 - 🆕 使用和生成日程完全相同的 API 方式
+# API 配置 - 场景分析使用高级模型以获得更好的分析质量
 STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
 STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", "https://yunwu.ai/v1/chat/completions")
-STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-flash")
+# 固定使用 gpt-5-chat-latest 高级模型进行场景分析
+SCENE_ANALYZER_MODEL = "gpt-5-chat-latest"
 
-# 🆕 根据生成日程的模型，自动选择对应的 lite 版本
-def get_scene_analyzer_model(base_model: str) -> str:
-    """
-    根据生成日程的模型，返回用于场景分析的模型。
-
-    规则：
-    - 如果是 gemini-2.5-flash，返回 gemini-2.5-flash-lite
-    - 如果是其他 gemini 模型，尝试返回对应的 lite 版本
-    - 如果不是 gemini 模型，返回原模型
-    """
-    if "gemini" in base_model.lower():
-        # 如果已经是 lite 版本，直接返回
-        if "-lite" in base_model.lower():
-            return base_model
-        # 否则，尝试添加 -lite 后缀
-        # 例如：gemini-2.5-flash -> gemini-2.5-flash-lite
-        #       gemini-2.5-pro -> gemini-2.5-pro-lite
-        if base_model.endswith("-flash"):
-            return base_model + "-lite"
-        elif base_model.endswith("-pro"):
-            # pro 系列可能没有 lite 版本，直接用 flash-lite
-            return base_model.replace("-pro", "-flash-lite")
-        else:
-            # 兜底：添加 -lite
-            return base_model + "-lite"
-    else:
-        # 非 gemini 模型，保持一致
-        return base_model
-
-SCENE_ANALYZER_MODEL = get_scene_analyzer_model(STRUCTURED_API_MODEL)
-
-logger.info(f"[scene_analyzer] 场景分析配置：URL={STRUCTURED_API_URL}, 生成日程模型={STRUCTURED_API_MODEL}，场景分析模型={SCENE_ANALYZER_MODEL}")
+logger.info(f"[scene_analyzer] 场景分析配置：URL={STRUCTURED_API_URL}, 场景分析模型={SCENE_ANALYZER_MODEL}")
 
 # Redis 客户端
 from utils.redis_manager import get_redis_client
@@ -205,7 +175,7 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
         scene_json_str = json.dumps(scene_data, ensure_ascii=False, indent=2)
 
         if is_selfie:
-            user_prompt = f"""你现在正在扮演德克萨斯，你正在处于下面的这个场景中，并有着下面这样的想法：
+            user_prompt = f"""你是德克萨斯（明日方舟的角色），你正在处于下面的这个场景中，并有着下面这样的想法：
 
 {scene_json_str}
 
@@ -219,6 +189,9 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
 5. **🎨 创意性视觉效果分析**：根据场景特点，主动建议适合的高级视觉效果（如：浴室场景→水雾+镜面反射，室外场景→景深+逆光，夜晚场景→霓虹灯光+光晕效果等）
 6. **📸 摄影艺术指导**：为这张自拍提供专业的摄影建议（构图技巧、光影运用、氛围营造等）
 7. **💃 姿态和表现力**：根据场景氛围，建议更有表现力、更大胆、更性感的姿态和服装细节，展现角色的魅力和自信
+8. **📐 图片尺寸决策**：根据场景内容决定图片尺寸
+   - 如果是单纯的自拍（主要展示人物），选择 "1080x1920"（竖屏9:16，2K）
+   - 如果自拍中需要展示大量风景或环境（人和风景一同出现），选择 "2560x1440"（横屏16:9，2K）
 
 请严格按照以下 JSON 格式输出，不要包含任何其他文本：
 {{
@@ -237,13 +210,14 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
   "photographic_technique": "摄影技巧（如：浅景深、大光圈bokeh、逆光剪影、HDR、长曝光、仰拍/俯拍、三分构图、对角线构图、框架构图等）",
   "artistic_style": "整体艺术风格（如：电影感、时尚杂志风、Instagram网红风、复古胶片质感、赛博朋克、梦幻柔焦、高对比度等）",
   "pose_suggestion": "姿态建议（自拍专用：更有表现力、更大胆、更性感的姿态，如：撩发、回眸、侧身展现曲线、慵懒姿态、自信站姿等，展现角色魅力）",
-  "clothing_details": "服装细节建议（根据场景氛围，建议更有魅力、更时尚、更性感的服装细节，如：露肩、V领、开叉、透视元素、贴身剪裁等，符合角色性格但更大胆）",
+  "clothing_details": "服装细节建议（**请智能判断场景类型**：1️⃣ 如果是居家私密场景（如卧室、浴室、自己家中），可以更性感大胆，**优先考虑以下元素：露肩设计（一字肩、斜肩、吊带）、侧边镂空设计（侧开衩上衣、侧边镂空款式）、短款上衣设计（下摆位置较高且宽松飘动、Crop Top风格、运动内衣款式，自然展现腰腹线条和身材曲线）**，也可以包括开叉、透视元素、贴身睡衣等性感元素；2️⃣ 如果是工作场景（如办公室、配送途中），则应穿着得体专业的工作服饰，如简洁工装衬衫配热裤或工装裤等；3️⃣ 如果是周末休闲外出场景，则可以时尚漂亮的休闲服，展现个性魅力。需符合当前场景氛围、角色性格和实际合理性）",
+  "recommended_image_size": "1080x1920或2560x1440（根据场景内容决定）",
   "character_expressions": [
     {{"name": "角色名", "expression": "表情描述"}}
   ]
 }}"""
         else:
-            user_prompt = f"""你现在正在扮演德克萨斯，你正在处于下面的这个场景中，并有着下面这样的想法：
+            user_prompt = f"""你是德克萨斯（明日方舟的角色），你正在处于下面的这个场景中，并有着下面这样的想法：
 
 {scene_json_str}
 
@@ -256,6 +230,7 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
 4. 如果场景中有其他角色，请分析他们的表情和状态
 5. **🎨 创意性视觉效果分析**：根据场景特点，主动建议适合的高级视觉效果（如：雨天→雨滴+地面倒影，咖啡店→景深+暖色光晕，夜景→霓虹灯+长曝光光轨，室内→阳光透过窗帘的光束等）
 6. **📸 摄影艺术指导**：为这张场景照提供专业的摄影建议（构图技巧、光影运用、氛围营造等）
+7. **📐 图片尺寸决策**：场景照片始终使用 "3840x2160"（横屏16:9，4K）
 
 请严格按照以下 JSON 格式输出，不要包含任何其他文本：
 {{
@@ -273,6 +248,7 @@ async def analyze_scene(scene_data: Dict[str, Any], is_selfie: bool = False) -> 
   "visual_effects": "特殊视觉效果（如：水雾、镜面反射、光束、雨滴、蒸汽、玻璃折射、bokeh散景、光晕、逆光轮廓、长曝光光轨、地面倒影等），根据场景自然融入",
   "photographic_technique": "摄影技巧（如：浅景深、大光圈bokeh、逆光剪影、HDR、长曝光、仰拍/俯拍、三分构图、对角线构图、框架构图、前景虚化等）",
   "artistic_style": "整体艺术风格（如：电影感、纪实摄影风、Instagram网红风、复古胶片质感、赛博朋克、梦幻柔焦、高对比度、Cinematic等）",
+  "recommended_image_size": "3840x2160",
   "character_expressions": [
     {{"name": "角色名", "expression": "表情描述"}}
   ]

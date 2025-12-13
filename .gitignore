@@ -73,20 +73,29 @@ Thumbs.db
 # Test & Debug Files
 test_message_format.py
 test_simplified.py
+test_character_descriptions.py
+test_optimized_selfie.py
+test_scene_pre_analyzer.py
 tp.py
 woker-logs.txt
 worker-logs.txt
 *.log.txt
 
-# Documentation (if you want to keep these out of Git)
-# Remove the # if you don't want these in version control
-# DEPLOYMENT.md
-# ROLLBACK_GUIDE.md
-# CODE_STRUCTURE_OPTIMIZATION_INFO.md
-# CODE_STRUCTURE_REFACTOR_PLAN.md
+# Documentation - Internal/Development docs (keep local only)
+CODE_STRUCTURE_OPTIMIZATION_INFO.md
+CODE_STRUCTURE_REFACTOR_PLAN.md
+IMAGE_GENERATION_REFACTOR_SUMMARY.md
+IMPROVEMENT_SUGGESTIONS.md
+MODEL_COMPARISON_GUIDE.md
+ROLLBACK_GUIDE.md
 
 # Deployment scripts (if contain sensitive info)
 scripts/*_script.sh
 
 # Nginx configs (may contain sensitive info)
 nginx/
+
+test_output/
+
+test_image_generation_flow.py
+test_three_styles.py
