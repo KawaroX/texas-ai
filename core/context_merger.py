@@ -99,9 +99,10 @@ def _get_future_events_context(user_id: str = "kawaro", days_ahead: int = 14) ->
             event_date = event.get('event_date')
             event_time = event.get('event_time')
 
-            logger.debug(f"🔍 [DEBUG] 事件: {event.get('event_summary')}, date类型={type(event_date)}, date={event_date}")
+            logger.info(f"🔍 [DEBUG] 处理事件: {event.get('event_summary')}, date类型={type(event_date)}, date={event_date}")
 
             if not event_date:
+                logger.warning(f"🔍 [DEBUG] 事件 {event.get('event_summary')} 没有日期，跳过")
                 continue
 
             # 如果event_date是字符串，转换为date对象
@@ -141,9 +142,9 @@ def _get_future_events_context(user_id: str = "kawaro", days_ahead: int = 14) ->
                 advance_minutes = event.get('reminder_advance_minutes', 30)
                 reminder_info = f"（将提前{advance_minutes}分钟提醒）"
 
-            context_parts.append(
-                f"- {date_desc}{time_str}: {event_summary} {reminder_info}".strip()
-            )
+            event_line = f"- {date_desc}{time_str}: {event_summary} {reminder_info}".strip()
+            context_parts.append(event_line)
+            logger.info(f"🔍 [DEBUG] 成功添加事件到上下文: {event_line}")
 
         if len(context_parts) == 1:  # 只有标题，没有事件
             return ""
@@ -895,11 +896,11 @@ async def merge_context(
             "(If you think no reply is necessary right now, simply respond with:\n(no messages)\n\n)"
             "(Once your message is fully composed and complete, append the word SEND at the end of the message to indicate it's ready to be sent. Make sure to include SEND only once and only after all parts of the message are finalized.)"
             "消息务必使用中文。(注意不要重复之前说过的话，除非你认为作为一个真正的人类，这时候会选择重复)\n\n"
-            "**IMPORTANT - Event Detection**: ONLY add [EVENT_DETECTED] if Kawaro is **TELLING you about a NEW future event** that needs to be remembered. "
-            "DO NOT add it if Kawaro is **ASKING about existing events** or just mentioning dates. "
-            "Examples that NEED the marker: '明天三点我要考试', '下周我要开会', '记得提醒我今晚喝酒', '后天我去参加派对'. "
-            "Examples that DON'T need the marker: '我明天有什么安排？', '1月15号我要做什么？', '你还记得吗？', '我忘了'. "
-            "This marker goes at the very END of your response (after SEND), is INVISIBLE to Kawaro, and is CRITICAL for system functionality."
+            "**CRITICAL - Event Detection**: Add [EVENT_DETECTED] at the END (after SEND) if Kawaro is TELLING you about a future event. "
+            "判断标准: "
+            "✅ NEED marker: '明天三点考试', '下周开会', '提醒我X点做Y', '记得X', '别忘了X', '2分钟后吃饭', '今晚8点健身' - 任何告诉你未来要做的事. "
+            "❌ DON'T need: '我明天有什么安排？', '你还记得X吗？', '我忘了' - 询问已有信息. "
+            "Marker is INVISIBLE to Kawaro. When in doubt, ADD IT."
         )
 
     messages.append({"role": "user", "content": user_query_content})
