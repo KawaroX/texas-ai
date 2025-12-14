@@ -737,8 +737,8 @@ async def merge_context(
     # 3. 获取生活系统信息
     life_system_context = _get_life_system_context()
 
-    # 3.5 获取未来事件信息
-    future_events_context = _get_future_events_context(user_id="kawaro", days_ahead=14)
+    # 3.5 获取未来事件信息（获取未来90天内的事件）
+    future_events_context = _get_future_events_context(user_id="kawaro", days_ahead=90)
 
     # 4. 获取记忆信息
     from core.rag_decision_system import RAGDecisionMaker
@@ -869,7 +869,7 @@ async def merge_context(
         else:
             user_query_content = (
                 f"{future_events_reminder}"  # 添加未来事件提醒
-                "请注意，现在Kawaro并没有给你发送消息，但是你决定**主动**给他发消息。不要使用"还以为"等会让人误会他已经向你发送消息的词语，因为此时他还并没有发送任何消息"
+                "请注意，现在Kawaro并没有给你发送消息，但是你决定**主动**给他发消息。不要使用『还以为』等会让人误会他已经向你发送消息的词语，因为此时他还并没有发送任何消息"
                 "因此请考虑如何正确表达。\n"
                 "德克萨斯内心:\n"
                 f"根据【你现在正在做的事情】，我的想法是：{latest_query}我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：注意只发送此刻的信息，不设计未来的信息：\n"
