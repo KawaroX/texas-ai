@@ -172,35 +172,54 @@ async def generate_and_store_daily_life(target_date: date):
     if "schedule_items" in daily_schedule_data:
         successful_experiences = 0
 
-        # 获取之前的经历摘要（简化实现）
-        previous_experiences_summary = None
+        # ✅ 累积式完整上下文存储
+        all_previous_experiences = []  # 存储所有已生成的微观经历完整数据
 
         for index, item in enumerate(daily_schedule_data["schedule_items"]):
-            # 设置当前时间为项目开始时间（如需使用可在后续逻辑中引用）
+            # 构建完整的上下文信息
+            context_for_generation = {
+                "previous_experiences": all_previous_experiences,  # 完整的经历列表
+            }
 
             micro_experiences = await generate_and_store_micro_experiences(
                 schedule_item=item,
                 current_date=target_date,
-                previous_experiences=previous_experiences_summary,
+                previous_experiences=context_for_generation,  # 传递完整上下文
                 major_event_context=major_event_context,
                 schedule_id=schedule_id,  # 传入每日计划的ID
             )
 
             if micro_experiences:
                 successful_experiences += 1
-                # 更新经历摘要（使用生成的经历内容）
-                exp_summaries = [
-                    f"{exp.get('start_time', '')}-{exp.get('end_time', '')}: {exp.get('content', '')[:50]}..."
-                    for exp in micro_experiences
-                ]
-                previous_experiences_summary = exp_summaries
+
+                # ✅ 累积经历（保留完整内容，让AI自己判断连贯性）
+                for exp in micro_experiences:
+                    all_previous_experiences.append({
+                        "time": f"{exp.get('start_time', '')}-{exp.get('end_time', '')}",
+                        "content": exp.get('content', ''),  # 完整内容
+                        "emotions": exp.get('emotions', ''),
+                        "need_interaction": exp.get('need_interaction', False),
+                        "interaction_content": exp.get('interaction_content', ''),
+                    })
 
     else:
         logger.warning("日程中没有可生成微观经历的项目")
 
     logger.info(f"[daily_life] 生成完成: {date_str} 每日日程与存储")
 
-    # 8. 使用专用函数收集需要交互的微观经历
+    # 8. 全局图片决策（在所有微观经历生成后）
+    logger.info("[daily_life] ========== 开始全局图片决策 ==========")
+    from utils.postgres_service import set_default_image_fields_for_all_experiences
+
+    # 先为所有微观经历设置默认值（need_image=false）
+    default_count = set_default_image_fields_for_all_experiences(date_str)
+    logger.debug(f"[daily_life] 已为 {default_count} 条记录设置默认图片字段")
+
+    # 然后让AI全局决策哪些需要图片
+    selected_count = await decide_images_for_day(target_date)
+    logger.info(f"[daily_life] ✅ 图片决策完成，选中 {selected_count} 张图片")
+
+    # 9. 使用专用函数收集需要交互的微观经历
     logger.debug("[daily_life] 开始收集需要主动交互的微观经历")
     await collect_interaction_experiences(target_date)
 
@@ -564,6 +583,132 @@ async def generate_and_store_micro_experiences(
 
     logger.info("[micro_exp] 微观经历项生成与存储完成")
     return micro_experiences
+
+
+async def decide_images_for_day(target_date: date):
+    """
+    在所有微观经历生成后，全局决策哪些需要生成图片
+
+    控制目标：5-15张图片/天，以自拍为主
+
+    Args:
+        target_date: 目标日期
+
+    Returns:
+        成功选择的图片数量
+    """
+    from services.ai_service import ai_decide_images_globally
+
+    date_str = target_date.strftime("%Y-%m-%d")
+    logger.info(f"[图片决策] 开始为 {date_str} 进行全局图片决策")
+
+    try:
+        # 1. 获取当天日程ID
+        daily_schedule = get_daily_schedule_by_date(date_str)
+        if not daily_schedule:
+            logger.warning(f"[图片决策] 未找到 {date_str} 的日程数据")
+            return 0
+
+        schedule_id = daily_schedule["id"]
+        logger.debug(f"[图片决策] 日程ID: {schedule_id}")
+
+        # 2. 获取所有微观经历
+        all_micro_exps = get_micro_experiences_by_daily_schedule_id(schedule_id)
+        if not all_micro_exps:
+            logger.warning(f"[图片决策] {date_str} 没有微观经历数据")
+            return 0
+
+        # 3. 筛选 need_interaction=true 的候选项
+        candidates = []
+        for record in all_micro_exps:
+            for exp in record.get("experiences", []):
+                if exp.get("need_interaction"):
+                    candidates.append({
+                        "id": exp.get("id"),  # 微观经历的ID
+                        "time": f"{exp.get('start_time', '')}-{exp.get('end_time', '')}",
+                        "content": exp.get("content", ""),
+                        "emotions": exp.get("emotions", ""),
+                        "interaction_content": exp.get("interaction_content", ""),
+                    })
+
+        logger.info(f"[图片决策] 找到 {len(candidates)} 个候选微观经历（need_interaction=true）")
+
+        if not candidates:
+            logger.warning("[图片决策] 没有候选项，跳过图片决策")
+            return 0
+
+        # 4. 调用AI进行全局评估（目标5-15张）
+        image_decisions = await ai_decide_images_globally(
+            candidates=candidates,
+            target_count_range=(5, 15)
+        )
+
+        if not image_decisions:
+            logger.warning("[图片决策] AI未选择任何图片")
+            return 0
+
+        # 5. 更新数据库
+        from utils.postgres_service import update_micro_experience_image_fields
+
+        success_count = 0
+        for decision in image_decisions:
+            try:
+                result = update_micro_experience_image_fields(
+                    exp_id=decision["micro_experience_id"],
+                    need_image=decision["need_image"],
+                    image_type=decision["image_type"],
+                    image_reason=decision["image_reason"]
+                )
+                if result:
+                    success_count += 1
+                    logger.debug(
+                        f"[图片决策] 已更新: {decision['micro_experience_id'][:8]}... "
+                        f"类型={decision['image_type']}, 原因={decision['image_reason']}"
+                    )
+            except Exception as e:
+                logger.error(f"[图片决策] 更新失败: {decision['micro_experience_id']}: {e}")
+
+        logger.info(f"[图片决策] ✅ 完成，成功选中 {success_count}/{len(image_decisions)} 个时刻")
+
+        # 📱 发送Bark推送通知
+        if success_count > 0:
+            from services.bark_notifier import bark_notifier
+
+            # 统计图片类型
+            selfie_count = sum(1 for d in image_decisions if d.get("image_type") == "selfie")
+            scene_count = sum(1 for d in image_decisions if d.get("image_type") == "scene")
+
+            # 构建推送内容
+            title = f"📸 {date_str} 图片决策完成"
+            body = f"共选中 {success_count} 张图片：{selfie_count} 张自拍，{scene_count} 张场景"
+
+            try:
+                await bark_notifier.send_notification(
+                    title=title,
+                    body=body,
+                    group="图片决策"
+                )
+                logger.info(f"[图片决策] 📱 已发送Bark推送通知")
+            except Exception as notify_err:
+                logger.warning(f"[图片决策] Bark推送失败: {notify_err}")
+
+        return success_count
+
+    except Exception as e:
+        logger.error(f"[图片决策] 全局图片决策失败: {str(e)}", exc_info=True)
+
+        # 📱 发送失败通知
+        try:
+            from services.bark_notifier import bark_notifier
+            await bark_notifier.send_notification(
+                title=f"❌ {date_str} 图片决策失败",
+                body=f"错误: {str(e)[:50]}",
+                group="图片决策"
+            )
+        except:
+            pass
+
+        return 0
 
 
 # async def get_and_summarize_experiences(

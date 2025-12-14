@@ -129,7 +129,7 @@ class ChatEngine:
         marker = "[EVENT_DETECTED]"
 
         # 先收集所有segments
-        async for segment in stream_ai_chat(prompt_messages, "claude-opus-4-5-20251101"):
+        async for segment in stream_ai_chat(prompt_messages, "gpt-5-chat-latest"):
             full_response += segment
             segments_list.append(segment)
             # 调试：每个segment是否包含标记

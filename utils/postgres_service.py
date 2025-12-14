@@ -720,3 +720,96 @@ def archive_event_to_mem0(event_id: str, mem0_memory_id: str) -> bool:
         'archived_to_mem0': True,
         'mem0_memory_id': mem0_memory_id
     })
+
+
+# ==================== 微观经历图片字段更新 ====================
+
+def update_micro_experience_image_fields(
+    exp_id: str,
+    need_image: bool,
+    image_type: str,
+    image_reason: str
+) -> bool:
+    """
+    更新微观经历的图片相关字段
+
+    注意：这需要在JSONB数组中找到对应ID的item并更新
+
+    Args:
+        exp_id: 微观经历的ID
+        need_image: 是否需要图片
+        image_type: 图片类型（selfie/scene）
+        image_reason: 图片原因
+
+    Returns:
+        是否成功更新
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # 使用PostgreSQL的JSONB函数更新数组中的元素
+            cur.execute(
+                """
+                UPDATE micro_experiences
+                SET experiences = (
+                    SELECT jsonb_agg(
+                        CASE
+                            WHEN elem->>'id' = %s THEN
+                                elem || jsonb_build_object(
+                                    'need_image', %s::boolean,
+                                    'image_type', %s,
+                                    'image_reason', %s
+                                )
+                            ELSE elem
+                        END
+                    )
+                    FROM jsonb_array_elements(experiences) elem
+                )
+                WHERE experiences @> jsonb_build_array(jsonb_build_object('id', %s));
+                """,
+                (exp_id, need_image, image_type, image_reason, exp_id)
+            )
+            return cur.rowcount > 0
+    except Exception as e:
+        logger.error(f"更新微观经历图片字段失败 (ID={exp_id}): {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def set_default_image_fields_for_all_experiences(date_str: str) -> int:
+    """
+    为当天所有微观经历设置默认图片字段（need_image=false）
+
+    Args:
+        date_str: 日期字符串 (YYYY-MM-DD)
+
+    Returns:
+        更新的记录数
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE micro_experiences
+                SET experiences = (
+                    SELECT jsonb_agg(
+                        elem || jsonb_build_object(
+                            'need_image', false,
+                            'image_type', null,
+                            'image_reason', null
+                        )
+                    )
+                    FROM jsonb_array_elements(experiences) elem
+                )
+                WHERE date = %s;
+                """,
+                (date_str,)
+            )
+            return cur.rowcount
+    except Exception as e:
+        logger.error(f"设置默认图片字段失败 (date={date_str}): {e}")
+        return 0
+    finally:
+        conn.close()

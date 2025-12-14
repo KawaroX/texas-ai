@@ -898,7 +898,7 @@ async def merge_context(
             "消息务必使用中文。(注意不要重复之前说过的话，除非你认为作为一个真正的人类，这时候会选择重复)\n\n"
             "**CRITICAL - Event Detection**: Add [EVENT_DETECTED] at the END (after SEND) if Kawaro is TELLING you about a future event. "
             "判断标准: "
-            "✅ NEED marker: '明天三点考试', '下周开会', '提醒我X点做Y', '记得X', '别忘了X', '2分钟后吃饭', '今晚8点健身' - 任何告诉你未来要做的事. "
+            "✅ NEED marker: '明天三点考试', '下周开会', '提醒我X点做Y', '记得X', '别忘了X', '提醒我2分钟后吃饭', '今晚8点健身' - 任何告诉你未来要做的事, 需要你来提醒Kawaro的事情, 都需要被标记. "
             "❌ DON'T need: '我明天有什么安排？', '你还记得X吗？', '我忘了' - 询问已有信息. "
             "Marker is INVISIBLE to Kawaro. When in doubt, ADD IT."
         )
