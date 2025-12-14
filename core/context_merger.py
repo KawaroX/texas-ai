@@ -763,9 +763,10 @@ async def merge_context(
     if life_system_context:
         system_parts.append(life_system_context)
 
-    if future_events_context:
-        system_parts.append(future_events_context)
-        logger.info(f"🔍 [DEBUG] 未来事件上下文已添加到system_parts，长度={len(future_events_context)}")
+    # future_events_context 将在 messages 中使用，不添加到 system_parts
+    # if future_events_context:
+    #     system_parts.append(future_events_context)
+    #     logger.info(f"🔍 [DEBUG] 未来事件上下文已添加到system_parts，长度={len(future_events_context)}")
 
     if summary_notes:
         system_parts.append("【其他渠道聊天参考资料】\n" + "\n\n".join(summary_notes))
@@ -838,9 +839,16 @@ async def merge_context(
 
         texas_reply_template = ""
 
+        # 在主动模式消息前也添加未来事件提醒
+        future_events_reminder = ""
+        if future_events_context:
+            future_events_reminder = f"[系统提示]\n{future_events_context}\n以上是你为Kawaro记录的未来事件。在主动发消息时，可以考虑是否需要提醒这些事件。[系统提示结束]\n\n"
+            logger.info(f"🔍 [DEBUG] 未来事件信息已添加到主动模式消息前，长度={len(future_events_context)}")
+
         # 主动模式：AI想要分享内容
         if condemn_prefix:
             condemn_prefix = (
+                f"{future_events_reminder}"  # 添加未来事件提醒
                 "[系统提示开始]请注意，现在Kawaro并没有给你发送消息，是你决定**主动**给他发消息。因此请考虑如何正确表达。\n\n"
                 f"距离Kawaro上次回复你，已经过去了 {hours_diff} 小时 {minutes_diff} 分钟。"
                 "现在Kawaro还没有给你发消息，但是你决定主动给他发消息。"
@@ -859,7 +867,8 @@ async def merge_context(
             )
         else:
             user_query_content = (
-                "请注意，现在Kawaro并没有给你发送消息，但是你决定**主动**给他发消息。不要使用“还以为”等会让人误会他已经向你发送消息的词语，因为此时他还并没有发送任何消息"
+                f"{future_events_reminder}"  # 添加未来事件提醒
+                "请注意，现在Kawaro并没有给你发送消息，但是你决定**主动**给他发消息。不要使用"还以为"等会让人误会他已经向你发送消息的词语，因为此时他还并没有发送任何消息"
                 "因此请考虑如何正确表达。\n"
                 "德克萨斯内心:\n"
                 f"根据【你现在正在做的事情】，我的想法是：{latest_query}我想把这些分享给Kawaro，于是在聊天框输入了以下信息并发送：注意只发送此刻的信息，不设计未来的信息：\n"
@@ -870,7 +879,15 @@ async def merge_context(
         user_query_content = ""
 
         messages.pop()
+
+        # 在用户消息前添加未来事件提醒
+        future_events_reminder = ""
+        if future_events_context:
+            future_events_reminder = f"[系统提示]\n{future_events_context}\n以上是你为Kawaro记录的未来事件。在回复时，如果Kawaro询问相关的日期或安排，请参考这些信息。[系统提示结束]\n\n"
+            logger.info(f"🔍 [DEBUG] 未来事件信息已添加到user消息前，长度={len(future_events_context)}")
+
         user_query_content = (
+            f"{future_events_reminder}"  # 添加未来事件提醒
             f"{condemn_prefix}"  # 添加谴责消息
             f"(距离上一条消息过去了：{time_diff_str}) [{current_time_str}] Kawaro:\n{latest_query}\n\n"
             f"现在是{texas_time_str}，你是德克萨斯，你看完了Kawaro刚刚发来的信息，思考应该如何回复后在聊天框输入了以下信息并发送。注意只回复此刻的信息，不设计未来的回复信息：\n"
