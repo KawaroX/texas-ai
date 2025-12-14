@@ -175,12 +175,28 @@ def calculate_reminder_datetime(event_date_str: str, event_time_str: str, advanc
                 "%Y-%m-%d %H:%M"
             )
 
-        # 计算提醒时间
-        reminder_datetime = event_datetime - timedelta(minutes=advance_minutes)
+        # 智能计算提醒时间
+        now = datetime.now()
+        time_until_event = (event_datetime - now).total_seconds() / 60  # 转换为分钟
 
-        # 如果提醒时间已经过去，则不设置提醒
-        if reminder_datetime < datetime.now():
+        # 如果事件已经过去，不设置提醒
+        if time_until_event <= 0:
+            logger.debug(f"[event_extractor] 事件已过去，不设置提醒")
             return None
+
+        # 智能调整提醒时间
+        if time_until_event > advance_minutes:
+            # 剩余时间充足，按原计划提前提醒
+            reminder_datetime = event_datetime - timedelta(minutes=advance_minutes)
+        elif time_until_event > 5:
+            # 剩余时间不足advance_minutes但超过5分钟，提前一半时间提醒
+            actual_advance = time_until_event / 2
+            reminder_datetime = event_datetime - timedelta(minutes=actual_advance)
+            logger.info(f"[event_extractor] 调整提醒时间：提前{actual_advance:.1f}分钟（原计划{advance_minutes}分钟）")
+        else:
+            # 剩余时间很短（≤5分钟），立即提醒（1分钟后）
+            reminder_datetime = now + timedelta(minutes=1)
+            logger.info(f"[event_extractor] 事件即将发生，1分钟后提醒")
 
         return reminder_datetime.isoformat()
 
