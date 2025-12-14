@@ -44,6 +44,19 @@ from .character_manager import character_manager
 # 监控功能在 tasks 层使用，这里不需要导入
 # from .image_generation_monitor import image_generation_monitor
 
+# 导入图片生成 Provider
+from .image_providers import (
+    ImageGenerationRequest,
+    ImageGenerationResponse,
+    SeeDreamProvider,
+    GeminiImageProvider
+)
+
+# ============================================================
+# 图片生成模型配置 - 直接在这里修改模型选择
+# ============================================================
+IMAGE_PROVIDER = "gemini"  # 可选值: "gemini" 或 "seedream"
+# ============================================================
 
 IMAGE_SAVE_DIR = "/app/generated_content/images"  # 在 Docker 容器内的路径
 os.makedirs(IMAGE_SAVE_DIR, exist_ok=True)
@@ -53,15 +66,29 @@ class ImageGenerationService:
     def __init__(self):
         # 使用专用的图片生成API Key
         self.api_key = settings.IMAGE_GENERATION_API_KEY
-        base_url = settings.IMAGE_GENERATION_API_URL
-        self.generation_url = f"{base_url}/generations"
-        # 🔄 SeeDream统一使用/generations端点，不再需要/edits端点
 
-        # 超时配置 (秒)
-        self.generation_timeout = 300  # 场景图生成超时（从120秒增加到300秒/5分钟）
-        self.selfie_timeout = 480     # 自拍生成超时（从180秒增加到480秒/8分钟）
-        self.multi_character_timeout = 600  # 多角色场景生成超时（从300秒增加到600秒/10分钟）
-        self.download_timeout = 60    # 图片下载超时（从30秒增加到60秒）
+        # 🆕 根据配置初始化 Provider
+        if IMAGE_PROVIDER == "gemini":
+            self.provider = GeminiImageProvider(
+                api_key=self.api_key,
+                api_url="https://yunwu.ai/v1beta"
+            )
+            logger.info("📸 图片生成模型: Gemini-2.5-Flash-Image")
+        elif IMAGE_PROVIDER == "seedream":
+            self.provider = SeeDreamProvider(
+                api_key=self.api_key,
+                api_url="https://yunwu.ai/v1"
+            )
+            logger.info("📸 图片生成模型: SeeDream (doubao-seedream-4-5-251128)")
+        else:
+            raise ValueError(f"未知的图片生成 Provider: {IMAGE_PROVIDER}")
+
+        # 超时配置 (秒) - 保留用于其他操作
+        self.generation_timeout = 300
+        self.selfie_timeout = 480
+        self.multi_character_timeout = 600
+        self.download_timeout = 60
+
         from utils.redis_manager import get_redis_client
         self.redis_client = get_redis_client()
 
@@ -183,6 +210,39 @@ class ImageGenerationService:
         logger.info(f"已将图片转换为base64 data URL，长度: {len(data_url)} chars")
         return data_url
 
+    async def _generate_with_provider(
+        self,
+        prompt: str,
+        images: Optional[List[bytes]] = None,
+        size: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        使用配置的 Provider 生成图片
+
+        Args:
+            prompt: 生成提示词
+            images: 底图列表（可选，支持多图）
+            size: 图片尺寸
+
+        Returns:
+            生成的图片文件路径，失败返回 None
+        """
+        request = ImageGenerationRequest(
+            prompt=prompt,
+            images=images,
+            size=size,
+            watermark=False
+        )
+
+        response = await self.provider.generate_image(request)
+
+        if response.success and response.image_data:
+            filepath = self._save_image(response.image_data)
+            return filepath
+        else:
+            logger.error(f"图片生成失败: {response.error}")
+            return None
+
     async def _download_image(self, url: str) -> Optional[bytes]:
         """下载图片内容"""
         try:
@@ -232,9 +292,7 @@ class ImageGenerationService:
             return await self._generate_scene_without_characters(experience_description, scene_analysis)
 
     async def _generate_scene_without_characters(self, experience_description: str, scene_analysis: Optional[Dict] = None) -> Optional[str]:
-        """生成不包含特定角色的场景图（使用SeeDream纯文字生成）"""
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-
+        """生成不包含特定角色的场景图（纯文字生成）"""
         # 🆕 使用AI预分析增强提示词 - 加入德克萨斯视角和明日方舟风格
         base_prompt = (
             f"请根据德克萨斯的第一人称视角和下面的场景描述，生成一张高质量的场景图片。"
@@ -274,73 +332,48 @@ class ImageGenerationService:
         else:
             prompt = f"{base_prompt}场景描述: {experience_description}"
 
-        # 🔄 SeeDream API payload（纯文字生成，不需要image参数）
         # 场景图：使用AI推荐的尺寸，默认16:9横屏4K
         recommended_size = scene_analysis.get("recommended_image_size", "3840x2160") if scene_analysis else "3840x2160"
-        payload = {
-            "model": "doubao-seedream-4-5-251128",
-            "prompt": prompt,
-            "size": recommended_size,  # 使用AI决策的具体像素尺寸
-            "watermark": False
-        }
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(self.generation_url, headers=headers, json=payload, timeout=self.generation_timeout)
-                response.raise_for_status()
-                result = response.json()
-                data_item = result.get("data", [{}])[0]
+        # 🆕 使用新的 Provider 接口
+        filepath = await self._generate_with_provider(prompt=prompt, images=None, size=recommended_size)
 
-                # 优先处理URL格式
-                image_url = data_item.get("url")
-                if image_url:
-                    image_data = await self._download_image(image_url)
-                    if image_data:
-                        filepath = self._save_image(image_data)
-                        await bark_notifier.send_notification("德克萨斯AI-生成场景图成功", f"图片已保存到 {filepath}", "TexasAIPics", image_url=image_url)
-                        return filepath
-
-                # 处理base64格式
-                b64_json = data_item.get("b64_json")
-                if b64_json:
-                    import base64
-                    try:
-                        image_data = base64.b64decode(b64_json)
-                        filepath = self._save_image(image_data)
-                        await bark_notifier.send_notification("德克萨斯AI-生成场景图成功", f"图片已保存到 {filepath}", "TexasAIPics")
-                        return filepath
-                    except Exception as decode_error:
-                        logger.error(f"base64解码失败: {decode_error}")
-
-                # 如果两种格式都没有
-                logger.error(f"图片生成API未返回有效的图片数据: {result}")
-                await bark_notifier.send_notification("德克萨斯AI-生成场景图失败", f"错误: API未返回有效数据。响应: {str(result)[:50]}...", "TexasAIPics")
-                return None
-        except Exception as e:
-            logger.error(f"调用图片生成API时发生未知异常: {e}")
-            await bark_notifier.send_notification("德克萨斯AI-生成场景图异常", f"错误: {str(e)[:100]}...", "TexasAIPics")
+        if filepath:
+            await bark_notifier.send_notification("德克萨斯AI-生成场景图成功", f"图片已保存到 {filepath}", "TexasAIPics")
+            return filepath
+        else:
+            await bark_notifier.send_notification("德克萨斯AI-生成场景图失败", "错误: 图片生成失败", "TexasAIPics")
             return None
 
     async def _generate_scene_with_characters(self, experience_description: str, detected_characters: List[str], scene_analysis: Optional[Dict] = None) -> Optional[str]:
-        """生成包含特定角色的场景图"""
+        """生成包含特定角色的场景图（支持多图输入）"""
         logger.info(f"🎭 使用角色增强生成场景图: {detected_characters}")
 
-        # 选择主要角色作为base图片（选择第一个检测到的角色）
-        main_character = detected_characters[0]
-        character_image_path = character_manager.get_character_image_path(main_character)
+        # 🆕 读取所有检测到的角色图片（支持多图输入）
+        character_images = []
+        character_image_paths = []
 
-        if not character_image_path:
-            logger.warning(f"未找到角色 {main_character} 的本地图片，回退到普通场景生成")
-            return await self._generate_scene_without_characters(experience_description)
+        for char_name in detected_characters:
+            char_image_path = character_manager.get_character_image_path(char_name)
+            if char_image_path:
+                try:
+                    with open(char_image_path, 'rb') as f:
+                        char_image_data = f.read()
+                    character_images.append(char_image_data)
+                    character_image_paths.append(char_image_path)
+                    logger.info(f"✅ 成功读取角色图片: {char_name} -> {char_image_path}")
+                except Exception as e:
+                    logger.warning(f"⚠️ 无法读取角色图片 {char_name}: {e}")
+            else:
+                logger.warning(f"⚠️ 未找到角色 {char_name} 的本地图片")
 
-        # 读取角色图片
-        try:
-            with open(character_image_path, 'rb') as f:
-                character_image_data = f.read()
-            logger.info(f"成功读取角色图片: {main_character} -> {character_image_path}")
-        except Exception as e:
-            logger.error(f"无法读取角色图片: {e}")
+        # 如果没有成功读取任何角色图片，回退到普通场景生成
+        if not character_images:
+            logger.warning(f"未能读取任何角色图片，回退到普通场景生成")
             return await self._generate_scene_without_characters(experience_description, scene_analysis)
+
+        logger.info(f"📸 共读取 {len(character_images)} 张角色图片，将使用多图生成模式")
+        main_character = detected_characters[0]
 
         # 🆕 构建增强的提示词，结合AI预分析和传统方法
         base_prompt = (
@@ -414,64 +447,17 @@ class ImageGenerationService:
         # 组合完整提示词
         prompt = f"{base_prompt}{character_prompt}{clothing_prompt}{expression_prompt}动作姿态要求：角色的动作和姿态要自然融入场景，展现真实的互动感和生活感。避免死板的pose，要有生动的肢体语言和场景互动，体现角色间的关系。场景融合要求：确保所有角色都真实自然地参与到场景中，服装、动作、表情都要与环境完美匹配，营造生动的生活画面。场景描述: {enhanced_scene_desc}"
 
-        try:
-            # 🔄 转换图片为base64 data URL
-            image_data_url = self._convert_image_to_base64_url(character_image_data)
+        # 场景图（含角色）：使用AI推荐的尺寸，默认16:9横屏4K
+        recommended_size = scene_analysis.get("recommended_image_size", "3840x2160") if scene_analysis else "3840x2160"
 
-            # 🔄 SeeDream API payload（Image-to-Image）
-            # 场景图（含角色）：使用AI推荐的尺寸，默认16:9横屏4K
-            recommended_size = scene_analysis.get("recommended_image_size", "3840x2160") if scene_analysis else "3840x2160"
-            payload = {
-                "model": "doubao-seedream-4-5-251128",
-                "prompt": prompt,
-                "image": image_data_url,
-                "size": recommended_size,  # 使用AI决策的具体像素尺寸
-                "watermark": False
-            }
+        # 🆕 使用新的 Provider 接口（支持多图输入）
+        filepath = await self._generate_with_provider(prompt=prompt, images=character_images, size=recommended_size)
 
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.generation_url,  # 🔄 SeeDream统一使用generation端点
-                    headers=headers,
-                    json=payload,
-                    timeout=self.multi_character_timeout  # 使用更长的超时时间
-                )
-                response.raise_for_status()
-                result = response.json()
-                data_item = result.get("data", [{}])[0]
-
-                # 处理生成结果
-                image_url = data_item.get("url")
-                if image_url:
-                    generated_image_data = await self._download_image(image_url)
-                    if generated_image_data:
-                        filepath = self._save_image(generated_image_data)
-                        await bark_notifier.send_notification("德克萨斯AI-多角色场景图成功", f"包含角色: {', '.join(detected_characters)}", "TexasAIPics")
-                        return filepath
-
-                # 处理base64格式
-                b64_json = data_item.get("b64_json")
-                if b64_json:
-                    import base64
-                    try:
-                        image_data = base64.b64decode(b64_json)
-                        filepath = self._save_image(image_data)
-                        await bark_notifier.send_notification("德克萨斯AI-多角色场景图成功", f"包含角色: {', '.join(detected_characters)}", "TexasAIPics")
-                        return filepath
-                    except Exception as decode_error:
-                        logger.error(f"base64解码失败: {decode_error}")
-
-                logger.error(f"多角色场景图生成API未返回有效数据: {result}")
-                return None
-
-        except Exception as e:
-            logger.error(f"多角色场景图生成异常: {e}")
-            await bark_notifier.send_notification("德克萨斯AI-多角色场景图失败", f"错误: {str(e)[:100]}...", "TexasAIPics")
+        if filepath:
+            await bark_notifier.send_notification("德克萨斯AI-多角色场景图成功", f"包含角色: {', '.join(detected_characters)}", "TexasAIPics")
+            return filepath
+        else:
+            await bark_notifier.send_notification("德克萨斯AI-多角色场景图失败", "错误: 图片生成失败", "TexasAIPics")
             return None
 
     def _build_character_descriptions(self, characters: List[str], main_character: str) -> str:
@@ -633,65 +619,17 @@ class ImageGenerationService:
         # 组合完整的自拍提示词
         prompt = f"{base_selfie_prompt}{other_characters_desc}{expression_prompt}{pose_prompt}{clothing_prompt}构图要求：自拍视角，画面构图要突出人物魅力和身材曲线。场景融合：姿势、神态和背景需要完全融入新的场景，营造自然的自拍效果。场景描述: {enhanced_scene_desc}"
 
-        try:
-            # 🔄 转换图片为base64 data URL
-            image_data_url = self._convert_image_to_base64_url(base_image_data)
+        # 自拍照：使用AI推荐的尺寸，默认9:16竖屏2K
+        recommended_size = scene_analysis.get("recommended_image_size", "1080x1920") if scene_analysis else "1080x1920"
 
-            # 🔄 SeeDream API payload（Image-to-Image）
-            # 自拍照：使用AI推荐的尺寸，默认9:16竖屏2K
-            recommended_size = scene_analysis.get("recommended_image_size", "1080x1920") if scene_analysis else "1080x1920"
-            payload = {
-                "model": "doubao-seedream-4-5-251128",
-                "prompt": prompt,
-                "image": image_data_url,
-                "size": recommended_size,  # 使用AI决策的具体像素尺寸（1080x1920竖屏或2560x1440横屏）
-                "watermark": False
-            }
+        # 🆕 使用新的 Provider 接口
+        filepath = await self._generate_with_provider(prompt=prompt, images=[base_image_data], size=recommended_size)
 
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.generation_url,  # 🔄 SeeDream统一使用generation端点
-                    headers=headers,
-                    json=payload,
-                    timeout=self.selfie_timeout
-                )
-                response.raise_for_status()
-                result = response.json()
-                data_item = result.get("data", [{}])[0]
-
-                # 优先处理URL格式
-                image_url = data_item.get("url")
-                if image_url:
-                    generated_image_data = await self._download_image(image_url)
-                    if generated_image_data:
-                        filepath = self._save_image(generated_image_data)
-                        await bark_notifier.send_notification("德克萨斯AI-生成自拍成功", f"图片已保存到 {filepath}", "TexasAIPics", image_url=image_url)
-                        return filepath
-
-                # 处理base64格式
-                b64_json = data_item.get("b64_json")
-                if b64_json:
-                    import base64
-                    try:
-                        generated_image_data = base64.b64decode(b64_json)
-                        filepath = self._save_image(generated_image_data)
-                        await bark_notifier.send_notification("德克萨斯AI-生成自拍成功", f"图片已保存到 {filepath}", "TexasAIPics")
-                        return filepath
-                    except Exception as decode_error:
-                        logger.error(f"自拍base64解码失败: {decode_error}")
-
-                # 如果两种格式都没有
-                logger.error(f"自拍生成API未返回有效的图片数据: {result}")
-                await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", f"错误: API未返回有效数据。响应: {str(result)[:50]}...", "TexasAIPics")
-                return None
-        except Exception as e:
-            logger.error(f"调用自拍生成API时发生未知异常: {e}")
-            await bark_notifier.send_notification("德克萨斯AI-生成自拍异常", f"错误: {str(e)[:100]}...", "TexasAIPics")
+        if filepath:
+            await bark_notifier.send_notification("德克萨斯AI-生成自拍成功", f"图片已保存到 {filepath}", "TexasAIPics")
+            return filepath
+        else:
+            await bark_notifier.send_notification("德克萨斯AI-生成自拍失败", "错误: 图片生成失败", "TexasAIPics")
             return None
 
 image_generation_service = ImageGenerationService()
