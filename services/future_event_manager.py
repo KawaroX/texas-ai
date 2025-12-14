@@ -118,9 +118,17 @@ class FutureEventManager:
         """
         try:
             from tasks.reminder_tasks import send_reminder
+            from datetime import timezone
+            import pytz
 
-            # 解析提醒时间
-            reminder_time = datetime.fromisoformat(reminder_datetime_str)
+            # 解析提醒时间（假设是北京时间）
+            reminder_time_naive = datetime.fromisoformat(reminder_datetime_str)
+
+            # 添加时区信息（北京时间 UTC+8）
+            beijing_tz = pytz.timezone('Asia/Shanghai')
+            reminder_time = beijing_tz.localize(reminder_time_naive)
+
+            logger.info(f"[event_manager] 提醒时间: {reminder_time_naive} (naive) → {reminder_time} (with timezone)")
 
             # 使用Celery的eta参数调度任务
             send_reminder.apply_async(
