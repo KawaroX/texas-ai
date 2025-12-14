@@ -77,35 +77,45 @@ class ImageContextFormatter:
     def clean_ai_generated_image_tags(cls, text: str) -> str:
         """
         清理AI可能生成的图片标签，避免无图片对应的描述
-        
+
         Args:
             text: 待清理的文本
-            
+
         Returns:
             清理后的文本
         """
         if not text:
             return text
-            
+
         original_text = text
-        
+
         # 1. 清理旧格式的图片标签 [图片: ...]
         text = re.sub(cls.OLD_FORMAT_PATTERN, '', text)
-        
-        # 2. 清理AI可能模仿的新格式（这种情况应该很少，但防万一）
-        # 注意：只清理明显是AI模仿的，不清理系统生成的
-        # 系统生成的通常出现在消息存储时，AI模仿的会出现在回复生成时
+
+        # 2. 清理AI可能模仿的新格式（完整的标签对）
         suspicious_new_format = re.sub(cls.NEW_FORMAT_PATTERN, '', text, flags=re.DOTALL)
         if suspicious_new_format != text:
-            logger.warning(f"[img_formatter] 检测到可疑的图片格式标记，已清理")
+            logger.warning(f"[img_formatter] 检测到可疑的完整图片格式标记，已清理")
             text = suspicious_new_format
-        
+
+        # 3. 🆕 清理不完整的IMG_CONTEXT标签（只有开始标签，没有结束标签）
+        # 匹配 <IMG_CONTEXT:description> 后面没有对应 </IMG_CONTEXT> 的情况
+        incomplete_tag_pattern = r'<IMG_CONTEXT:description>[^<]*(?!</IMG_CONTEXT>)'
+        incomplete_cleaned = re.sub(incomplete_tag_pattern, '', text, flags=re.DOTALL)
+        if incomplete_cleaned != text:
+            logger.warning(f"[img_formatter] 检测到不完整的IMG_CONTEXT标签，已清理")
+            text = incomplete_cleaned
+
+        # 4. 🆕 清理孤立的开始或结束标签
+        text = text.replace('<IMG_CONTEXT:description>', '')
+        text = text.replace('</IMG_CONTEXT>', '')
+
         # 清理多余的空白字符
         text = re.sub(r'\n\s*\n', '\n\n', text).strip()
-        
+
         if original_text != text:
             logger.debug(f"[img_formatter] 清理AI生成的图片标签: 原长度={len(original_text)}, 清理后长度={len(text)}")
-        
+
         return text
     
     @classmethod
