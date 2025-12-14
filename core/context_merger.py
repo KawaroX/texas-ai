@@ -84,6 +84,8 @@ def _get_future_events_context(user_id: str = "kawaro", days_ahead: int = 14) ->
         # 获取活跃事件
         events = future_event_manager.get_active_events(user_id, days_ahead)
 
+        logger.info(f"🔍 [DEBUG] 获取到 {len(events)} 个未来事件")
+
         if not events:
             logger.debug("[context_merger] 未找到未来事件")
             return ""
@@ -97,8 +99,15 @@ def _get_future_events_context(user_id: str = "kawaro", days_ahead: int = 14) ->
             event_date = event.get('event_date')
             event_time = event.get('event_time')
 
+            logger.debug(f"🔍 [DEBUG] 事件: {event.get('event_summary')}, date类型={type(event_date)}, date={event_date}")
+
             if not event_date:
                 continue
+
+            # 如果event_date是字符串，转换为date对象
+            if isinstance(event_date, str):
+                from datetime import datetime
+                event_date = datetime.strptime(event_date, "%Y-%m-%d").date()
 
             # 计算距离天数
             days_diff = (event_date - today).days
