@@ -43,7 +43,8 @@ class SeeDreamProvider(BaseImageProvider):
                 "model": self.model,
                 "prompt": request.prompt,
                 "size": request.size or "2K",
-                "watermark": request.watermark
+                "watermark": request.watermark,
+                "response_format": "b64_json"  # 强制使用 base64 格式返回
             }
 
             # 处理底图
