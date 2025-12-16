@@ -100,7 +100,7 @@ class InstantImageGenerator:
                 is_selfie=is_selfie
             )
 
-            if not analysis_result or 'enhanced_prompt' not in analysis_result:
+            if not analysis_result:
                 logger.error("[instant_image] 场景预分析失败")
                 return {
                     "success": False,
@@ -108,23 +108,24 @@ class InstantImageGenerator:
                     "generation_time": (datetime.now() - start_time).total_seconds()
                 }
 
-            enhanced_prompt = analysis_result['enhanced_prompt']
-            logger.debug(f"[instant_image] 增强提示词: {enhanced_prompt[:100]}...")
+            logger.debug(f"[instant_image] 场景分析完成: {len(analysis_result.get('characters', []))}个角色")
 
             # 6. 生成图片（复用现有逻辑）
+            # 获取场景描述文本
+            experience_description = scene_data.get('content', '')
             logger.debug("[instant_image] 开始生成图片")
 
             if is_selfie:
                 # 自拍模式
                 image_path = await self.image_service.generate_selfie(
-                    enhanced_prompt=enhanced_prompt,
-                    scene_data=scene_data
+                    experience_description=experience_description,
+                    scene_analysis=analysis_result
                 )
             else:
                 # 场景模式
                 image_path = await self.image_service.generate_image_from_prompt(
-                    enhanced_prompt=enhanced_prompt,
-                    scene_data=scene_data
+                    experience_description=experience_description,
+                    scene_analysis=analysis_result
                 )
 
             if not image_path:
