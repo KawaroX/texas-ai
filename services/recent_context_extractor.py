@@ -60,6 +60,8 @@ class RecentContextExtractor:
     ) -> List[Dict]:
         """从Redis buffer提取"""
         try:
+            import pytz
+
             # 获取频道的所有缓存消息
             channel_memory = self.get_channel_memory(channel_id)
             buffer_messages = channel_memory.get_recent_messages()
@@ -67,8 +69,9 @@ class RecentContextExtractor:
             if not buffer_messages:
                 return []
 
-            # 计算时间窗口
-            cutoff_time = datetime.now() - timedelta(minutes=window_minutes)
+            # 计算时间窗口（使用东八区时间，与 memory_buffer 保持一致）
+            tz = pytz.timezone("Asia/Shanghai")
+            cutoff_time = datetime.now(tz) - timedelta(minutes=window_minutes)
 
             # 过滤时间窗口内的消息
             recent_messages = []
@@ -94,12 +97,22 @@ class RecentContextExtractor:
             return None
 
         try:
-            # 尝试ISO格式
-            return datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            # 尝试ISO格式（带时区信息）
+            dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            # 如果是 naive datetime，添加东八区时区
+            if dt.tzinfo is None:
+                import pytz
+                tz = pytz.timezone("Asia/Shanghai")
+                dt = tz.localize(dt)
+            return dt
         except:
             try:
                 # 尝试其他格式
-                return datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                import pytz
+                dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                # 添加东八区时区
+                tz = pytz.timezone("Asia/Shanghai")
+                return tz.localize(dt)
             except:
                 return None
 
