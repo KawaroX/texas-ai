@@ -127,28 +127,61 @@ async def _generate_reminder_message(event: dict) -> str:
     # 计算距离事件多久
     time_desc = _calculate_time_description(event)
 
+    # 判断提醒类型（用于给AI更明确的指导）
+    if time_desc in ["现在", "马上"]:
+        reminder_type = "即时提醒"
+        hint = "时间已到，应该提醒kawaro立即行动"
+    elif "分钟" in time_desc:
+        try:
+            minutes = int(time_desc.replace("还有", "").replace("分钟", ""))
+            if minutes <= 10:
+                reminder_type = "临近提醒"
+                hint = "时间快到了，提醒kawaro准备"
+            else:
+                reminder_type = "提前提醒"
+                hint = "提醒kawaro注意即将到来的事件"
+        except:
+            reminder_type = "提前提醒"
+            hint = "提醒kawaro注意即将到来的事件"
+    else:
+        reminder_type = "提前提醒"
+        hint = "提醒kawaro注意即将到来的事件"
+
     # 使用AI生成自然的提醒
     from services.ai_service import call_openai
 
-    prompt = f"""你是德克萨斯，需要提醒kawaro一件事。
+    prompt = f"""你是德克萨斯，现在是【提醒触发时刻】，需要提醒kawaro一件事。
 
-事件信息：
+【提醒场景】
+- 提醒类型：{reminder_type}
 - 事件：{event['event_summary']}
-- 时间：{time_desc}
-- 原始描述：{event['event_text']}
+- 距离事件时间：{time_desc}
+- 用户原话：{event['event_text']}
 
-请生成一条自然、简洁的提醒消息，符合德克萨斯的性格（冷静、专业、关心但不过分热情）。
+【指导说明】
+{hint}
 
-要求：
-- 1-2句话
-- 不要过于正式，像朋友提醒一样
-- 可以加一句关心或鼓励的话（可选）
+【要求】
+- 1-2句话，简洁自然
+- 符合德克萨斯的性格：冷静、专业、关心但不过分热情
+- 根据距离事件的时间调整措辞：
+  * 如果是"现在"或"马上"：直接催促行动，如"时间到了，该吃饭了"
+  * 如果是"还有X分钟"（≤10分钟）：提醒准备，如"快到时间了，准备一下吧"
+  * 如果是更长时间：提前通知，如"再过30分钟该吃饭了，记得准备"
 - 直接输出消息内容，不要任何额外标记
 
-示例：
+【示例】
+场景1（即时提醒，距离0-2分钟）：
+- "时间到了，该吃饭了。"
+- "kawaro，该去做那件事了。"
+
+场景2（临近提醒，距离3-10分钟）：
+- "再过5分钟就该吃饭了，准备一下吧。"
+- "快到约定的时间了，准备好了吗？"
+
+场景3（提前提醒，距离>10分钟）：
 - "kawaro，再过30分钟就要考试了，记得带准考证。"
 - "提醒一下，今晚九点你说要去喝酒的，别忘了。"
-- "马上到约定的时间了，准备好了吗？"
 
 直接输出提醒消息："""
 
@@ -161,22 +194,27 @@ async def _generate_reminder_message(event: dict) -> str:
 
     except Exception as e:
         logger.error(f"[reminder_task] AI生成提醒失败: {e}")
-        # Fallback到简单模板
-        return f"提醒：{event['event_summary']}（{time_desc}）"
+        # Fallback到智能模板
+        if time_desc in ["现在", "马上"]:
+            return f"时间到了，该{event['event_summary']}了。"
+        elif "分钟" in time_desc:
+            return f"{time_desc}就该{event['event_summary']}了，准备一下吧。"
+        else:
+            return f"提醒：{event['event_summary']}（{time_desc}）"
 
 
 def _calculate_time_description(event: dict) -> str:
     """
-    计算时间描述
+    计算时间描述（用于提醒消息生成）
 
     Args:
         event: 事件数据
 
     Returns:
-        时间描述文本
+        包含提醒语境的时间描述
     """
     if not event.get('event_date'):
-        return "即将发生"
+        return "即将"
 
     try:
         # 构建事件时间
@@ -191,20 +229,35 @@ def _calculate_time_description(event: dict) -> str:
                 datetime.min.time()
             )
 
-        # 计算时间差
+        # 计算剩余时间
         now = datetime.now()
         time_delta = event_datetime - now
+        total_seconds = time_delta.total_seconds()
 
-        # 生成描述
-        if time_delta.total_seconds() < 0:
+        # 根据剩余时间生成不同的描述
+        if total_seconds <= 0:
+            # 事件时间已到或已过
             return "现在"
-        elif time_delta.total_seconds() < 3600:  # 1小时内
-            minutes = int(time_delta.total_seconds() / 60)
-            return f"{minutes}分钟后"
-        elif time_delta.total_seconds() < 86400:  # 24小时内
-            hours = int(time_delta.total_seconds() / 3600)
-            return f"{hours}小时后"
+        elif total_seconds <= 300:  # ≤5分钟
+            # 即时提醒：时间几乎到了
+            minutes = max(1, int(total_seconds / 60))
+            if minutes <= 1:
+                return "马上"
+            else:
+                return f"还有{minutes}分钟"
+        elif total_seconds <= 1800:  # 5-30分钟
+            # 临近提醒
+            minutes = int(total_seconds / 60)
+            return f"还有{minutes}分钟"
+        elif total_seconds < 3600:  # 30分钟-1小时
+            # 提前提醒
+            minutes = int(total_seconds / 60)
+            return f"还有{minutes}分钟"
+        elif total_seconds < 86400:  # 1-24小时
+            hours = int(total_seconds / 3600)
+            return f"还有{hours}小时"
         else:
+            # 超过1天
             days = time_delta.days
             if days == 1:
                 return "明天"
@@ -213,7 +266,7 @@ def _calculate_time_description(event: dict) -> str:
 
     except Exception as e:
         logger.error(f"[reminder_task] 计算时间描述失败: {e}")
-        return "即将发生"
+        return "即将"
 
 
 @shared_task
