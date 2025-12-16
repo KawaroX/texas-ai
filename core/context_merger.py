@@ -900,7 +900,16 @@ async def merge_context(
             "判断标准: "
             "✅ NEED marker: '明天三点考试', '下周开会', '提醒我X点做Y', '记得X', '别忘了X', '提醒我2分钟后吃饭', '今晚8点健身' - 任何告诉你未来要做的事, 需要你来提醒Kawaro的事情, 都需要被标记. "
             "❌ DON'T need: '我明天有什么安排？', '你还记得X吗？', '我忘了' - 询问已有信息. "
-            "Marker is INVISIBLE to Kawaro. When in doubt, ADD IT."
+            "Marker is INVISIBLE to Kawaro. When in doubt, ADD IT.\n\n"
+            "**CRITICAL - Image Request**: Add [IMAGE_REQUESTED] at the END (after SEND and [EVENT_DETECTED] if present) if Kawaro is asking for a photo/image. "
+            "判断标准: "
+            "✅ NEED marker: '拍照', '拍张照', '发照片', '发个照片', '自拍', '看看你', '给我看看', '拍一下', '什么样子', '长什么样', '现在在哪', '那里什么样' - 任何要求你拍照或展示画面的请求. "
+            "❌ DON'T need: '照片真好看', '上次那张照片', '还记得那张照片吗' - 谈论已有照片. "
+            "Marker is INVISIBLE to Kawaro. When Kawaro wants to SEE something, ADD IT.\n"
+            "**OPTIONAL - Image Caption**: After [IMAGE_REQUESTED], you can add a natural caption for the photo on the NEXT line in format: [IMAGE_CAPTION:你的话]. "
+            "This will be the message sent WITH the photo. Keep it natural and brief (5-15 characters). "
+            "Examples: [IMAGE_CAPTION:拍好了。] or [IMAGE_CAPTION:刚在办公室，给你看看。] "
+            "If you don't add a caption, a random default will be used."
         )
 
     messages.append({"role": "user", "content": user_query_content})

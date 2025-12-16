@@ -123,34 +123,60 @@ class ChatEngine:
         # logger.info(f"Content: {m['content']}")
         # logger.info(f"Content length: {len(m['content'])} characters\n")
 
-        # 4. 流式调用 AI 模型，并收集完整回复用于事件检测
+        # 4. 流式调用 AI 模型，并收集完整回复用于事件检测和图片请求检测
         full_response = ""
         segments_list = []  # 收集所有segments
-        marker = "[EVENT_DETECTED]"
+        event_marker = "[EVENT_DETECTED]"
+        image_marker = "[IMAGE_REQUESTED]"
 
         # 先收集所有segments
-        async for segment in stream_ai_chat(prompt_messages, "gpt-5-chat-latest"):
+        async for segment in stream_ai_chat(prompt_messages, "gpt-5.1"):
             full_response += segment
             segments_list.append(segment)
             # 调试：每个segment是否包含标记
-            if marker in segment:
-                logger.warning(f"🔍 [DEBUG] segment 包含标记! segment='{segment}'")
+            if event_marker in segment:
+                logger.warning(f"🔍 [DEBUG] segment 包含事件标记! segment='{segment}'")
+            if image_marker in segment:
+                logger.warning(f"🔍 [DEBUG] segment 包含图片标记! segment='{segment}'")
 
         # 调试：完整回复
         logger.info(f"🔍 [DEBUG] full_response 长度={len(full_response)}")
         logger.info(f"🔍 [DEBUG] full_response 最后200字符: {full_response[-200:]}")
-        logger.info(f"🔍 [DEBUG] 是否包含标记? {marker in full_response}")
+        logger.info(f"🔍 [DEBUG] 是否包含事件标记? {event_marker in full_response}")
+        logger.info(f"🔍 [DEBUG] 是否包含图片标记? {image_marker in full_response}")
 
         # 检查是否包含标记，并从segments中移除
-        has_event_marker = marker in full_response
+        has_event_marker = event_marker in full_response
+        has_image_marker = image_marker in full_response
+
         if has_event_marker:
             # 找到包含标记的segment并移除标记
             for i, seg in enumerate(segments_list):
-                if marker in seg:
-                    segments_list[i] = seg.replace(marker, "")
+                if event_marker in seg:
+                    segments_list[i] = seg.replace(event_marker, "")
                     logger.info(f"[chat_engine] 从segment {i} 中移除事件标记")
 
-        # 在输出前先触发事件检测（因为generator可能被提前终止）
+        # 提取图片附言（如果有的话）
+        image_caption = None
+        if has_image_marker:
+            import re
+            # 查找 [IMAGE_CAPTION:xxx] 格式
+            caption_pattern = r'\[IMAGE_CAPTION:([^\]]+)\]'
+            caption_match = re.search(caption_pattern, full_response)
+            if caption_match:
+                image_caption = caption_match.group(1).strip()
+                logger.info(f"[chat_engine] 提取到AI生成的图片附言: {image_caption}")
+
+            # 移除图片标记和附言标记
+            for i, seg in enumerate(segments_list):
+                if image_marker in seg:
+                    segments_list[i] = seg.replace(image_marker, "")
+                    logger.info(f"[chat_engine] 从segment {i} 中移除图片标记")
+                if caption_match and caption_match.group(0) in seg:
+                    segments_list[i] = seg.replace(caption_match.group(0), "")
+                    logger.info(f"[chat_engine] 从segment {i} 中移除图片附言标记")
+
+        # 在输出前先触发事件检测和图片生成（因为generator可能被提前终止）
         if has_event_marker:
             logger.info(f"[chat_engine] ✅ 检测到事件标记，开始异步提取 channel={channel_id}")
             asyncio.create_task(
@@ -160,6 +186,16 @@ class ChatEngine:
                     messages,
                     context_messages,
                     user_info
+                )
+            )
+
+        if has_image_marker:
+            logger.info(f"[chat_engine] ✅ 检测到图片请求标记，开始异步生成 channel={channel_id}")
+            asyncio.create_task(
+                self._generate_and_send_image(
+                    channel_id,
+                    user_info.get('username', 'unknown') if user_info else 'unknown',
+                    custom_caption=image_caption
                 )
             )
 
@@ -266,6 +302,86 @@ class ChatEngine:
 
         except Exception as e:
             logger.error(f"[chat_engine] 事件提取和存储异常: {e}", exc_info=True)
+
+    async def _generate_and_send_image(
+        self,
+        channel_id: str,
+        user_id: str,
+        custom_caption: Optional[str] = None
+    ):
+        """
+        异步生成并发送图片
+
+        Args:
+            channel_id: 频道ID
+            user_id: 用户ID
+            custom_caption: AI生成的自定义图片附言
+        """
+        try:
+            from services.instant_image_generator import instant_image_generator
+
+            # 生成图片（异步，不阻塞）
+            result = await instant_image_generator.generate_instant_image(
+                channel_id=channel_id,
+                user_id=user_id,
+                image_type=None,  # 自动判断
+                context_window_minutes=3,
+                max_messages=25
+            )
+
+            if not result['success']:
+                logger.warning(f"[chat_engine] 图片生成失败: {result.get('error')}")
+                # 生成失败不影响对话流程，静默失败
+                return
+
+            image_path = result['image_path']
+            is_selfie = result.get('is_selfie', False)
+            logger.info(f"[chat_engine] 图片生成成功: {image_path}, 类型: {'自拍' if is_selfie else '场景'}")
+
+            # 发送图片到频道
+            from app.mattermost_client import MattermostWebSocketClient
+            ws_client = MattermostWebSocketClient()
+
+            # 确保bot user ID已获取
+            if ws_client.user_id is None:
+                await ws_client.fetch_bot_user_id()
+
+            # 使用自定义附言或生成随机的发送文本
+            if custom_caption:
+                caption = custom_caption
+                logger.info(f"[chat_engine] 使用AI生成的图片附言: {caption}")
+            else:
+                import random
+                if is_selfie:
+                    messages = [
+                        "拍好了。",
+                        "来，看这里。",
+                        "这张怎么样？",
+                        "刚拍的。",
+                        "（举起手机）",
+                    ]
+                else:
+                    messages = [
+                        "拍到了。",
+                        "这就是现在的场景。",
+                        "看，就是这样。",
+                        "给你看看。",
+                        "（转身对准窗外）",
+                    ]
+                caption = random.choice(messages)
+                logger.info(f"[chat_engine] 使用预设随机附言: {caption}")
+
+            # 发送图片
+            await ws_client.post_message_with_image(
+                channel_id=channel_id,
+                message=caption,
+                image_path=image_path
+            )
+
+            logger.info(f"[chat_engine] 图片已发送到频道: {channel_id}")
+
+        except Exception as e:
+            logger.error(f"[chat_engine] 图片生成和发送异常: {e}", exc_info=True)
 
     # 为了向后兼容，保留原有的单消息接口
     async def stream_reply_single(
