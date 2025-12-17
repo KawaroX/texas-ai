@@ -236,12 +236,26 @@ class TexasStateManager:
             is_hard_lock = True # 贤者时间也是一种软性锁
             
         elif (cycle_phase == "Menstrual" and bio.get_current_pain_level() > 0.5 and mood.pleasure < -2):
-            # 痛经锁：痛感等级 > 0.5 且心情差时触发
-            # 拒绝阴道性交，但如果 Lust 高，允许其他方式
-            if bio.lust > 50:
+            # 痛经锁逻辑 v3.3
+            # 基础门槛：Lust > 90 才能突破痛经
+            # 亲密度修正：亲密度越高，门槛越低
+            # Sens > 95 (灵魂伴侣): 门槛 = 0 (只要有一点点想法或者为了你，都愿意)
+            # Sens > 80: 门槛 = 40
+            # Sens > 60: 门槛 = 60
+            # Sens > 40: 门槛 = 80
+            # Default: 90
+            
+            threshold = 90
+            if bio.sensitivity > 95: threshold = 0
+            elif bio.sensitivity > 80: threshold = 40
+            elif bio.sensitivity > 60: threshold = 60
+            elif bio.sensitivity > 40: threshold = 80
+            
+            # 拒绝阴道性交，但如果 Lust > 阈值，允许其他方式
+            if bio.lust > threshold:
                  state_text = (
                     "  **状态**: 【生理不适 (Pain)】\n"
-                    "  剧烈的痛经让她无法接受常规性行为（拒绝 Vaginal Sex）。但因为欲望并未完全消失，"
+                    "  剧烈的痛经让她无法接受常规性行为（拒绝 Vaginal Sex）。但因为欲望/爱意突破了痛楚，"
                     "如果用户主动引导，她愿意尝试**用嘴、胸部或大腿**来满足你，作为一种寻求安抚的交换。\n"
                     "  *(System: Refuse vaginal entry. Allow Oral/Paizuri/Handjob if treated gently.)*"
                  )
