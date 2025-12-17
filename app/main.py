@@ -3,6 +3,7 @@ from utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 from fastapi import FastAPI, HTTPException, Depends, Query, Request, Response
+from fastapi.responses import HTMLResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
@@ -426,10 +427,28 @@ async def get_gallery_record_detail(
 
 @app.get("/gallery/stats")
 async def get_gallery_stats(
-    k: str = Query(default=""), 
+    k: str = Query(default=""),
     _=Depends(check_k)
 ):
     """获取亲密行为统计"""
     return get_intimacy_stats()
+
+
+# ==================== Admin Dashboard ====================
+
+@app.get("/admin", response_class=HTMLResponse)
+async def get_admin_dashboard():
+    """返回管理面板HTML页面"""
+    try:
+        # 读取HTML文件
+        html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "admin_dashboard.html")
+        with open(html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="管理面板页面未找到")
+    except Exception as e:
+        logger.error(f"加载管理面板失败: {e}")
+        raise HTTPException(status_code=500, detail="加载管理面板失败")
 
 
