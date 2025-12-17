@@ -61,10 +61,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     # 常见的恶意扫描路径
     MALICIOUS_PATHS = {
         "/favicon.ico",
-        "/robots.txt", 
+        "/robots.txt",
         "/sitemap.xml",
         "/wp-login.php",
-        "/admin",
+        # "/admin",  # 已移除：现在是合法的管理面板路由
         "/login",
         "/phpMyAdmin",
         "/images/js/eas/eas.js",
