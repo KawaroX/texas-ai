@@ -50,6 +50,15 @@ class TexasStateManager:
     def save_state(self):
         """保存当前状态到 Redis"""
         try:
+            # 在保存前打印当前关键状态，便于调试观察
+            bio = self.bio_state
+            mood = self.mood_state
+            logger.info(
+                f"[State] 💾 保存状态: "
+                f"Bio(Day{bio.cycle_day}/Sta{bio.stamina:.1f}/Lust{bio.lust:.1f}/Sens{bio.sensitivity:.1f}) "
+                f"Mood(P{mood.pleasure:.1f}/A{mood.arousal:.1f}/D{mood.dominance:.1f})"
+            )
+
             state_dict = {
                 "bio": self.bio_state.model_dump(),
                 "mood": self.mood_state.model_dump(),
