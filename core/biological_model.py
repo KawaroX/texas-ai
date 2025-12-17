@@ -3,12 +3,21 @@ from typing import Literal, Tuple, Dict
 import time
 import math
 
+import random
+
 class BiologicalState(BaseModel):
     """
     生理状态模型：管理周期、体力、欲望与开发度
     """
     # === 基础生理属性 ===
-    cycle_day: int = Field(default=1, ge=1, le=28, description="生理周期天数 (1-28)")
+    cycle_day: int = Field(default=1, ge=1, le=35, description="生理周期天数")
+    cycle_length: int = Field(default=28, ge=25, le=35, description="本周期总长度 (25-35天)")
+    menstrual_days: int = Field(default=5, ge=3, le=7, description="本周期经期长度 (3-7天)")
+    
+    # 存储本周期每天的痛感等级 (0.0 - 1.0)
+    # Key: day (1-7), Value: pain_level
+    menstrual_pain_levels: Dict[int, float] = Field(default_factory=dict, description="本周期经期痛感分布")
+
     stamina: float = Field(default=100.0, ge=0.0, le=100.0, description="体力/精力 (0-100)")
     sleep_state: Literal["Awake", "LightSleep", "DeepSleep"] = Field(default="Awake", description="睡眠状态")
 
@@ -16,20 +25,104 @@ class BiologicalState(BaseModel):
     lust: float = Field(default=0.0, ge=0.0, le=100.0, description="当前欲念值 (0-100)，可波动")
     sensitivity: float = Field(default=0.0, ge=0.0, le=100.0, description="敏感度/开发度 (0-100)，不可逆积累")
     
+    last_release_time: float = Field(default=0.0, description="上次释放(高潮)的时间戳")
     last_updated: float = Field(default_factory=time.time, description="最后更新时间戳")
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        # 初始化如果没有痛感数据
+        if not self.menstrual_pain_levels:
+            self._generate_cycle_params()
+
+    def _generate_cycle_params(self):
+        """生成新的周期参数 (长度、经期天数、痛感分布)"""
+        # 1. 随机周期长度 (26-32天)
+        self.cycle_length = random.randint(26, 32)
+        
+        # 2. 随机经期长度 (4-6天)
+        self.menstrual_days = random.randint(4, 6)
+        
+        # 3. 生成痛感曲线 (Peak 在 Day 1 或 2，然后递减)
+        peak_day = random.randint(1, 2)
+        base_pain = random.uniform(0.6, 0.9) # 基础峰值痛感
+        
+        new_levels = {}
+        for d in range(1, self.menstrual_days + 1):
+            if d == peak_day:
+                pain = base_pain
+            elif d < peak_day:
+                pain = base_pain * 0.7 # 爬坡
+            else:
+                # 衰减
+                days_after_peak = d - peak_day
+                pain = max(0.0, base_pain - (0.2 * days_after_peak) - random.uniform(0.0, 0.1))
+            
+            new_levels[d] = round(pain, 2)
+        
+        self.menstrual_pain_levels = new_levels
 
     def get_cycle_phase(self) -> str:
         """获取当前生理周期阶段"""
-        if 1 <= self.cycle_day <= 5:
+        if 1 <= self.cycle_day <= self.menstrual_days:
             return "Menstrual" # 经期
-        elif 6 <= self.cycle_day <= 11:
-            return "Follicular" # 卵泡期
-        elif 12 <= self.cycle_day <= 16:
-            return "Ovulation" # 排卵期
-        elif 17 <= self.cycle_day <= 23:
-            return "Luteal" # 黄体期
+        # 动态调整其他阶段的起始点
+        ovulation_start = self.cycle_length - 14 - 2
+        if self.menstrual_days < self.cycle_day < ovulation_start:
+             return "Follicular" # 卵泡期
+        elif ovulation_start <= self.cycle_day <= ovulation_start + 4:
+             return "Ovulation" # 排卵期
+        elif ovulation_start + 4 < self.cycle_day <= self.cycle_length - 5:
+             return "Luteal" # 黄体期
         else:
             return "PMS" # 经前综合征
+
+    def get_current_pain_level(self) -> float:
+        """获取当前的痛经等级 (0.0 - 1.0)"""
+        if self.get_cycle_phase() == "Menstrual":
+            return self.menstrual_pain_levels.get(self.cycle_day, 0.0)
+        if self.get_cycle_phase() == "PMS":
+            return 0.1 # PMS 轻微不适
+        return 0.0
+
+    def get_cycle_phase_description(self) -> str:
+        """获取生理周期阶段的详细描述"""
+        phase = self.get_cycle_phase()
+        if phase == "Menstrual":
+            pain = self.get_current_pain_level()
+            base = f"【生理期 Day {self.cycle_day}/{self.menstrual_days}】"
+            if pain > 0.7:
+                return f"{base} 剧烈痛经。腹部有强烈的绞痛感，腰酸背痛，全身乏力。除了躺着什么都不想做。"
+            elif pain > 0.3:
+                return f"{base} 中度不适。腹部持续隐痛，身体沉重。虽然能忍受，但容易疲劳。"
+            else:
+                return f"{base} 轻微不适。痛感已经消退，只剩下一点点下坠感，精神状态基本恢复。"
+                
+        elif phase == "PMS":
+            return "【经前】情绪像火药桶，容易焦虑和烦躁。对忽视极其敏感，可能会无理取闹。身体开始出现水肿或胸胀。"
+        elif phase == "Ovulation":
+            return "【排卵期】皮肤状态极佳，体温稍高。潜意识里渴望被触碰，对异性气息敏感，更容易被诱惑。"
+        return "【日常】身体状态平稳。"
+
+    def get_sexual_phase(self) -> Tuple[str, float]:
+        """
+        获取当前的欲望阶段 (基于时间轴)
+        Returns: (PhaseName, HoursSinceRelease)
+        """
+        if self.last_release_time == 0.0:
+            return "Normal", 999.0 # 从未释放过，默认为 Normal
+            
+        hours_passed = (time.time() - self.last_release_time) / 3600.0
+        
+        if hours_passed < 0.5:
+            return "Refractory", hours_passed # 贤者时间/不应期 (30分钟内)
+        elif hours_passed < 2.0:
+            return "Afterglow", hours_passed # 余韵/后戏期 (2小时内)
+        elif hours_passed < 24 * 3:
+            return "Normal", hours_passed # 正常期 (3天内)
+        elif hours_passed < 24 * 7:
+            return "Accumulating", hours_passed # 积累期 (3-7天)
+        else:
+            return "Starved", hours_passed # 匮乏/饥渴期 (>7天)
 
     def get_cycle_phase_description(self) -> str:
         """获取生理周期阶段的详细描述"""
@@ -110,5 +203,7 @@ class BiologicalState(BaseModel):
     def advance_cycle(self):
         """推进一天生理周期"""
         self.cycle_day += 1
-        if self.cycle_day > 28:
+        if self.cycle_day > self.cycle_length:
             self.cycle_day = 1
+            # 新周期：重新生成参数 (长度、痛感等)
+            self._generate_cycle_params()

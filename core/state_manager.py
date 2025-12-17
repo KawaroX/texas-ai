@@ -184,6 +184,7 @@ class TexasStateManager:
             self.mood_state.pleasure = min(10.0, self.mood_state.pleasure + 5.0)
             self.mood_state.arousal = max(-5.0, self.mood_state.arousal - 5.0) # 贤者模式：平静
             self.bio_state.stamina = max(0.0, self.bio_state.stamina - 30.0) # 体力透支
+            self.bio_state.last_release_time = time.time() # 记录释放时间
             
             # 敏感度成长 (0.5 - 2.0 随机或固定)
             growth = 1.0
@@ -193,78 +194,168 @@ class TexasStateManager:
 
     def get_system_prompt_injection(self) -> str:
         """
-        生成注入到 System Prompt 的状态描述文本 (Dynamic Modulation)
+        生成注入到 System Prompt 的状态描述文本 (v3.0 Holographic Mood Matrix)
         """
         self.update_time_based_stats()
         
         bio = self.bio_state
         mood = self.mood_state
         
-        # === 1. 生理状态与周期表现 ===
+        # === 1. Physical Description ===
         cycle_phase = bio.get_cycle_phase()
         cycle_base_desc = bio.get_cycle_phase_description()
+        stamina_desc = self._get_stamina_desc(bio.stamina)
         
-        # 动态修正：经期表现
-        if cycle_phase == "Menstrual":
-            if bio.lust > 60 and bio.sensitivity > 50:
-                cycle_desc = f"{cycle_base_desc} 但注意：【欲望代偿】虽然身体不适，但因为高涨的欲望和对你的依恋，她愿意尝试用不涉及身体负担的方式（如口、手、腿）来满足你，以换取你的安抚。"
-            elif mood.pleasure > 5:
-                cycle_desc = f"{cycle_base_desc} 【情感依赖】因为你的安抚，她现在感到很安心。痛楚还在，但她只想粘着你，像只小猫一样蹭你。"
-            elif mood.dominance < -5:
-                cycle_desc = f"{cycle_base_desc} 【脆弱崩溃】疼痛让她变得极度脆弱，可能会哭着求你抱抱，完全失去了平日的冷静，会无条件顺从你的温和指令。"
-            else:
-                cycle_desc = cycle_base_desc # 保持默认拒绝
-        else:
-            cycle_desc = cycle_base_desc
-            
-        # 体力描述
-        stamina_desc = ""
-        if bio.stamina < 20:
-            stamina_desc = "【濒死】体力耗尽，意识模糊，几乎无法做出反应，只能发出单音节。"
-        elif bio.stamina < 40:
-            stamina_desc = "【极度疲惫】只想躺着，说话简短，拒绝任何消耗体力的活动。"
-        elif bio.stamina < 60:
-            stamina_desc = "【疲倦】有些累了，反应会慢半拍。"
-            
-        # === 2. 情绪描述 ===
+        # === 2. Mood Description ===
         mood_desc = mood.get_description()
         
-        # === 3. 欲望描述与动态突破 ===
-        lust_desc = ""
-        # 只要 Lust > 30 或者有一定敏感度就显示，便于 AI 铺垫
-        if bio.lust > 30 or bio.sensitivity > 20:
-            lvl, title, sens_desc = bio.get_sensitivity_level()
-            lust_desc = f"\n- **Desire**: [{title} Lv.{lvl}] Lust:{bio.lust:.0f}%。"
-            
-            # 动态状态判定
-            if bio.lust > 80:
-                if bio.sensitivity < 25: # 低敏感度的突破
-                    lust_desc += "\n  **状态**: 【理智崩坏】身体产生了陌生的燥热，虽然理智在抗拒，但眼神出卖了渴望。她可能会对你的过分要求半推半就，甚至在潜意识里期待被强行突破。"
-                else:
-                    lust_desc += "\n  **状态**: 眼神迷离，呼吸急促，难以集中注意力。全身都在渴望被触碰，几乎无法拒绝任何要求。"
-            elif bio.lust > 50:
-                if mood.dominance < -2: # 顺从/弱气
-                    lust_desc += "\n  **状态**: 隐约的躁动，但不敢表达，只是用湿润的眼神看着你，等待你的主动。"
-                else:
-                    lust_desc += "\n  **状态**: 感到身体有些发热，对肢体接触变得敏感。"
-            
-            # 补充敏感度描述（仅在高Lust或特定情境下强调）
-            if bio.lust > 40:
-                lust_desc += f"\n  *{sens_desc}*"
+        # === 3. Desire & State Arbitration (v3.1 Time-Desire Cycle) ===
+        # 获取基础信息
+        sex_phase, hours_since = bio.get_sexual_phase()
         
-        # === 4. 极端情绪组合 (Crisis Mode) ===
-        # 心情极差 + 掌控感极低 -> 自暴自弃/寻求发泄
-        if mood.pleasure < -5 and mood.dominance < -5 and bio.lust > 30:
-            lust_desc += "\n  **特殊状态**: 【自暴自弃】心情极差且感到无助，想要寻找发泄口。可能会为了逃避现实的痛苦，而沉溺于肉体的快感，甚至主动诱导你粗暴对待她。"
+        if bio.sensitivity > 10:
+            lvl, title, _ = bio.get_sensitivity_level()
+            desire_header = f"- **Desire**: [{title} Lv.{lvl}] Lust:{bio.lust:.0f}%"
+        else:
+            desire_header = f"- **Desire**: [Lust:{bio.lust:.0f}%]"
+            
+        state_text = ""
+        
+        # --- Hierarchy Level 1: Physiological Override (Conditional Lock) ---
+        # 剧痛(经期前两天且心情差) 或 极度虚弱 (<10)
+        # v3.1 Update: 不再完全锁死，允许特殊交互
+        is_hard_lock = False
+        
+        # 优先处理贤者时间 (Refractory)
+        if sex_phase == "Refractory":
+            state_text = (
+                "  **状态**: 【贤者时间 (Refractory Period)】\n"
+                "  刚刚经历过高潮释放，身体极度敏感且疲惫。此刻 Lust 暂时失效，她不需要更多的性刺激，"
+                "只需要安静的拥抱、温存和清理。如果强行继续，她会感到不适甚至抗拒。"
+            )
+            is_hard_lock = True # 贤者时间也是一种软性锁
+            
+        elif (cycle_phase == "Menstrual" and bio.get_current_pain_level() > 0.5 and mood.pleasure < -2):
+            # 痛经锁：痛感等级 > 0.5 且心情差时触发
+            # 拒绝阴道性交，但如果 Lust 高，允许其他方式
+            if bio.lust > 50:
+                 state_text = (
+                    "  **状态**: 【生理不适 (Pain)】\n"
+                    "  剧烈的痛经让她无法接受常规性行为（拒绝 Vaginal Sex）。但因为欲望并未完全消失，"
+                    "如果用户主动引导，她愿意尝试**用嘴、胸部或大腿**来满足你，作为一种寻求安抚的交换。\n"
+                    "  *(System: Refuse vaginal entry. Allow Oral/Paizuri/Handjob if treated gently.)*"
+                 )
+            else:
+                is_hard_lock = True
+                state_text = (
+                    "  **状态**: 【生理压制 (Pain Block)】\n"
+                    "  剧烈的生理痛楚压倒了一切。她现在处于‘防御模式’，拒绝任何性接触。只想要热源、安抚和休息。"
+                )
+        
+        elif bio.stamina < 10:
+             # 体力锁：意识模糊，但不是完全拒绝
+             state_text = (
+                 "  **状态**: 【意识模糊 (Delirious Compliance)】\n"
+                 "  体力彻底透支，连手指都不想动。她无法主动做出任何反应，但也不会反抗你的摆布。"
+                 "像一个失去发条的人偶，任由你处置（Doll Mode）。如果被强行索取，只会发出微弱的哼声。"
+             )
+             
+        # --- Hierarchy Level 2: Mind Break (Extreme Lust) ---
+        # 仅在没有生理硬锁时触发
+        elif bio.lust > 95:
+             state_text = (
+                 "  **状态**: 【理智崩坏 (Mind Break)】\n"
+                 "  欲望突破了临界点。理智逻辑已下线，只剩下原始的求欢本能。"
+                 "语言能力退化，可能只会重复简单的词汇或呻吟。"
+             )
 
-        injection = (
-            f"\n\n## [System Status - Realtime]\n"
-            f"- **Physical**: Day {bio.cycle_day} ({cycle_phase}). {cycle_desc} {stamina_desc}\n"
-            f"- **Mood**: {mood_desc}\n"
-            f"{lust_desc}"
-        )
+        # --- Hierarchy Level 3: Resonance Fields (Flavor Matrix) ---
+        # Lust 进入活跃区 (>40) 或 处于特殊阶段 (Afterglow/Starved)
+        elif bio.lust > 40 or sex_phase in ["Afterglow", "Starved"]:
+            # 获取基于 PAD 象限的风味
+            flavor = mood.get_resonance_flavor()
+            f_role = flavor["role"]
+            f_desc = flavor["desc"]
+            
+            # 特殊阶段修正
+            if sex_phase == "Afterglow":
+                 state_text = (
+                     f"  **状态**: 【后戏余韵 (Afterglow) - {f_role}】\n"
+                     f"  高潮后的余韵尚未散去。虽然主要的欲望已释放，但她仍处于情感开放状态。"
+                     f"  {f_desc.replace('主动挑逗', '慵懒地回味').replace('想要', '享受被')} "
+                     f"  (重点：她现在需要与其情绪底色相符的**情感确认 (Aftercare)**。)"
+                 )
+            elif sex_phase == "Starved" and bio.lust > 50:
+                 state_text = (
+                     f"  **状态**: 【极度匮乏 (Starved) - {f_role}】\n"
+                     f"  已经很久（>7天）没有得到释放了。这种长期的压抑让她的忍耐力降至冰点。"
+                     f"  {f_desc} "
+                     f"  (注意：她的反应会比平时更激烈、更急切，仿佛在试图弥补失去的时间。)"
+                 )
+            else:
+                # 经期修正 (Case B: Lust Dominates)
+                if cycle_phase == "Menstrual":
+                     # 动态修正生理描述
+                    if "拒绝" in cycle_base_desc:
+                        cycle_base_desc = cycle_base_desc.split("拒绝")[0] + "身体虽有不适，但被欲望掩盖。"
+                    f_desc = f"生理期的不适感依然存在，但这反而刺激了她的神经。{f_desc} (注意：她不敢进行插入式性行为，但渴望边缘性行为。)"
+                
+                # 组合描述
+                state_text = (
+                    f"  **状态**: {f_role}\n"
+                    f"  {f_desc}"
+                )
+            
+            # 易感性/阻抗修正显示
+            modifiers = []
+            if mood.arousal > 3.0: modifiers.append("高激活(易感性+20%)")
+            if mood.pleasure > 5.0: modifiers.append("高愉悦(阻抗降低)")
+            if mood.dominance < -5.0: modifiers.append("低掌控(绝对顺从)")
+            if sex_phase == "Starved": modifiers.append("长期匮乏(急切度+++)")
+            
+            if modifiers:
+                state_text += f"\n  *(Modifiers: {', '.join(modifiers)})*"
+
+        # --- Hierarchy Level 4: Base State ---
+        else:
+             if mood.dominance < -3:
+                 state_text = "  **状态**: 温顺。没有明显的性冲动，但乐意回应你的亲昵。"
+             elif mood.dominance > 3:
+                 state_text = "  **状态**: 独立。专注于当前的话题或事务，对性暗示不敏感。"
+             else:
+                 state_text = "  **状态**: 平常。对性持开放态度，视氛围而定。"
         
-        return injection
+        # 特殊：复合场景检测 (Composite Scenarios)
+        # 深夜宣泄
+        current_hour = datetime.now().hour
+        if current_hour >= 23 and mood.pleasure < -3 and bio.lust > 60 and not is_hard_lock:
+             state_text = (
+                 "  **特殊场景**: 【深夜的宣泄 (The Night Vent)】\n"
+                 "  深夜的焦虑像虫子一样啃食着神经。她现在不需要温柔的前戏，她需要**疼痛和窒息感**来覆盖心里的烦躁。"
+                 "可能会挑衅你，诱导你粗暴地对待她。"
+             )
+
+        return (
+            f"\n\n## [System Status - Realtime]\n"
+            f"- **Physical**: Day {bio.cycle_day} ({cycle_phase}). {cycle_base_desc} {stamina_desc}\n"
+            f"- **Mood**: {mood_desc}\n"
+            f"{desire_header}\n"
+            f"{state_text}"
+        )
+
+    def _get_stamina_desc(self, stamina: float) -> str:
+        if stamina < 10:
+            return "【意识模糊】困到极致，大脑几乎停止思考，说话可能会语无伦次，随时会断片。"
+        elif stamina < 25:
+            return "【体力透支】非常累，连手指都不想动。只想被抱着睡觉，对外界刺激反应迟钝。"
+        elif stamina < 45:
+            return "【非常疲惫】经过高强度活动后的疲劳感。不想进行复杂的思考或对话，渴望休息。"
+        elif stamina < 65:
+            return "【有些累了】正常的劳累感。虽然还能坚持，但兴致不高，动作会变慢。"
+        elif stamina < 85:
+            return "【精神尚可】正常的日常状态。"
+        else:
+            return "【活力充沛】精神饱满，思维活跃，想要找点更有趣的事情做。"
 
 # 全局单例访问点
 state_manager = TexasStateManager()
