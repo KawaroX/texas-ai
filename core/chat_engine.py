@@ -186,8 +186,6 @@ class ChatEngine:
         image_description = None
         image_caption = None
         if has_image_marker:
-            import re
-
             # 查找 [IMAGE_DESCRIPTION:xxx] 格式
             description_pattern = r"\[IMAGE_DESCRIPTION:([^\]]+)\]"
             description_match = re.search(description_pattern, full_response)
