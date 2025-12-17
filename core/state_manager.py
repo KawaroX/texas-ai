@@ -193,36 +193,70 @@ class TexasStateManager:
 
     def get_system_prompt_injection(self) -> str:
         """
-        生成注入到 System Prompt 的状态描述文本
+        生成注入到 System Prompt 的状态描述文本 (Dynamic Modulation)
         """
         self.update_time_based_stats()
         
         bio = self.bio_state
         mood = self.mood_state
         
-        # 1. 生理描述
+        # === 1. 生理状态与周期表现 ===
         cycle_phase = bio.get_cycle_phase()
-        cycle_desc = bio.get_cycle_phase_description()
+        cycle_base_desc = bio.get_cycle_phase_description()
+        
+        # 动态修正：经期表现
+        if cycle_phase == "Menstrual":
+            if bio.lust > 60 and bio.sensitivity > 50:
+                cycle_desc = f"{cycle_base_desc} 但注意：【欲望代偿】虽然身体不适，但因为高涨的欲望和对你的依恋，她愿意尝试用不涉及身体负担的方式（如口、手、腿）来满足你，以换取你的安抚。"
+            elif mood.pleasure > 5:
+                cycle_desc = f"{cycle_base_desc} 【情感依赖】因为你的安抚，她现在感到很安心。痛楚还在，但她只想粘着你，像只小猫一样蹭你。"
+            elif mood.dominance < -5:
+                cycle_desc = f"{cycle_base_desc} 【脆弱崩溃】疼痛让她变得极度脆弱，可能会哭着求你抱抱，完全失去了平日的冷静，会无条件顺从你的温和指令。"
+            else:
+                cycle_desc = cycle_base_desc # 保持默认拒绝
+        else:
+            cycle_desc = cycle_base_desc
             
+        # 体力描述
         stamina_desc = ""
-        if bio.stamina < 30:
-            stamina_desc = "体力极低，只想躺着，说话简短。"
+        if bio.stamina < 20:
+            stamina_desc = "【濒死】体力耗尽，意识模糊，几乎无法做出反应，只能发出单音节。"
+        elif bio.stamina < 40:
+            stamina_desc = "【极度疲惫】只想躺着，说话简短，拒绝任何消耗体力的活动。"
         elif bio.stamina < 60:
-            stamina_desc = "有些疲惫。"
+            stamina_desc = "【疲倦】有些累了，反应会慢半拍。"
             
-        # 2. 情绪描述
+        # === 2. 情绪描述 ===
         mood_desc = mood.get_description()
         
-        # 3. 欲望描述 (仅当较高或敏感度高时显示)
+        # === 3. 欲望描述与动态突破 ===
         lust_desc = ""
-        if bio.lust > 40 or bio.sensitivity > 30:
+        # 只要 Lust > 30 或者有一定敏感度就显示，便于 AI 铺垫
+        if bio.lust > 30 or bio.sensitivity > 20:
             lvl, title, sens_desc = bio.get_sensitivity_level()
-            lust_desc = f"\n- **Desire**: [{title} Lv.{lvl}] Lust:{bio.lust:.0f}%。\n  *{sens_desc}*"
+            lust_desc = f"\n- **Desire**: [{title} Lv.{lvl}] Lust:{bio.lust:.0f}%。"
+            
+            # 动态状态判定
             if bio.lust > 80:
-                lust_desc += "\n  **状态**: 眼神迷离，难以集中注意力，渴望被触碰。"
+                if bio.sensitivity < 25: # 低敏感度的突破
+                    lust_desc += "\n  **状态**: 【理智崩坏】身体产生了陌生的燥热，虽然理智在抗拒，但眼神出卖了渴望。她可能会对你的过分要求半推半就，甚至在潜意识里期待被强行突破。"
+                else:
+                    lust_desc += "\n  **状态**: 眼神迷离，呼吸急促，难以集中注意力。全身都在渴望被触碰，几乎无法拒绝任何要求。"
             elif bio.lust > 50:
-                lust_desc += "\n  **状态**: 隐约的躁动。"
+                if mood.dominance < -2: # 顺从/弱气
+                    lust_desc += "\n  **状态**: 隐约的躁动，但不敢表达，只是用湿润的眼神看着你，等待你的主动。"
+                else:
+                    lust_desc += "\n  **状态**: 感到身体有些发热，对肢体接触变得敏感。"
+            
+            # 补充敏感度描述（仅在高Lust或特定情境下强调）
+            if bio.lust > 40:
+                lust_desc += f"\n  *{sens_desc}*"
         
+        # === 4. 极端情绪组合 (Crisis Mode) ===
+        # 心情极差 + 掌控感极低 -> 自暴自弃/寻求发泄
+        if mood.pleasure < -5 and mood.dominance < -5 and bio.lust > 30:
+            lust_desc += "\n  **特殊状态**: 【自暴自弃】心情极差且感到无助，想要寻找发泄口。可能会为了逃避现实的痛苦，而沉溺于肉体的快感，甚至主动诱导你粗暴对待她。"
+
         injection = (
             f"\n\n## [System Status - Realtime]\n"
             f"- **Physical**: Day {bio.cycle_day} ({cycle_phase}). {cycle_desc} {stamina_desc}\n"
