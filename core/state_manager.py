@@ -201,6 +201,9 @@ class TexasStateManager:
         bio = self.bio_state
         mood = self.mood_state
         
+        # === v3.5 Linguistic Style ===
+        ling_style = mood.get_linguistic_style()
+        
         # === 1. Physical Description ===
         cycle_phase = bio.get_cycle_phase()
         cycle_base_desc = bio.get_cycle_phase_description()
@@ -356,6 +359,7 @@ class TexasStateManager:
             f"\n\n## [System Status - Realtime]\n"
             f"- **Physical**: Day {bio.cycle_day} ({cycle_phase}). {cycle_base_desc} {stamina_desc}\n"
             f"- **Mood**: {mood_desc}\n"
+            f"- **Conversation Style**:\n  {ling_style}\n"
             f"{desire_header}\n"
             f"{state_text}"
         )

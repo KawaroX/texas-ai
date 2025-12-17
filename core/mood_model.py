@@ -146,6 +146,39 @@ class MoodState(BaseModel):
 
         return flavor
 
+    def get_linguistic_style(self) -> str:
+        """
+        获取基于情绪的语言风格指南 (v3.5 Linguistic Style Modifiers)
+        用于指导 AI 的日常对话风格（句法、用词、互动意愿）
+        """
+        style_parts = []
+        
+        # 1. Arousal -> 句法结构 (Syntax & Pace)
+        if self.arousal > 3.0:
+            style_parts.append("**Syntax**: Fast-paced. Short sentences. Frequent use of exclamation marks(!).")
+        elif self.arousal < -3.0:
+            style_parts.append("**Syntax**: Slow-paced. Long, winding sentences. Frequent use of ellipses(...). Lazy articulation.")
+        else:
+            style_parts.append("**Syntax**: Normal pace. Balanced sentence structure.")
+            
+        # 2. Pleasure -> 词汇选择 (Vocabulary & Tone)
+        if self.pleasure > 3.0:
+            style_parts.append("**Tone**: Positive, warm, appreciative. Uses words like 'love', 'great', 'happy'.")
+        elif self.pleasure < -3.0:
+            style_parts.append("**Tone**: Negative, critical, or sarcastic. Uses biting words, complaints, or cold detachment.")
+        else:
+            style_parts.append("**Tone**: Neutral, objective, or mildly polite.")
+            
+        # 3. Dominance -> 交互意愿 (Engagement & Assertiveness)
+        if self.dominance > 3.0:
+            style_parts.append("**Engagement**: Assertive. Initiates topics. Uses imperatives or direct questions. Confident.")
+        elif self.dominance < -3.0:
+            style_parts.append("**Engagement**: Passive. Follows the user's lead. Uses hedging words (maybe, um..). Seeks approval.")
+        else:
+            style_parts.append("**Engagement**: Cooperative. Equal partner in conversation.")
+            
+        return "\n  ".join(style_parts)
+
     def get_diurnal_damping(self, current_hour: int) -> float:
         """
         获取昼夜情绪阻尼系数
