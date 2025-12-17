@@ -213,11 +213,9 @@ class TexasStateManager:
         # 获取基础信息
         sex_phase, hours_since = bio.get_sexual_phase()
         
-        if bio.sensitivity > 10:
-            lvl, title, _ = bio.get_sensitivity_level()
-            desire_header = f"- **Desire**: [{title} Lv.{lvl}] Lust:{bio.lust:.0f}%"
-        else:
-            desire_header = f"- **Desire**: [Lust:{bio.lust:.0f}%]"
+        # v3.4 Fix: 无论等级高低，都显示敏感度称号
+        lvl, title, _ = bio.get_sensitivity_level()
+        desire_header = f"- **Desire**: [{title} Lv.{lvl}] Lust:{bio.lust:.0f}%"
             
         state_text = ""
         
@@ -285,11 +283,15 @@ class TexasStateManager:
 
         # --- Hierarchy Level 3: Resonance Fields (Flavor Matrix) ---
         # Lust 进入活跃区 (>40) 或 处于特殊阶段 (Afterglow/Starved)
+        # v3.4 Update: 使用 4x7 Lust 描述矩阵作为基底
         elif bio.lust > 40 or sex_phase in ["Afterglow", "Starved"]:
-            # 获取基于 PAD 象限的风味
+            # 1. 获取基础欲望描述 (Based on Sensitivity & Lust Tier)
+            lust_base_desc = bio.get_lust_tier_description()
+            
+            # 2. 获取基于 PAD 象限的风味 (Flavor)
             flavor = mood.get_resonance_flavor()
             f_role = flavor["role"]
-            f_desc = flavor["desc"]
+            f_desc = flavor["desc"] # 这是基于心情的修饰，如"傲娇地..."
             
             # 特殊阶段修正
             if sex_phase == "Afterglow":
@@ -302,8 +304,8 @@ class TexasStateManager:
             elif sex_phase == "Starved" and bio.lust > 50:
                  state_text = (
                      f"  **状态**: 【极度匮乏 (Starved) - {f_role}】\n"
-                     f"  已经很久（>7天）没有得到释放了。这种长期的压抑让她的忍耐力降至冰点。"
-                     f"  {f_desc} "
+                     f"  已经很久（>7天）没有得到释放了。{lust_base_desc}"
+                     f"  这种长期的压抑让她的忍耐力降至冰点。{f_desc} "
                      f"  (注意：她的反应会比平时更激烈、更急切，仿佛在试图弥补失去的时间。)"
                  )
             else:
@@ -314,10 +316,11 @@ class TexasStateManager:
                         cycle_base_desc = cycle_base_desc.split("拒绝")[0] + "身体虽有不适，但被欲望掩盖。"
                     f_desc = f"生理期的不适感依然存在，但这反而刺激了她的神经。{f_desc} (注意：她不敢进行插入式性行为，但渴望边缘性行为。)"
                 
-                # 组合描述
+                # 组合描述 v3.4: Lust Tier Desc + Mood Flavor
                 state_text = (
                     f"  **状态**: {f_role}\n"
-                    f"  {f_desc}"
+                    f"  {lust_base_desc}\n"
+                    f"  **表现风格**: {f_desc}"
                 )
             
             # 易感性/阻抗修正显示
