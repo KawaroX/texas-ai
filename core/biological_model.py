@@ -26,6 +26,7 @@ class BiologicalState(BaseModel):
     sensitivity: float = Field(default=0.0, ge=0.0, le=100.0, description="敏感度/开发度 (0-100)，不可逆积累")
     
     last_release_time: float = Field(default=0.0, description="上次释放(高潮)的时间戳")
+    last_actual_release_time: float = Field(default=0.0, description="上次成功记录的释放时间戳 (用于防止重复触发)")
     last_updated: float = Field(default_factory=time.time, description="最后更新时间戳")
 
     def __init__(self, **data):
@@ -229,7 +230,15 @@ class BiologicalState(BaseModel):
     def get_lust_modifier(self) -> float:
         """获取基于周期和敏感度的 Lust 获取率修正系数"""
         modifier = 1.0
-        
+
+        # v3.7 贤者时间影响：根据敏感度动态调整抑制系数
+        sex_phase, _ = self.get_sexual_phase()
+        if sex_phase == "Refractory":
+            # 贤者时间基础抑制系数：从0.1（低敏感）到1.0（高敏感）线性增长
+            # 公式：0.1 + (sensitivity / 100) * 0.9
+            refractory_multiplier = 0.1 + (self.sensitivity / 100.0) * 0.9
+            modifier *= refractory_multiplier
+
         # 周期影响
         phase = self.get_cycle_phase()
         if phase == "Ovulation":
@@ -244,7 +253,7 @@ class BiologicalState(BaseModel):
         if level == 0: modifier *= 0.5
         elif level == 1: modifier *= 0.8
         elif level >= 3: modifier *= (1.0 + (level - 2) * 0.2) # Lv3: 1.2, Lv4: 1.4...
-        
+
         return modifier
 
     def update_time_passage(self, hours_passed: float):

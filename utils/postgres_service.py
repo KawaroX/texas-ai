@@ -968,3 +968,81 @@ def delete_intimacy_record(record_id: str) -> bool:
             return cur.rowcount > 0
     finally:
         conn.close()
+
+def get_latest_intimacy_record(within_seconds: int = 600) -> dict:
+    """
+    获取最近的亲密记录（在指定时间窗口内）
+    Args:
+        within_seconds: 时间窗口（秒），默认600秒（10分钟）
+    Returns:
+        最近的记录字典，如果没有则返回None
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, recorded_at, trigger_type, body_part, act_type, summary, full_story, tags, intensity
+                FROM intimacy_records
+                WHERE recorded_at > NOW() - INTERVAL '%s seconds'
+                ORDER BY recorded_at DESC
+                LIMIT 1;
+                """,
+                (within_seconds,)
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    'id': str(row[0]),
+                    'recorded_at': row[1].isoformat(),
+                    'trigger_type': row[2],
+                    'body_part': row[3],
+                    'act_type': row[4],
+                    'summary': row[5],
+                    'full_story': row[6],
+                    'tags': row[7],
+                    'intensity': row[8]
+                }
+            return None
+    finally:
+        conn.close()
+
+def update_intimacy_record(record_id: str, record_data: dict) -> bool:
+    """
+    更新亲密记录（用于防抖期内的CG替换）
+    Args:
+        record_id: 记录ID
+        record_data: 新的记录数据
+    Returns:
+        是否更新成功
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE intimacy_records
+                SET trigger_type = %s,
+                    body_part = %s,
+                    act_type = %s,
+                    summary = %s,
+                    full_story = %s,
+                    tags = %s,
+                    intensity = %s,
+                    recorded_at = NOW()
+                WHERE id = %s;
+                """,
+                (
+                    record_data.get('trigger_type', 'release'),
+                    record_data.get('body_part', 'Unknown'),
+                    record_data.get('act_type', 'Unknown'),
+                    record_data.get('summary', ''),
+                    record_data.get('full_story', ''),
+                    json.dumps(record_data.get('tags', []), ensure_ascii=False),
+                    record_data.get('intensity', 1),
+                    record_id
+                ),
+            )
+            return cur.rowcount > 0
+    finally:
+        conn.close()

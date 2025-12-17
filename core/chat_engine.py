@@ -8,7 +8,12 @@ from core.context_merger import merge_context
 from services.ai_service import stream_ai_chat, analyze_intimacy_event
 from core.persona import get_texas_system_prompt
 from core.state_manager import state_manager
-from utils.postgres_service import init_intimacy_table, insert_intimacy_record
+from utils.postgres_service import (
+    init_intimacy_table,
+    insert_intimacy_record,
+    get_latest_intimacy_record,
+    update_intimacy_record
+)
 import re
 
 
@@ -19,23 +24,37 @@ class ChatEngine:
     async def _process_release_event(self, context_messages: list):
         """
         处理释放事件：分析并存储记录 (CG Gallery)
+        v3.7: 支持防抖期内的CG替换逻辑
         """
         try:
             logger.info("[chat_engine] 开始处理 Release 事件记录...")
-            
+
             # 1. 确保表存在
             init_intimacy_table()
-            
+
             # 2. 调用 AI 分析
             analysis = await analyze_intimacy_event(context_messages)
             if not analysis:
                 logger.warning("[chat_engine] 亲密事件分析失败")
                 return
-                
-            # 3. 存储记录
-            record_id = insert_intimacy_record(analysis)
-            logger.info(f"[chat_engine] 亲密事件已记录: ID={record_id}, Summary={analysis.get('summary')}")
-            
+
+            # 3. v3.7 防抖逻辑：检查是否有最近的记录（10分钟内）
+            COOLDOWN_SECONDS = 600
+            latest_record = get_latest_intimacy_record(within_seconds=COOLDOWN_SECONDS)
+
+            if latest_record:
+                # 在防抖期内，替换最近的CG记录
+                record_id = latest_record['id']
+                success = update_intimacy_record(record_id, analysis)
+                if success:
+                    logger.info(f"[chat_engine] ✅ CG记录已替换 (防抖): ID={record_id}, Summary={analysis.get('summary')}")
+                else:
+                    logger.warning(f"[chat_engine] ⚠️ CG记录替换失败: ID={record_id}")
+            else:
+                # 不在防抖期内，插入新记录
+                record_id = insert_intimacy_record(analysis)
+                logger.info(f"[chat_engine] ✅ CG记录已新建: ID={record_id}, Summary={analysis.get('summary')}")
+
         except Exception as e:
             logger.error(f"[chat_engine] 处理 Release 事件失败: {e}", exc_info=True)
 

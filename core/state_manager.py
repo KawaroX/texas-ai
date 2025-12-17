@@ -2,6 +2,7 @@ import json
 import time
 from datetime import datetime
 from typing import Optional, Dict, Any
+import random
 from utils.logging_config import get_logger
 from utils.redis_manager import get_redis_client
 from .biological_model import BiologicalState
@@ -178,17 +179,32 @@ class TexasStateManager:
             
         # 3. 处理释放 (Release)
         if release:
-            # 释放逻辑：Lust归零，P大幅上升，体力大幅下降，敏感度微涨
+            # v3.7 Release Debounce: 防止短时间内重复触发
+            COOLDOWN_SECONDS = 600 # 10分钟内只记录一次高潮
+            if (time.time() - self.bio_state.last_actual_release_time) < COOLDOWN_SECONDS:
+                logger.info("[StateManager] 释放被防抖机制拦截 (短时间内重复触发)")
+                return # 忽略情绪和体力变动（CG替换逻辑在ai_service处理）
+
             logger.info("[StateManager] 触发释放 (Release/Climax)")
             self.bio_state.lust = 0.0
             self.mood_state.pleasure = min(10.0, self.mood_state.pleasure + 5.0)
             self.mood_state.arousal = max(-5.0, self.mood_state.arousal - 5.0) # 贤者模式：平静
             self.bio_state.stamina = max(0.0, self.bio_state.stamina - 30.0) # 体力透支
-            self.bio_state.last_release_time = time.time() # 记录释放时间
+            self.bio_state.last_actual_release_time = time.time() # 更新实际释放时间
             
-            # 敏感度成长 (0.5 - 2.0 随机或固定)
-            growth = 1.0
+            # v3.6 敏感度成长: 动态且可变
+            base_growth = random.uniform(1.0, 5.0) # 基础成长值在 1.0 到 5.0 之间随机
+            growth_multiplier = 1.0
+            
+            # 月经状态下突破防线，敏感度增长系数更高
+            if self.bio_state.get_cycle_phase() == "Menstrual" and self.bio_state.get_current_pain_level() > 0.3:
+                # 痛感等级 > 0.3 且在经期，突破防线敏感度成长更高
+                growth_multiplier = random.uniform(1.1, 1.3) # 乘 1.1-1.3 的系数
+                logger.info(f"[StateManager] 经期突破，敏感度成长乘数: {growth_multiplier:.2f}")
+
+            growth = base_growth * growth_multiplier
             self.bio_state.sensitivity = min(100.0, self.bio_state.sensitivity + growth)
+            logger.info(f"[StateManager] 敏感度增长: +{growth:.2f}, 当前: {self.bio_state.sensitivity:.2f}")
             
         self.save_state()
 
