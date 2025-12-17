@@ -292,7 +292,8 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8000';
+        // 使用相对路径，自动适配当前域名
+        const API_BASE = window.location.origin;
         let currentState = null;
         let currentPage = 0;
         const pageSize = 10;
