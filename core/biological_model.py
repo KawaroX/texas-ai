@@ -72,7 +72,7 @@ class BiologicalState(BaseModel):
             modifier *= 1.1 # 经前渴望与烦躁并存
 
         # 敏感度影响
-        level, _ = self.get_sensitivity_level()
+        level, _, _ = self.get_sensitivity_level()
         if level == 0: modifier *= 0.5
         elif level == 1: modifier *= 0.8
         elif level >= 3: modifier *= (1.0 + (level - 2) * 0.2) # Lv3: 1.2, Lv4: 1.4...
