@@ -55,7 +55,7 @@ from .image_providers import (
 # ============================================================
 # 图片生成模型配置 - 直接在这里修改模型选择
 # ============================================================
-IMAGE_PROVIDER = "gemini"  # 可选值: "gemini" 或 "seedream"
+IMAGE_PROVIDER = "seedream"  # 可选值: "gemini" 或 "seedream"
 # ============================================================
 
 IMAGE_SAVE_DIR = "/app/generated_content/images"  # 在 Docker 容器内的路径

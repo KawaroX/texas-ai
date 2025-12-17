@@ -14,8 +14,8 @@ from datetime import datetime
 # API 配置 - 场景分析使用高级模型以获得更好的分析质量
 STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
 STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", "https://yunwu.ai/v1/chat/completions")
-# 固定使用 gpt-5-chat-latest 高级模型进行场景分析
-SCENE_ANALYZER_MODEL = "gpt-5-chat-latest"
+# 使用 grok-4-1-fast-reasoning 进行场景分析（支持结构化输出 + 推理能力）
+SCENE_ANALYZER_MODEL = "grok-4-1-fast-reasoning"
 
 logger.info(f"[scene_analyzer] 场景分析配置：URL={STRUCTURED_API_URL}, 场景分析模型={SCENE_ANALYZER_MODEL}")
 
