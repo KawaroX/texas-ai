@@ -34,7 +34,8 @@ class InstantImageGenerator:
         user_id: str,
         image_type: Optional[str] = None,  # "selfie"|"scene"|None(自动判断)
         context_window_minutes: int = 3,
-        max_messages: int = 25
+        max_messages: int = 25,
+        image_description: Optional[str] = None
     ) -> Dict:
         """
         生成即时图片的完整流程
@@ -45,6 +46,7 @@ class InstantImageGenerator:
             image_type: 强制指定图片类型
             context_window_minutes: 上下文时间窗口
             max_messages: 最大消息数
+            image_description: (可选) AI直接生成的图片描述，如果提供则跳过场景分析
 
         Returns:
             {
@@ -77,7 +79,8 @@ class InstantImageGenerator:
                 include_assistant=True
             )
 
-            if not recent_messages or len(recent_messages) < 2:
+            # 如果没有image_description，则必须要有足够的上下文
+            if not image_description and (not recent_messages or len(recent_messages) < 2):
                 logger.warning("[instant_image] 未找到足够的最近对话，无法生成图片")
                 return {
                     "success": False,
@@ -86,29 +89,58 @@ class InstantImageGenerator:
                 }
 
             # 3. 构建场景数据
-            scene_data = self._build_scene_data(recent_messages, channel_id)
+            if image_description:
+                scene_content = image_description
+                logger.info(f"[instant_image] 使用AI直接生成的图片描述，跳过上下文拼接")
+            else:
+                # 格式化对话为场景描述
+                scene_content = self.context_extractor.format_context_for_scene(recent_messages)
+
+            scene_data = {
+                "id": str(uuid.uuid4()),
+                "content": scene_content,
+                "timestamp": datetime.now().isoformat(),
+                "channel_id": channel_id,
+                "source": "instant_generation"
+            }
 
             # 4. 判断图片类型（selfie vs scene）
-            is_selfie = self._determine_image_type(image_type, recent_messages)
+            if image_description and ("自拍" in image_description or "selfie" in image_description.lower()):
+                is_selfie = True
+                logger.info(f"[instant_image] 从描述中检测到自拍类型")
+            else:
+                is_selfie = self._determine_image_type(image_type, recent_messages or [])
 
             logger.info(f"[instant_image] 图片类型: {'自拍' if is_selfie else '场景'}")
 
-            # 5. AI场景预分析（复用现有逻辑）
-            logger.debug("[instant_image] 开始场景预分析")
-            analysis_result = await self.scene_analyzer(
-                scene_data=scene_data,
-                is_selfie=is_selfie
-            )
-
-            if not analysis_result:
-                logger.error("[instant_image] 场景预分析失败")
-                return {
-                    "success": False,
-                    "error": "场景分析失败",
-                    "generation_time": (datetime.now() - start_time).total_seconds()
+            # 5. 场景分析
+            if image_description:
+                # 如果有直接描述，跳过昂贵的AI预分析
+                logger.info("[instant_image] 使用AI直接描述，跳过ScenePreAnalyzer")
+                # 构造基础的分析结果
+                analysis_result = {
+                    "characters": [],  # 让image_service自己去检测或回退
+                    "recommended_image_size": "1080x1920" if is_selfie else "3840x2160",
+                    # 标记这是直接描述，避免后续逻辑过度处理
+                    "is_direct_description": True
                 }
+            else:
+                # AI场景预分析（复用现有逻辑）
+                logger.debug("[instant_image] 开始场景预分析")
+                analysis_result = await self.scene_analyzer(
+                    scene_data=scene_data,
+                    is_selfie=is_selfie
+                )
 
-            logger.debug(f"[instant_image] 场景分析完成: {len(analysis_result.get('characters', []))}个角色")
+                if not analysis_result:
+                    logger.error("[instant_image] 场景预分析失败")
+                    return {
+                        "success": False,
+                        "error": "场景分析失败",
+                        "generation_time": (datetime.now() - start_time).total_seconds()
+                    }
+
+                logger.debug(f"[instant_image] 场景分析完成: {len(analysis_result.get('characters', []))}个角色")
 
             # 6. 生成图片（复用现有逻辑）
             # 获取场景描述文本

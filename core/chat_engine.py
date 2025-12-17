@@ -156,10 +156,21 @@ class ChatEngine:
                     segments_list[i] = seg.replace(event_marker, "")
                     logger.info(f"[chat_engine] 从segment {i} 中移除事件标记")
 
-        # 提取图片附言（如果有的话）
+        # 提取图片描述和附言（如果有的话）
+        image_description = None
         image_caption = None
         if has_image_marker:
             import re
+
+            # 查找 [IMAGE_DESCRIPTION:xxx] 格式
+            description_pattern = r'\[IMAGE_DESCRIPTION:([^\]]+)\]'
+            description_match = re.search(description_pattern, full_response)
+            if description_match:
+                image_description = description_match.group(1).strip()
+                logger.info(f"[chat_engine] 提取到AI生成的图片描述: {image_description[:100]}...")
+            else:
+                logger.warning(f"[chat_engine] 未找到图片描述标记，将使用默认场景分析")
+
             # 查找 [IMAGE_CAPTION:xxx] 格式
             caption_pattern = r'\[IMAGE_CAPTION:([^\]]+)\]'
             caption_match = re.search(caption_pattern, full_response)
@@ -167,11 +178,14 @@ class ChatEngine:
                 image_caption = caption_match.group(1).strip()
                 logger.info(f"[chat_engine] 提取到AI生成的图片附言: {image_caption}")
 
-            # 移除图片标记和附言标记
+            # 移除图片标记、描述标记和附言标记
             for i, seg in enumerate(segments_list):
                 if image_marker in seg:
                     segments_list[i] = seg.replace(image_marker, "")
                     logger.info(f"[chat_engine] 从segment {i} 中移除图片标记")
+                if description_match and description_match.group(0) in seg:
+                    segments_list[i] = seg.replace(description_match.group(0), "")
+                    logger.info(f"[chat_engine] 从segment {i} 中移除图片描述标记")
                 if caption_match and caption_match.group(0) in seg:
                     segments_list[i] = seg.replace(caption_match.group(0), "")
                     logger.info(f"[chat_engine] 从segment {i} 中移除图片附言标记")
@@ -195,6 +209,7 @@ class ChatEngine:
                 self._generate_and_send_image(
                     channel_id,
                     user_info.get('username', 'unknown') if user_info else 'unknown',
+                    image_description=image_description,
                     custom_caption=image_caption
                 )
             )
@@ -307,7 +322,8 @@ class ChatEngine:
         self,
         channel_id: str,
         user_id: str,
-        custom_caption: Optional[str] = None
+        custom_caption: Optional[str] = None,
+        image_description: Optional[str] = None
     ):
         """
         异步生成并发送图片
@@ -316,6 +332,7 @@ class ChatEngine:
             channel_id: 频道ID
             user_id: 用户ID
             custom_caption: AI生成的自定义图片附言
+            image_description: AI直接生成的图片描述
         """
         try:
             from services.instant_image_generator import instant_image_generator
@@ -326,7 +343,8 @@ class ChatEngine:
                 user_id=user_id,
                 image_type=None,  # 自动判断
                 context_window_minutes=3,
-                max_messages=25
+                max_messages=25,
+                image_description=image_description
             )
 
             if not result['success']:
