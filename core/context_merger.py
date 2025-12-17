@@ -921,7 +921,11 @@ async def merge_context(
             "Example format: [IMAGE_DESCRIPTION:这是一张自拍照。德克萨斯坐在鹏鹏物流办公室的窗边，下午温暖的阳光从侧面照进来，她微微侧身看向镜头，表情平静淡然。穿着日常的黑色外套，短发被光晕笼罩，背景是窗外龙门的街景，略微虚化。整体色调温暖柔和，传达出平静放松的午后时光。]\n"
             "**OPTIONAL - Image Caption**: You can also add [IMAGE_CAPTION:你的话] for the message sent with the photo (5-15 characters). "
             "Examples: [IMAGE_CAPTION:拍好了。] or [IMAGE_CAPTION:刚在办公室，给你看看。] "
-            "If you don't add a caption, a random default will be used."
+            "If you don't add a caption, a random default will be used.\n\n"
+            "**REQUIRED - Mood & Interaction Tags**: Analyze the user's intent and append these tags AT THE END (after SEND and other tags) if applicable:\n"
+            "1. [MOOD_IMPACT: P+x A+y] - If the message impacts your emotion. P(Pleasure): +Happy/-Sad, A(Arousal): +Excited/-Calm. Range: -5 to +5. Example: [MOOD_IMPACT: P+2 A-1]\n"
+            "2. [LUST_INCREASE: +x] - If the interaction contains intimacy, flirting, or triggers your desire. Range: +5 to +30. Example: [LUST_INCREASE: +10]\n"
+            "3. [RELEASE_TRIGGERED] - ONLY if the interaction reaches a climax, orgasm, or deep physical satisfaction that releases pent-up desire.\n"
         )
 
     messages.append({"role": "user", "content": user_query_content})

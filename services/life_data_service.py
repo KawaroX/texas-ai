@@ -7,7 +7,7 @@ import redis
 from app.config import settings
 from app.life_system import LifeSystemQuery
 from services.ai_service import summarize_past_micro_experiences  # 导入新的AI服务
-
+from core.state_manager import state_manager
 
 # 复用项目现有的Redis连接池
 from utils.redis_manager import get_redis_client
@@ -137,6 +137,46 @@ class LifeDataService:
 
             if schedule_item:
                 logger.debug(f"[LIFE_DATA] 找到匹配的日程项: {schedule_item}")
+                
+                # [Stats Update] 更新状态管理器的活动消耗率
+                try:
+                    metadata = schedule_item.get("metadata", {})
+                    # 获取预估消耗 (默认5)
+                    stamina_cost = float(metadata.get("stamina_cost", 5))
+                    
+                    # 计算持续时间
+                    fmt = "%H:%M"
+                    try:
+                        start_dt = datetime.strptime(schedule_item["start_time"], fmt)
+                        end_dt = datetime.strptime(schedule_item["end_time"], fmt)
+                        # 简单的时长计算 (忽略跨天带来的负数问题，假设 schedule_item 内部已处理或在此仅做差值绝对值)
+                        # 如果 end < start，通常意味着跨天，例如 23:00 - 01:00。
+                        # 这里我们简单处理：如果 end < start，加 24 小时
+                        if end_dt < start_dt:
+                             duration_hours = (end_dt - start_dt).total_seconds() / 3600.0 + 24
+                        else:
+                             duration_hours = (end_dt - start_dt).total_seconds() / 3600.0
+                    except Exception:
+                        duration_hours = 1.0
+
+                    if duration_hours < 0.1: duration_hours = 0.5 # 避免极端值
+                    
+                    # 计算每小时消耗率
+                    rate = stamina_cost / duration_hours
+                    
+                    # 判断是否在睡觉
+                    is_sleeping = False
+                    category = schedule_item.get("category", "")
+                    title = schedule_item.get("title", "")
+                    if category == "rest" or "睡" in title:
+                        is_sleeping = True
+                        
+                    state_manager.update_current_activity(rate, is_sleeping)
+                    logger.debug(f"[LIFE_DATA] 更新生理状态: rate={rate:.2f}/h, sleep={is_sleeping}")
+                    
+                except Exception as e:
+                    logger.warning(f"[LIFE_DATA] 更新生理状态失败: {e}")
+
                 # 获取该日程项的微观经历
                 logger.debug("[LIFE_DATA] 获取该日程项的微观经历")
                 schedule_item_id = schedule_item.get("id")
@@ -146,6 +186,11 @@ class LifeDataService:
                     current_micro_experience = await query.get_micro_experience_at_time(
                         schedule_item_id, current_time
                     )
+            else:
+                # 当前没有匹配的日程项 (闲暇时间)
+                # 默认消耗极低，且为清醒状态
+                state_manager.update_current_activity(0.5, False)
+
 
             # 获取当前时刻之前的所有微观经历（不包括当前时刻）
             all_past_micro_experiences = []

@@ -20,6 +20,7 @@ from app.life_system import (
     collect_interaction_experiences,
 )
 from datetime import date
+from core.state_manager import state_manager  # 导入状态管理器
 
 # 统一日志配置
 from utils.logging_config import setup_logging, get_logger
@@ -327,6 +328,22 @@ async def check_and_generate_missing_images_endpoint(target_date: str = None):
         "already_generated": check_result["already_generated"],
         "missing_count": check_result["missing_count"],
         "missing_ids": check_result["missing_ids"][:10]  # 只返回前10个缺失的ID
+    }
+
+
+@app.get("/debug/texas-state")
+async def get_texas_state_endpoint(k: str = Query(default=""), _=Depends(check_k)):
+    """
+    调试接口：获取德克萨斯当前的详细状态
+    """
+    # 强制更新一次时间影响
+    state_manager.update_time_based_stats()
+    
+    return {
+        "bio": state_manager.bio_state.model_dump(),
+        "mood": state_manager.mood_state.model_dump(),
+        "current_activity_rate": getattr(state_manager, "current_activity_rate", 0.0),
+        "prompt_injection": state_manager.get_system_prompt_injection()
     }
 
 

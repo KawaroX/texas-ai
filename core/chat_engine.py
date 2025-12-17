@@ -7,6 +7,8 @@ import asyncio
 from core.context_merger import merge_context
 from services.ai_service import stream_ai_chat
 from core.persona import get_texas_system_prompt
+from core.state_manager import state_manager
+import re
 
 
 class ChatEngine:
@@ -130,7 +132,7 @@ class ChatEngine:
         image_marker = "[IMAGE_REQUESTED]"
 
         # 先收集所有segments
-        async for segment in stream_ai_chat(prompt_messages, "gpt-5.1"):
+        async for segment in stream_ai_chat(prompt_messages, "grok-4.1-thinking"):
             full_response += segment
             segments_list.append(segment)
             # 调试：每个segment是否包含标记
@@ -163,16 +165,18 @@ class ChatEngine:
             import re
 
             # 查找 [IMAGE_DESCRIPTION:xxx] 格式
-            description_pattern = r'\[IMAGE_DESCRIPTION:([^\]]+)\]'
+            description_pattern = r"\[IMAGE_DESCRIPTION:([^\]]+)\]"
             description_match = re.search(description_pattern, full_response)
             if description_match:
                 image_description = description_match.group(1).strip()
-                logger.info(f"[chat_engine] 提取到AI生成的图片描述: {image_description[:100]}...")
+                logger.info(
+                    f"[chat_engine] 提取到AI生成的图片描述: {image_description[:100]}..."
+                )
             else:
                 logger.warning(f"[chat_engine] 未找到图片描述标记，将使用默认场景分析")
 
             # 查找 [IMAGE_CAPTION:xxx] 格式
-            caption_pattern = r'\[IMAGE_CAPTION:([^\]]+)\]'
+            caption_pattern = r"\[IMAGE_CAPTION:([^\]]+)\]"
             caption_match = re.search(caption_pattern, full_response)
             if caption_match:
                 image_caption = caption_match.group(1).strip()
@@ -190,27 +194,72 @@ class ChatEngine:
                     segments_list[i] = seg.replace(caption_match.group(0), "")
                     logger.info(f"[chat_engine] 从segment {i} 中移除图片附言标记")
 
+        # [NEW] Mood & Lust Tag Parsing
+        p_delta = 0
+        a_delta = 0
+        lust_delta = 0
+        release_triggered = False
+        
+        # 1. Mood Impact
+        mood_match = re.search(r"\[MOOD_IMPACT:\s*P([+-]?\d+)\s*A([+-]?\d+)\]", full_response)
+        if mood_match:
+            try:
+                p_delta = float(mood_match.group(1))
+                a_delta = float(mood_match.group(2))
+                logger.info(f"[chat_engine] 检测到情绪变化: P{p_delta:+.1f} A{a_delta:+.1f}")
+            except ValueError:
+                logger.warning(f"[chat_engine] 情绪标签解析失败: {mood_match.group(0)}")
+        
+        # 2. Lust Increase
+        lust_match = re.search(r"\[LUST_INCREASE:\s*([+-]?\d+)\]", full_response)
+        if lust_match:
+            try:
+                lust_delta = float(lust_match.group(1))
+                logger.info(f"[chat_engine] 检测到欲望变化: {lust_delta:+.1f}")
+            except ValueError: pass
+            
+        # 3. Release
+        if "[RELEASE_TRIGGERED]" in full_response:
+            release_triggered = True
+            logger.info("[chat_engine] 检测到释放触发")
+
+        # 应用变更
+        if p_delta != 0 or a_delta != 0 or lust_delta != 0 or release_triggered:
+            state_manager.apply_raw_impact(p_delta, a_delta, lust_delta, release_triggered)
+
+        # 清理 Tags
+        tags_to_remove = []
+        if mood_match: tags_to_remove.append(mood_match.group(0))
+        if lust_match: tags_to_remove.append(lust_match.group(0))
+        if release_triggered: tags_to_remove.append("[RELEASE_TRIGGERED]")
+        
+        if tags_to_remove:
+            for i, seg in enumerate(segments_list):
+                for tag in tags_to_remove:
+                    if tag in seg:
+                        segments_list[i] = segments_list[i].replace(tag, "")
+
         # 在输出前先触发事件检测和图片生成（因为generator可能被提前终止）
         if has_event_marker:
-            logger.info(f"[chat_engine] ✅ 检测到事件标记，开始异步提取 channel={channel_id}")
+            logger.info(
+                f"[chat_engine] ✅ 检测到事件标记，开始异步提取 channel={channel_id}"
+            )
             asyncio.create_task(
                 self._extract_and_store_event(
-                    full_response,
-                    channel_id,
-                    messages,
-                    context_messages,
-                    user_info
+                    full_response, channel_id, messages, context_messages, user_info
                 )
             )
 
         if has_image_marker:
-            logger.info(f"[chat_engine] ✅ 检测到图片请求标记，开始异步生成 channel={channel_id}")
+            logger.info(
+                f"[chat_engine] ✅ 检测到图片请求标记，开始异步生成 channel={channel_id}"
+            )
             asyncio.create_task(
                 self._generate_and_send_image(
                     channel_id,
-                    user_info.get('username', 'unknown') if user_info else 'unknown',
+                    user_info.get("username", "unknown") if user_info else "unknown",
                     image_description=image_description,
-                    custom_caption=image_caption
+                    custom_caption=image_caption,
                 )
             )
 
@@ -218,7 +267,9 @@ class ChatEngine:
         for seg in segments_list:
             yield seg
 
-        logger.info(f"[chat_engine] 流式生成回复完成 channel={channel_id}, 回复长度={len(full_response)}, segments数量={len(segments_list)}")
+        logger.info(
+            f"[chat_engine] 流式生成回复完成 channel={channel_id}, 回复长度={len(full_response)}, segments数量={len(segments_list)}"
+        )
 
     async def _process_event_detection(
         self,
@@ -226,7 +277,7 @@ class ChatEngine:
         channel_id: str,
         user_messages: List[str],
         context_messages: List[Dict],
-        user_info: Optional[Dict] = None
+        user_info: Optional[Dict] = None,
     ):
         """
         检测AI回复中的事件标记，并异步提取和存储事件
@@ -238,23 +289,23 @@ class ChatEngine:
             context_messages: 对话上下文
             user_info: 用户信息
         """
-        logger.debug(f"[chat_engine] 检查事件标记，回复长度={len(ai_response)}, 包含标记={'[EVENT_DETECTED]' in ai_response}")
+        logger.debug(
+            f"[chat_engine] 检查事件标记，回复长度={len(ai_response)}, 包含标记={'[EVENT_DETECTED]' in ai_response}"
+        )
 
         # 检查事件标记
         if "[EVENT_DETECTED]" not in ai_response:
             logger.debug(f"[chat_engine] 未检测到事件标记")
             return
 
-        logger.info(f"[chat_engine] ✅ 检测到事件标记，开始异步提取 channel={channel_id}")
+        logger.info(
+            f"[chat_engine] ✅ 检测到事件标记，开始异步提取 channel={channel_id}"
+        )
 
         # 启动异步任务处理事件提取（不阻塞主流程）
         asyncio.create_task(
             self._extract_and_store_event(
-                ai_response,
-                channel_id,
-                user_messages,
-                context_messages,
-                user_info
+                ai_response, channel_id, user_messages, context_messages, user_info
             )
         )
 
@@ -264,7 +315,7 @@ class ChatEngine:
         channel_id: str,
         user_messages: List[str],
         context_messages: List[Dict],
-        user_info: Optional[Dict] = None
+        user_info: Optional[Dict] = None,
     ):
         """
         异步提取事件详情并存储
@@ -290,7 +341,7 @@ class ChatEngine:
             event_data = await extract_event_details(
                 user_message=user_message,
                 ai_response=clean_response,
-                recent_context=context_messages[-10:]  # 最近10条消息作为上下文
+                recent_context=context_messages[-10:],  # 最近10条消息作为上下文
             )
 
             if not event_data:
@@ -298,14 +349,14 @@ class ChatEngine:
                 return
 
             # 获取用户ID
-            user_id = user_info.get('username', 'unknown') if user_info else 'unknown'
+            user_id = user_info.get("username", "unknown") if user_info else "unknown"
 
             # 创建事件
             event_id = await future_event_manager.create_event(
                 event_data=event_data,
                 channel_id=channel_id,
                 user_id=user_id,
-                context_messages=context_messages[-5:]  # 保存最近5条消息作为上下文
+                context_messages=context_messages[-5:],  # 保存最近5条消息作为上下文
             )
 
             if event_id:
@@ -323,7 +374,7 @@ class ChatEngine:
         channel_id: str,
         user_id: str,
         custom_caption: Optional[str] = None,
-        image_description: Optional[str] = None
+        image_description: Optional[str] = None,
     ):
         """
         异步生成并发送图片
@@ -344,20 +395,23 @@ class ChatEngine:
                 image_type=None,  # 自动判断
                 context_window_minutes=3,
                 max_messages=25,
-                image_description=image_description
+                image_description=image_description,
             )
 
-            if not result['success']:
+            if not result["success"]:
                 logger.warning(f"[chat_engine] 图片生成失败: {result.get('error')}")
                 # 生成失败不影响对话流程，静默失败
                 return
 
-            image_path = result['image_path']
-            is_selfie = result.get('is_selfie', False)
-            logger.info(f"[chat_engine] 图片生成成功: {image_path}, 类型: {'自拍' if is_selfie else '场景'}")
+            image_path = result["image_path"]
+            is_selfie = result.get("is_selfie", False)
+            logger.info(
+                f"[chat_engine] 图片生成成功: {image_path}, 类型: {'自拍' if is_selfie else '场景'}"
+            )
 
             # 发送图片到频道
             from app.mattermost_client import MattermostWebSocketClient
+
             ws_client = MattermostWebSocketClient()
 
             # 确保bot user ID已获取
@@ -370,6 +424,7 @@ class ChatEngine:
                 logger.info(f"[chat_engine] 使用AI生成的图片附言: {caption}")
             else:
                 import random
+
                 if is_selfie:
                     messages = [
                         "拍好了。",
@@ -391,9 +446,7 @@ class ChatEngine:
 
             # 发送图片
             await ws_client.post_message_with_image(
-                channel_id=channel_id,
-                message=caption,
-                image_path=image_path
+                channel_id=channel_id, message=caption, image_path=image_path
             )
 
             logger.info(f"[chat_engine] 图片已发送到频道: {channel_id}")
