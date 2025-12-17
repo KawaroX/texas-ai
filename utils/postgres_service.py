@@ -952,3 +952,19 @@ def get_intimacy_stats() -> dict:
             return {row[0]: row[1] for row in cur.fetchall()}
     finally:
         conn.close()
+
+def delete_intimacy_record(record_id: str) -> bool:
+    """删除亲密记录"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM intimacy_records
+                WHERE id = %s;
+                """,
+                (record_id,)
+            )
+            return cur.rowcount > 0
+    finally:
+        conn.close()

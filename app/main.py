@@ -22,7 +22,7 @@ from app.life_system import (
 )
 from datetime import date
 from core.state_manager import state_manager  # 导入状态管理器
-from utils.postgres_service import get_intimacy_records, get_intimacy_record_detail, get_intimacy_stats
+from utils.postgres_service import get_intimacy_records, get_intimacy_record_detail, get_intimacy_stats, delete_intimacy_record
 
 # 统一日志配置
 from utils.logging_config import setup_logging, get_logger
@@ -340,12 +340,45 @@ async def get_texas_state_endpoint(k: str = Query(default=""), _=Depends(check_k
     """
     # 强制更新一次时间影响
     state_manager.update_time_based_stats()
-    
+
+    bio = state_manager.bio_state
+    mood = state_manager.mood_state
+
+    # 获取额外的计算属性
+    sens_level, sens_title, sens_desc = bio.get_sensitivity_level()
+    cycle_phase = bio.get_cycle_phase()
+    cycle_phase_desc = bio.get_cycle_phase_description()
+    sexual_phase, hours_since = bio.get_sexual_phase()
+    lust_tier_desc = bio.get_lust_tier_description()
+    mood_quadrant = mood.get_pad_quadrant()
+    mood_flavor = mood.get_resonance_flavor()
+
     return {
-        "bio": state_manager.bio_state.model_dump(),
-        "mood": state_manager.mood_state.model_dump(),
+        "bio": bio.model_dump(),
+        "mood": mood.model_dump(),
         "current_activity_rate": getattr(state_manager, "current_activity_rate", 0.0),
-        "prompt_injection": state_manager.get_system_prompt_injection()
+        "prompt_injection": state_manager.get_system_prompt_injection(),
+        # 额外的详细信息
+        "detailed_info": {
+            "sensitivity": {
+                "level": sens_level,
+                "title": sens_title,
+                "description": sens_desc
+            },
+            "cycle": {
+                "phase": cycle_phase,
+                "description": cycle_phase_desc
+            },
+            "sexual": {
+                "phase": sexual_phase,
+                "hours_since_release": round(hours_since, 2)
+            },
+            "lust_description": lust_tier_desc,
+            "mood": {
+                "quadrant": mood_quadrant,
+                "flavor": mood_flavor
+            }
+        }
     }
 
 
@@ -432,6 +465,18 @@ async def get_gallery_stats(
 ):
     """获取亲密行为统计"""
     return get_intimacy_stats()
+
+@app.delete("/gallery/record/{record_id}")
+async def delete_gallery_record(
+    record_id: str,
+    k: str = Query(default=""),
+    _=Depends(check_k)
+):
+    """删除CG记录"""
+    success = delete_intimacy_record(record_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Record not found")
+    return {"success": True, "message": "Record deleted successfully"}
 
 
 # ==================== Admin Dashboard ====================
