@@ -347,3 +347,55 @@ async def get_texas_state_endpoint(k: str = Query(default=""), _=Depends(check_k
     }
 
 
+@app.post("/debug/texas-state/update")
+async def update_texas_state_endpoint(
+    payload: dict,
+    k: str = Query(default=""), 
+    _=Depends(check_k)
+):
+    """
+    调试接口：更新德克萨斯的状态参数
+    Payload Example:
+    {
+      "stamina": 80.0,
+      "lust": 50.0,
+      "cycle_day": 14,
+      "sleep_state": "Awake",
+      "sensitivity": 10.0,
+      "mood": {
+        "pleasure": 5.0,
+        "arousal": 2.0,
+        "dominance": 1.0
+      }
+    }
+    """
+    try:
+        # 更新生理状态 (BioState)
+        bio_fields = state_manager.bio_state.model_fields.keys()
+        for key, value in payload.items():
+            if key in bio_fields:
+                setattr(state_manager.bio_state, key, value)
+        
+        # 更新情绪状态 (MoodState)
+        if "mood" in payload and isinstance(payload["mood"], dict):
+            mood_data = payload["mood"]
+            mood_fields = state_manager.mood_state.model_fields.keys()
+            for key, value in mood_data.items():
+                if key in mood_fields:
+                    setattr(state_manager.mood_state, key, value)
+        
+        # 保存并刷新
+        state_manager.save_state()
+        
+        return {
+            "message": "状态更新成功",
+            "new_state": {
+                "bio": state_manager.bio_state.model_dump(),
+                "mood": state_manager.mood_state.model_dump()
+            }
+        }
+    except Exception as e:
+        logger.error(f"状态更新失败: {e}")
+        raise HTTPException(status_code=400, detail=f"更新失败: {str(e)}")
+
+
