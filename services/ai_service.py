@@ -1005,3 +1005,72 @@ async def ai_decide_images_globally(
     except Exception as e:
         logger.error(f"[AI图片决策] 调用失败: {e}")
         return []
+
+
+async def analyze_intimacy_event(context_messages: list) -> dict:
+    """
+    分析亲密互动事件 (CG Gallery Analysis)
+    
+    Args:
+        context_messages: 最近的聊天记录 (list of dict)
+        
+    Returns:
+        {
+            "body_part": "Mouth",
+            "act_type": "Fellatio",
+            "summary": "Short summary",
+            "full_story": "Detailed description",
+            "tags": ["Tag1", "Tag2"],
+            "intensity": 8
+        }
+    """
+    logger.info(f"[AI分析] 开始分析亲密事件，上下文长度: {len(context_messages)}")
+    
+    # 转换上下文为文本
+    context_text = ""
+    for msg in context_messages[-20:]: # 取最近20条
+        role = "德克萨斯" if msg["role"] == "assistant" else "Kawaro"
+        context_text += f"{role}: {msg['content']}\n"
+        
+    prompt = f"""You are an erotic literature analyst. Analyze the following roleplay interaction between Texas and Kawaro.
+The interaction has just reached a "Release" or "Climax" point. Your job is to document this event for a gallery record.
+
+## Context
+{context_text}
+
+## Task
+Extract the following details from the interaction:
+1. **Body Part**: The primary body part involved in the climax or main act (e.g., Mouth, Chest, Hands, Feet, Thighs, Vaginal, Anal, Toy, WholeBody).
+2. **Act Type**: The specific act performed (e.g., Fellatio, Paizuri, Handjob, Footjob, Cowgirl, Missionary, DeepThroat, Creampie, etc.).
+3. **Intensity**: A score from 1-10 based on the description's heat and emotional depth.
+4. **Summary**: A short, one-sentence summary (Chinese, max 20 chars).
+5. **Full Story**: A vivid, 3rd-person summary of the entire sequence of events leading to the release (Chinese, ~100 words). Capture the sensations and atmosphere.
+6. **Tags**: 3-5 keywords describing the play (e.g., "Sweaty", "Gentle", "Rough", "Lingerie").
+
+## Output Format (JSON Only)
+{{
+  "body_part": "String",
+  "act_type": "String",
+  "intensity": Integer,
+  "summary": "String",
+  "full_story": "String",
+  "tags": ["String", "String"]
+}}
+"""
+    messages = [{"role": "user", "content": prompt}]
+    
+    try:
+        # 使用结构化生成或普通调用（如果是 OpenAI/Gemini）
+        # 这里为了稳妥，使用普通调用并解析 JSON，或者复用 structured generation
+        # 假设 call_structured_generation 内部使用的是能处理 JSON 的模型
+        response = await call_structured_generation(messages)
+        
+        if "error" in response:
+            logger.error(f"[AI分析] 分析失败: {response['error']}")
+            return None
+            
+        return response
+        
+    except Exception as e:
+        logger.error(f"[AI分析] 调用异常: {e}")
+        return None

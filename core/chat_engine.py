@@ -5,15 +5,39 @@ from typing import List, Dict, Optional, Tuple
 import asyncio
 
 from core.context_merger import merge_context
-from services.ai_service import stream_ai_chat
+from services.ai_service import stream_ai_chat, analyze_intimacy_event
 from core.persona import get_texas_system_prompt
 from core.state_manager import state_manager
+from utils.postgres_service import init_intimacy_table, insert_intimacy_record
 import re
 
 
 class ChatEngine:
     def __init__(self):
         self.system_prompt = get_texas_system_prompt()
+
+    async def _process_release_event(self, context_messages: list):
+        """
+        处理释放事件：分析并存储记录 (CG Gallery)
+        """
+        try:
+            logger.info("[chat_engine] 开始处理 Release 事件记录...")
+            
+            # 1. 确保表存在
+            init_intimacy_table()
+            
+            # 2. 调用 AI 分析
+            analysis = await analyze_intimacy_event(context_messages)
+            if not analysis:
+                logger.warning("[chat_engine] 亲密事件分析失败")
+                return
+                
+            # 3. 存储记录
+            record_id = insert_intimacy_record(analysis)
+            logger.info(f"[chat_engine] 亲密事件已记录: ID={record_id}, Summary={analysis.get('summary')}")
+            
+        except Exception as e:
+            logger.error(f"[chat_engine] 处理 Release 事件失败: {e}", exc_info=True)
 
     async def stream_reply(
         self,
@@ -222,6 +246,8 @@ class ChatEngine:
         if "[RELEASE_TRIGGERED]" in full_response:
             release_triggered = True
             logger.info("[chat_engine] 检测到释放触发")
+            # 触发 CG Gallery 记录任务
+            asyncio.create_task(self._process_release_event(context_messages))
 
         # 应用变更
         if p_delta != 0 or a_delta != 0 or lust_delta != 0 or release_triggered:

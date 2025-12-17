@@ -813,3 +813,142 @@ def set_default_image_fields_for_all_experiences(date_str: str) -> int:
         return 0
     finally:
         conn.close()
+
+
+# ==================== Intimacy Records (CG Gallery) ====================
+
+def init_intimacy_table():
+    """初始化亲密记录表"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS intimacy_records (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    trigger_type VARCHAR(50),
+                    body_part VARCHAR(100),
+                    act_type VARCHAR(100),
+                    summary TEXT,
+                    full_story TEXT,
+                    tags JSONB,
+                    intensity INTEGER
+                );
+            """)
+    except Exception as e:
+        logger.error(f"初始化 intimacy_records 表失败: {e}")
+    finally:
+        conn.close()
+
+def insert_intimacy_record(record_data: dict) -> str:
+    """
+    插入亲密行为记录
+    Args:
+        record_data: {
+            'trigger_type': str,
+            'body_part': str,
+            'act_type': str,
+            'summary': str,
+            'full_story': str,
+            'tags': list,
+            'intensity': int
+        }
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO intimacy_records (
+                    trigger_type, body_part, act_type, summary, full_story, tags, intensity
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id;
+                """,
+                (
+                    record_data.get('trigger_type', 'release'),
+                    record_data.get('body_part', 'Unknown'),
+                    record_data.get('act_type', 'Unknown'),
+                    record_data.get('summary', ''),
+                    record_data.get('full_story', ''),
+                    json.dumps(record_data.get('tags', []), ensure_ascii=False),
+                    record_data.get('intensity', 1)
+                ),
+            )
+            return str(cur.fetchone()[0])
+    finally:
+        conn.close()
+
+def get_intimacy_records(limit: int = 20, offset: int = 0) -> list:
+    """获取亲密记录列表"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, recorded_at, body_part, act_type, summary, tags, intensity
+                FROM intimacy_records
+                ORDER BY recorded_at DESC
+                LIMIT %s OFFSET %s;
+                """,
+                (limit, offset)
+            )
+            records = []
+            for row in cur.fetchall():
+                records.append({
+                    'id': str(row[0]),
+                    'recorded_at': row[1].isoformat(),
+                    'body_part': row[2],
+                    'act_type': row[3],
+                    'summary': row[4],
+                    'tags': row[5],
+                    'intensity': row[6]
+                })
+            return records
+    finally:
+        conn.close()
+
+def get_intimacy_record_detail(record_id: str) -> dict:
+    """获取单条记录详情"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, recorded_at, body_part, act_type, summary, full_story, tags, intensity
+                FROM intimacy_records
+                WHERE id = %s;
+                """,
+                (record_id,)
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    'id': str(row[0]),
+                    'recorded_at': row[1].isoformat(),
+                    'body_part': row[2],
+                    'act_type': row[3],
+                    'summary': row[4],
+                    'full_story': row[5],
+                    'tags': row[6],
+                    'intensity': row[7]
+                }
+            return None
+    finally:
+        conn.close()
+
+def get_intimacy_stats() -> dict:
+    """获取部位统计"""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT body_part, COUNT(*) as count
+                FROM intimacy_records
+                GROUP BY body_part
+                ORDER BY count DESC;
+                """
+            )
+            return {row[0]: row[1] for row in cur.fetchall()}
+    finally:
+        conn.close()

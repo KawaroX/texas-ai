@@ -21,6 +21,7 @@ from app.life_system import (
 )
 from datetime import date
 from core.state_manager import state_manager  # 导入状态管理器
+from utils.postgres_service import get_intimacy_records, get_intimacy_record_detail, get_intimacy_stats
 
 # 统一日志配置
 from utils.logging_config import setup_logging, get_logger
@@ -397,5 +398,38 @@ async def update_texas_state_endpoint(
     except Exception as e:
         logger.error(f"状态更新失败: {e}")
         raise HTTPException(status_code=400, detail=f"更新失败: {str(e)}")
+
+
+# ==================== CG Gallery APIs ====================
+
+@app.get("/gallery/records")
+async def get_gallery_records(
+    limit: int = 20, 
+    offset: int = 0, 
+    k: str = Query(default=""), 
+    _=Depends(check_k)
+):
+    """获取亲密记录列表"""
+    return get_intimacy_records(limit, offset)
+
+@app.get("/gallery/record/{record_id}")
+async def get_gallery_record_detail(
+    record_id: str, 
+    k: str = Query(default=""), 
+    _=Depends(check_k)
+):
+    """获取单条记录详情"""
+    record = get_intimacy_record_detail(record_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    return record
+
+@app.get("/gallery/stats")
+async def get_gallery_stats(
+    k: str = Query(default=""), 
+    _=Depends(check_k)
+):
+    """获取亲密行为统计"""
+    return get_intimacy_stats()
 
 
