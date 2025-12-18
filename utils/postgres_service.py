@@ -1058,9 +1058,11 @@ def get_last_release_timestamp() -> float:
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
+            # v3.9 修复：只查询 trigger_type = 'release' 的记录
             cur.execute(
                 """
                 SELECT recorded_at FROM intimacy_records
+                WHERE trigger_type = 'release'
                 ORDER BY recorded_at DESC
                 LIMIT 1;
                 """
