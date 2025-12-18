@@ -17,6 +17,7 @@ services:
       - /var/log/nginx
     volumes:
       - ${NGINX_CONFIG_PATH}:/etc/nginx/conf.d:ro
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
       - ${NGINX_DHPARAMS_FILE}:/etc/nginx/dhparams4096.pem:ro
       - ${CERT_PATH}:/etc/nginx/certs/cert.pem:ro
       - ${KEY_PATH}:/etc/nginx/certs/key.pem:ro
