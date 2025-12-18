@@ -95,85 +95,69 @@
 
 ## 🔨 待完成的工作
 
-### 1. 安全措施实施 (优先级：中)
+### ✅ HTTP Basic Auth 认证 (已完成代码修改 - 2025-12-18)
 
-#### 方案1：隐蔽路径
+**代码修改已完成**（本地仓库）：
+- ✅ `app/main.py`: `/admin` 端点自动注入 ADMIN_K 到 HTML
+- ✅ `admin_dashboard.html`: 移除密钥输入框，自动使用注入的密钥
+- ✅ `nginx/conf.d/default.conf.template`: nginx 配置模板
+- ✅ `scripts/deploy_admin_auth.sh`: 自动化部署脚本
+- ✅ `docs/ADMIN_AUTH_SETUP.md`: 详细部署指南
 
-**修改文件**: `app/main.py` 和 `nginx/conf.d/default.conf`
+**待在服务器执行**：
+- [ ] 提交并推送代码到 GitHub
+- [ ] SSH 登录服务器并拉取最新代码
+- [ ] 运行部署脚本或手动执行部署步骤
+- [ ] 验证 HTTP Basic Auth 认证功能
 
-**步骤**:
-1. 选择一个难以猜测的路径，例如: `/texas-control-X7K9mP2v`
-2. 修改 `app/main.py` 中的路由：
-   ```python
-   @app.get("/texas-control-X7K9mP2v", response_class=HTMLResponse)
-   async def get_admin_dashboard():
-       # ... 现有代码
-   ```
-3. 修改nginx配置中的路由（3处）：
-   ```nginx
-   location /texas-control-X7K9mP2v {
-       proxy_pass http://texas-bot:8000;
-       # ...
-   }
-   ```
+**部署方式（二选一）**：
 
-#### 方案3：HTTP Basic Auth
+**方式A：自动化部署脚本**（推荐）
+```bash
+# 在本地执行（将脚本推送到服务器并执行）
+git push origin main
+ssh root@115.190.143.80 'bash -s' < scripts/deploy_admin_auth.sh
+```
 
-**修改文件**: `nginx/conf.d/default.conf`
-
-**步骤**:
-1. 在服务器上生成密码文件：
-   ```bash
-   # 创建密码文件
-   htpasswd -c /root/texas-ai/nginx/.htpasswd admin
-   # 输入密码两次
-   ```
-
-2. 修改nginx配置：
-   ```nginx
-   location /admin {  # 或隐蔽路径
-       auth_basic "Texas AI Admin Panel";
-       auth_basic_user_file /etc/nginx/.htpasswd;
-
-       proxy_pass http://texas-bot:8000;
-       # ... 其他配置
-   }
-   ```
-
-3. 在docker-compose.nginx.yml中挂载密码文件：
-   ```yaml
-   volumes:
-     - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
-   ```
+**方式B：手动部署**
+参考详细步骤：`docs/ADMIN_AUTH_SETUP.md`
 
 ---
 
 ## 📝 实施顺序建议
 
-1. **✅ 已完成** (2025-12-18):
+1. **✅ 已完成** (2025-12-18 早期):
    - [x] 更新HTML：添加详细状态显示
    - [x] 更新HTML：添加CG删除按钮
    - [x] 添加德克萨斯人物卡片
 
-2. **待考虑实施** (需要重启服务):
-   - [ ] 安全措施：隐蔽路径 + HTTP Basic Auth
+2. **✅ 已完成** (2025-12-18 当前):
+   - [x] 后端API密钥自动注入功能
+   - [x] 移除前端手动输入密钥
+   - [x] HTTP Basic Auth 配置文件和文档
+   - [x] 自动化部署脚本
+
+3. **待执行** (需要在服务器上操作):
+   - [ ] 部署 HTTP Basic Auth 认证（参考 `docs/ADMIN_AUTH_SETUP.md`）
 
 ---
 
 ## 🔗 相关文件
 
-- **HTML文件**: `admin_dashboard.html` (719行)
-- **后端API**: `app/main.py` (第336-479行)
-- **数据库操作**: `utils/postgres_service.py` (第956-970行)
-- **Nginx配置**: `nginx/conf.d/default.conf`
+- **HTML文件**: `admin_dashboard.html` (管理面板前端)
+- **后端API**: `app/main.py:484-508` (管理面板端点和密钥注入)
+- **数据库操作**: `utils/postgres_service.py:956-970` (CG记录删除)
+- **Nginx配置模板**: `nginx/conf.d/default.conf.template`
+- **部署脚本**: `scripts/deploy_admin_auth.sh`
 
 ---
 
 ## 📚 参考文档
 
-- `docs/ADMIN_DASHBOARD_GUIDE.md` - 使用指南
+- `docs/ADMIN_AUTH_SETUP.md` - ⭐ **HTTP Basic Auth 部署指南**（新增）
+- `docs/ADMIN_DASHBOARD_GUIDE.md` - 管理面板使用指南
 - `docs/DEBUG_API_GUIDE.md` - API调试指南
-- `DEPLOYMENT.md` - 部署流程
+- `DEPLOYMENT.md` - 通用部署流程
 
 ---
 

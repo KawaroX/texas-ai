@@ -76,13 +76,9 @@
                     <p class="text-gray-600 mt-2">实时状态监控与CG陈列馆</p>
                 </div>
                 <div class="flex flex-col items-end">
-                    <label class="text-sm text-gray-600 mb-2">API密钥</label>
-                    <input
-                        type="password"
-                        id="apiKey"
-                        placeholder="输入密钥 (k)"
-                        class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    >
+                    <div class="px-4 py-2 bg-green-100 text-green-700 rounded-lg">
+                        <span class="text-sm">🔒 已通过HTTP Basic Auth认证</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -354,12 +350,12 @@
         const pageSize = 10;
 
         function getApiKey() {
-            const key = document.getElementById('apiKey').value;
-            if (!key) {
-                alert('请先输入API密钥！');
-                throw new Error('Missing API key');
+            // 使用服务器注入的API密钥（通过HTTP Basic Auth保护）
+            if (!window.INJECTED_API_KEY) {
+                alert('API密钥未正确加载，请刷新页面！');
+                throw new Error('Missing injected API key');
             }
-            return key;
+            return window.INJECTED_API_KEY;
         }
 
         function switchTab(tab) {
@@ -867,16 +863,8 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            // Try to load API key from localStorage
-            const savedKey = localStorage.getItem('apiKey');
-            if (savedKey) {
-                document.getElementById('apiKey').value = savedKey;
-            }
-
-            // Save API key to localStorage on change
-            document.getElementById('apiKey').addEventListener('change', (e) => {
-                localStorage.setItem('apiKey', e.target.value);
-            });
+            // API密钥已由服务器自动注入，无需localStorage
+            console.log('Admin Dashboard loaded with injected API key');
         });
     </script>
 </body>

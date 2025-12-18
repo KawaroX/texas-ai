@@ -483,12 +483,23 @@ async def delete_gallery_record(
 
 @app.get("/admin", response_class=HTMLResponse)
 async def get_admin_dashboard():
-    """返回管理面板HTML页面"""
+    """返回管理面板HTML页面（自动注入API密钥）"""
     try:
         # 读取HTML文件
         html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "admin_dashboard.html")
         with open(html_path, "r", encoding="utf-8") as f:
             html_content = f.read()
+
+        # 注入API密钥到HTML中
+        # 在</head>标签前插入<script>定义API_KEY
+        api_key_script = f"""
+    <script>
+        // API密钥由服务器自动注入（通过HTTP Basic Auth保护）
+        window.INJECTED_API_KEY = "{ADMIN_K}";
+    </script>
+</head>"""
+        html_content = html_content.replace("</head>", api_key_script)
+
         return HTMLResponse(content=html_content)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="管理面板页面未找到")
