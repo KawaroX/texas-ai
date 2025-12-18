@@ -174,7 +174,7 @@
                     <div class="flex-1 text-slate-300 w-full">
                         <div class="flex flex-col md:flex-row items-center gap-2 md:gap-3 mb-2 justify-center md:justify-start">
                             <h1 class="text-2xl md:text-3xl font-bold text-white">德克萨斯 (Texas)</h1>
-                            <span class="px-2 py-0.5 rounded text-xs font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/20">★★★★★</span>
+                            <span class="px-2 py-0.5 rounded text-xs font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/20">★★★★★★</span>
                         </div>
                         <p class="text-slate-400 mb-6 flex items-center justify-center md:justify-start gap-2 text-sm md:text-base">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
@@ -352,6 +352,24 @@
                                 <div id="display-lust-desc" class="text-sm text-slate-300 italic">--</div>
                             </div>
                         </div>
+                    </div>
+                    
+                    <!-- Prompt Injection (Collapsible) -->
+                    <div id="prompt-container" class="glass-panel p-4 rounded-2xl hidden">
+                        <details class="group">
+                            <summary class="flex items-center justify-between cursor-pointer text-slate-400 hover:text-white transition list-none">
+                                <span class="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                                    Active System Prompt
+                                </span>
+                                <span class="transition group-open:rotate-180">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </span>
+                            </summary>
+                            <div class="mt-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                                <pre id="prompt-text" class="text-xs text-slate-300 font-mono whitespace-pre-wrap break-all leading-relaxed"></pre>
+                            </div>
+                        </details>
                     </div>
                 </div>
 
@@ -587,6 +605,24 @@
         }
 
         // --- Logic Implementation ---
+        
+        let isUserInteracting = false; // Track if user is dragging sliders
+
+        function initInteractions() {
+            // Track user interaction to prevent auto-refresh conflict
+            const inputs = document.querySelectorAll('input[type=range], input[type=number], select');
+            inputs.forEach(input => {
+                input.addEventListener('mousedown', () => isUserInteracting = true);
+                input.addEventListener('touchstart', () => isUserInteracting = true);
+                input.addEventListener('change', () => {
+                    isUserInteracting = false;
+                    // Optional: Auto-save on change? Maybe too aggressive.
+                });
+                // Reset flag after delay if they just clicked
+                input.addEventListener('mouseup', () => setTimeout(() => isUserInteracting = false, 1000));
+                input.addEventListener('touchend', () => setTimeout(() => isUserInteracting = false, 1000));
+            });
+        }
 
         function toggleAutoRefresh() {
             const checkbox = document.getElementById('auto-refresh-toggle');
@@ -615,18 +651,46 @@
                 currentState = data;
                 updateStatusUI(data);
                 
+                // Auto-sync sliders ONLY if user is not interacting
+                if (!isUserInteracting) {
+                    syncSlidersWithState(data);
+                }
+                
                 // Update status dot
                 const dot = document.getElementById('status-dot');
-                dot.classList.remove('bg-slate-500', 'bg-red-500');
-                dot.classList.add('bg-emerald-500');
-                setTimeout(() => dot.classList.remove('bg-emerald-500'), 500); // Blink effect
+                if(dot) {
+                    dot.classList.remove('bg-slate-500', 'bg-red-500');
+                    dot.classList.add('bg-emerald-500');
+                    setTimeout(() => dot.classList.remove('bg-emerald-500'), 500); 
+                }
                 
             } catch (error) {
                 console.error('Error loading state:', error);
                 const dot = document.getElementById('status-dot');
-                dot.classList.remove('bg-slate-500', 'bg-emerald-500');
-                dot.classList.add('bg-red-500');
+                if(dot) {
+                    dot.classList.remove('bg-slate-500', 'bg-emerald-500');
+                    dot.classList.add('bg-red-500');
+                }
             }
+        }
+
+        function syncSlidersWithState(data) {
+            const bio = data.bio;
+            const mood = data.mood;
+
+            setSlider('stamina', bio.stamina);
+            setSlider('lust', bio.lust);
+            setSlider('sensitivity', bio.sensitivity);
+            
+            const cycleInput = document.getElementById('cycle_day');
+            if(cycleInput) cycleInput.value = bio.cycle_day;
+            
+            const sleepInput = document.getElementById('sleep_state');
+            if(sleepInput) sleepInput.value = bio.sleep_state;
+
+            setSlider('pleasure', mood.pleasure);
+            setSlider('arousal', mood.arousal);
+            setSlider('dominance', mood.dominance);
         }
 
         function updateStatusUI(data) {
@@ -639,7 +703,6 @@
             updateMetric('sensitivity', bio.sensitivity, 100, '', '');
 
             // 2. Update PAD Model
-            // Map -10..10 to 0..100%
             updatePAD('pleasure', mood.pleasure);
             updatePAD('arousal', mood.arousal);
             updatePAD('dominance', mood.dominance);
@@ -655,6 +718,18 @@
 
             document.getElementById('mood-flavor').innerText = `${data.detailed_info.mood.flavor.role} / ${data.detailed_info.mood.flavor.tone}`;
             document.getElementById('mood-desc').innerText = data.detailed_info.mood.flavor.desc;
+            
+            // 4. Update Prompt Injection (New)
+            const promptContainer = document.getElementById('prompt-container');
+            const promptText = document.getElementById('prompt-text');
+            if (promptContainer && promptText) {
+                if (data.prompt_injection) {
+                    promptContainer.classList.remove('hidden');
+                    promptText.innerText = data.prompt_injection;
+                } else {
+                    promptContainer.classList.add('hidden');
+                }
+            }
         }
 
         function updateMetric(id, value, max, prefix, suffix) {
@@ -819,43 +894,65 @@
 
             document.getElementById('gallery-count').innerText = `${records.length} items on page`;
 
-            list.innerHTML = records.map(record => `
-                <div class="glass-card rounded-xl overflow-hidden group cursor-pointer flex flex-col h-full" onclick="showDetail('${record.id}')">
-                    <!-- Top Bar -->
-                    <div class="p-3 border-b border-white/5 flex justify-between items-center bg-slate-800/30">
-                        <div class="flex gap-2">
-                            <span class="text-xs font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">${record.body_part}</span>
-                            <span class="text-xs font-bold px-2 py-0.5 rounded bg-pink-500/20 text-pink-400">${record.act_type}</span>
+            list.innerHTML = records.map(record => {
+                const tags = record.tags || [];
+                const displayTags = tags.slice(0, 3);
+                const moreTags = tags.length - 3;
+
+                return `
+                <div class="glass-card rounded-xl overflow-hidden group flex flex-col h-[280px] relative transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1">
+                    <!-- Top Bar: Meta Info -->
+                    <div class="p-3 border-b border-white/5 flex justify-between items-center bg-slate-800/40 backdrop-blur-sm">
+                        <div class="flex gap-2 items-center">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">${record.body_part}</span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20">${record.act_type}</span>
                         </div>
-                        <span class="text-xs text-slate-500">${new Date(record.recorded_at).toLocaleDateString()}</span>
+                        <span class="text-[10px] font-mono text-slate-500">${new Date(record.recorded_at).toLocaleDateString(undefined, {month:'2-digit', day:'2-digit'})}</span>
                     </div>
                     
-                    <!-- Content -->
-                    <div class="p-4 flex-1">
-                        <p class="text-sm text-slate-300 line-clamp-3 mb-3">${record.summary}</p>
-                        <div class="flex flex-wrap gap-1 mt-auto">
-                            ${(record.tags || []).slice(0, 3).map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-slate-700 rounded text-slate-400">#${t}</span>`).join('')}
+                    <!-- Content: Summary -->
+                    <div class="p-4 flex-1 overflow-y-auto scrollbar-thin">
+                        <p class="text-sm text-slate-300 leading-relaxed">${record.summary}</p>
+                    </div>
+
+                    <!-- Tags Row -->
+                    <div class="px-4 py-2 flex items-center gap-1.5 flex-wrap min-h-[32px]">
+                        ${displayTags.map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-slate-700/50 rounded text-slate-400 whitespace-nowrap">#${t}</span>`).join('')}
+                        ${moreTags > 0 ? `<span class="text-[10px] px-1.5 py-0.5 bg-slate-800 rounded text-slate-500">+${moreTags}</span>` : ''}
+                    </div>
+
+                    <!-- Footer: Actions -->
+                    <div class="p-3 mt-auto bg-slate-900/40 border-t border-white/5 flex justify-between items-center">
+                        <div class="flex items-center gap-1">
+                            <span class="text-xs text-yellow-500">⭐</span>
+                            <span class="text-xs font-mono text-slate-400">${record.intensity}</span>
+                        </div>
+                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 translate-y-2 group-hover:translate-y-0">
+                             <button onclick="showDetail('${record.id}')" class="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 transition">
+                                查看
+                            </button>
+                            <button onclick="event.stopPropagation(); deleteRecord('${record.id}')" class="text-xs px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition border border-red-500/20">
+                                删除
+                            </button>
                         </div>
                     </div>
-
-                    <!-- Footer -->
-                    <div class="p-3 bg-slate-800/50 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span class="text-xs text-yellow-500">⭐ ${record.intensity}</span>
-                        <button onclick="event.stopPropagation(); deleteRecord('${record.id}')" class="text-red-400 hover:text-red-300">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </button>
-                    </div>
                 </div>
-            `).join('');
+            `}).join('');
 
             // Pagination Controls
-            const prevDisabled = currentPage === 0 ? 'disabled opacity-50' : '';
-            const nextDisabled = records.length < pageSize ? 'disabled opacity-50' : ''; // simple logic
+            const prevDisabled = currentPage === 0 ? 'disabled opacity-50 cursor-not-allowed' : '';
+            const nextDisabled = records.length < pageSize ? 'disabled opacity-50 cursor-not-allowed' : ''; 
             
             document.getElementById('galleryPagination').innerHTML = `
-                <button onclick="loadGallery(${currentPage - 1})" ${prevDisabled} class="px-3 py-1 bg-slate-700 rounded text-sm hover:bg-slate-600">Prev</button>
-                <span class="px-3 py-1 text-slate-400 text-sm">Page ${currentPage + 1}</span>
-                <button onclick="loadGallery(${currentPage + 1})" ${nextDisabled} class="px-3 py-1 bg-slate-700 rounded text-sm hover:bg-slate-600">Next</button>
+                <button onclick="loadGallery(${currentPage - 1})" ${prevDisabled} class="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-700 transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    Prev
+                </button>
+                <span class="px-4 py-2 text-slate-400 text-sm font-mono flex items-center">Page ${currentPage + 1}</span>
+                <button onclick="loadGallery(${currentPage + 1})" ${nextDisabled} class="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-700 transition flex items-center gap-2">
+                    Next
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
             `;
         }
 
@@ -967,6 +1064,7 @@
         
         // Initial Load
         document.addEventListener('DOMContentLoaded', () => {
+             initInteractions();
              // Auto load state
              loadCurrentState();
         });
