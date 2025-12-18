@@ -65,6 +65,8 @@ class TexasStateManager:
                 self.bio_state.last_release_time = recovered_time
                 self.bio_state.last_actual_release_time = recovered_time
                 logger.info(f"[StateManager] ✅ 已从数据库恢复 last_release_time: {recovered_time}")
+                # v3.8.1 修复：恢复后立即保存到 Redis，防止数据丢失
+                self.save_state()
             else:
                 logger.info("[StateManager] 数据库中无释放记录，保持默认值")
         except Exception as e:
