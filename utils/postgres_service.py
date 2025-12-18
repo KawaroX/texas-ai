@@ -1046,3 +1046,32 @@ def update_intimacy_record(record_id: str, record_data: dict) -> bool:
             return cur.rowcount > 0
     finally:
         conn.close()
+
+def get_last_release_timestamp() -> float:
+    """
+    从 intimacy_records 表中获取最后一次释放的时间戳
+    用于在 Redis 状态丢失后恢复 last_release_time
+
+    Returns:
+        时间戳（float），如果没有记录则返回 0.0
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT recorded_at FROM intimacy_records
+                ORDER BY recorded_at DESC
+                LIMIT 1;
+                """
+            )
+            row = cur.fetchone()
+            if row:
+                # 将 PostgreSQL TIMESTAMP 转换为 Unix 时间戳
+                return row[0].timestamp()
+            return 0.0
+    except Exception as e:
+        logger.error(f"获取最后释放时间戳失败: {e}")
+        return 0.0
+    finally:
+        conn.close()
