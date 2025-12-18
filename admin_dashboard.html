@@ -18,266 +18,287 @@
                             border: '#334155'
                         },
                         texas: {
-                            main: '#ef4444', // Red for Texas
-                            accent: '#fbbf24' // Amber
+                            primary: '#e11d48', // Rose 600
+                            accent: '#f59e0b', // Amber 500
+                            bg: '#0f172a'
                         }
                     },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', 'monospace'],
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
                     animation: {
-                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
                     }
                 }
             }
         }
     </script>
     <style>
+        /* Immersive Background */
         body {
-            background-color: #0f172a;
-            background-image: 
-                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-                radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
-                radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+            background-color: #020617; /* Very dark slate */
             color: #e2e8f0;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', sans-serif;
             min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
         }
 
-        /* Glassmorphism Base */
+        /* Texas Background Image */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('https://media.prts.wiki/6/65/%E7%AB%8B%E7%BB%98_%E7%BC%84%E9%BB%98%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_1.png?image_process=format,webp/quality,Q_90');
+            background-size: cover;
+            background-position: center 20%;
+            background-repeat: no-repeat;
+            opacity: 0.15; /* Subtle background */
+            z-index: -2;
+            filter: grayscale(40%) contrast(1.2);
+        }
+        
+        /* Noise Overlay for Texture */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+            opacity: 0.4;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* Deep Glassmorphism */
         .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            background: rgba(15, 23, 42, 0.65); /* Darker, more opaque */
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         }
 
         .glass-card {
-            background: rgba(51, 65, 85, 0.4);
+            background: rgba(30, 41, 59, 0.4);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .glass-card:hover {
-            background: rgba(51, 65, 85, 0.6);
-            border-color: rgba(255, 255, 255, 0.1);
+            background: rgba(30, 41, 59, 0.7);
+            border-color: rgba(255, 255, 255, 0.15);
             transform: translateY(-2px);
+            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
         }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0f172a; 
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #475569; 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #64748b; 
-        }
+        /* Custom Scrollbar - Slim & Sleek */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
 
-        /* Range Slider Styling - Mobile Optimized */
+        /* Range Slider - Tactical Style */
         input[type=range] {
             -webkit-appearance: none;
             width: 100%;
             background: transparent;
-            height: 30px; /* Increase hit area */
+            height: 24px;
         }
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            height: 24px; /* Larger thumb for touch */
-            width: 24px;
-            border-radius: 50%;
-            background: #38bdf8;
+            height: 20px;
+            width: 20px;
+            border-radius: 2px; /* Square/Diamond look */
+            background: #e2e8f0;
             cursor: pointer;
-            margin-top: -10px; /* Center on track */
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.6);
-            border: 2px solid #1e293b; /* Contrast border */
-            transition: transform 0.1s;
+            margin-top: -8px;
+            box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.8);
+            transform: rotate(45deg); /* Diamond shape */
+            transition: all 0.2s;
         }
-        input[type=range]:active::-webkit-slider-thumb {
-            transform: scale(1.2); /* Feedback on touch */
-        }
+        input[type=range]:hover::-webkit-slider-thumb { transform: rotate(45deg) scale(1.1); background: #fff; }
         input[type=range]::-webkit-slider-runnable-track {
             width: 100%;
             height: 4px;
             cursor: pointer;
-            background: #334155;
+            background: rgba(255,255,255,0.1);
             border-radius: 2px;
         }
-        
-        /* Mood Slider specific colors */
-        .slider-pleasure::-webkit-slider-thumb { background: #4ade80; box-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
-        .slider-arousal::-webkit-slider-thumb { background: #f472b6; box-shadow: 0 0 10px rgba(244, 114, 182, 0.5); }
-        .slider-dominance::-webkit-slider-thumb { background: #a78bfa; box-shadow: 0 0 10px rgba(167, 139, 250, 0.5); }
 
-        .loading-spinner {
-            border: 3px solid rgba(255,255,255,0.1);
-            border-radius: 50%;
-            border-top: 3px solid #38bdf8;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
+        /* Loading Animation */
+        .loading-ring {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading-ring:after {
+            content: " ";
+            display: block;
+            width: 16px;
+            height: 16px;
+            margin: 2px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            border-color: #fff transparent #fff transparent;
+            animation: ring 1.2s linear infinite;
+        }
+        @keyframes ring { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="antialiased selection:bg-cyan-500 selection:text-white">
+<body class="antialiased selection:bg-rose-500/30 selection:text-rose-200">
 
-    <!-- Top Navigation Bar -->
-    <nav class="sticky top-0 z-50 glass-panel border-b border-white/5 mb-6 md:mb-8">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">
-                        TX
-                    </div>
-                    <span class="text-lg md:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 truncate max-w-[150px] md:max-w-none">
-                        Texas AI System
-                    </span>
+    <!-- Top Navigation - Minimalist -->
+    <nav class="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl h-16 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-8 h-8 flex items-center justify-center bg-rose-600/20 text-rose-500 font-bold font-mono rounded border border-rose-500/30">
+                    TX
                 </div>
-                
-                <div class="flex items-center gap-4">
-                    <div class="flex items-center px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
-                        <span class="hidden sm:inline">已通过 HTTP Basic Auth 认证</span>
-                        <span class="sm:hidden">已认证</span>
-                    </div>
+                <div class="flex flex-col">
+                    <span class="text-sm font-bold text-slate-100 tracking-wider">OMERTOSA</span>
+                    <span class="text-[10px] text-slate-500 font-mono tracking-widest uppercase">System Interface v2.0</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <!-- Status Indicator -->
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/50 border border-slate-700/50">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-[10px] font-mono text-slate-400 uppercase hidden sm:inline">System Online</span>
                 </div>
             </div>
         </div>
     </nav>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+    <!-- Main Layout -->
+    <div class="pt-24 pb-12 px-4 max-w-7xl mx-auto min-h-screen flex flex-col">
         
-        <!-- Hero / Character Card -->
-        <div class="glass-panel rounded-2xl p-1 mb-6 md:mb-8">
-            <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl overflow-hidden relative">
-                <!-- Decorative BG - Hidden on mobile to save space/distraction -->
-                <div class="hidden md:block absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
-                
-                <div class="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 p-6 md:p-8 text-center md:text-left">
-                    <!-- Avatar -->
-                    <div class="flex-shrink-0 relative group">
-                        <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
-                        <img 
-                            src="https://media.prts.wiki/6/65/%E7%AB%8B%E7%BB%98_%E7%BC%84%E9%BB%98%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_1.png?image_process=format,webp/quality,Q_90" 
-                            alt="Texas" 
-                            class="relative w-32 h-32 md:w-40 md:h-40 object-cover object-top rounded-xl border-2 border-slate-700 shadow-2xl"
-                            onerror="this.src='https://via.placeholder.com/200x200?text=Texas'"
-                        >
-                    </div>
-                    
-                    <!-- Info -->
-                    <div class="flex-1 text-slate-300 w-full">
-                        <div class="flex flex-col md:flex-row items-center gap-2 md:gap-3 mb-2 justify-center md:justify-start">
-                            <h1 class="text-2xl md:text-3xl font-bold text-white">德克萨斯 (Texas)</h1>
-                            <span class="px-2 py-0.5 rounded text-xs font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/20">★★★★★★</span>
-                        </div>
-                        <p class="text-slate-400 mb-6 flex items-center justify-center md:justify-start gap-2 text-sm md:text-base">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-                            企鹅物流 · 剑术大师 · 鲁珀族
-                        </p>
-                        
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                            <div class="glass-card p-2 md:p-3 rounded-lg text-center">
-                                <div class="text-[10px] md:text-xs text-slate-500 uppercase tracking-wider mb-1">Status</div>
-                                <div class="font-semibold text-white text-sm md:text-base">Active</div>
-                            </div>
-                            <div class="glass-card p-2 md:p-3 rounded-lg text-center">
-                                <div class="text-[10px] md:text-xs text-slate-500 uppercase tracking-wider mb-1">Code</div>
-                                <div class="font-semibold text-white text-sm md:text-base truncate">Penguin Logistics</div>
-                            </div>
-                            <div class="glass-card p-2 md:p-3 rounded-lg text-center">
-                                <div class="text-[10px] md:text-xs text-slate-500 uppercase tracking-wider mb-1">Personality</div>
-                                <div class="font-semibold text-white text-sm md:text-base">Cool / Loyal</div>
-                            </div>
-                             <div class="glass-card p-2 md:p-3 rounded-lg text-center">
-                                <div class="text-[10px] md:text-xs text-slate-500 uppercase tracking-wider mb-1">Weapon</div>
-                                <div class="font-semibold text-white text-sm md:text-base">Dual Swords</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <!-- Header Section: Integrated with Background -->
+        <header class="mb-10 flex flex-col md:flex-row items-end md:items-end justify-between gap-6 animate-[fadeIn_0.5s_ease-out]">
+            <div class="flex items-end gap-6">
+                 <!-- No card box anymore, just floating text -->
+                 <div class="relative w-24 h-24 hidden md:block">
+                     <div class="absolute inset-0 bg-rose-500/20 blur-xl rounded-full"></div>
+                     <img src="https://media.prts.wiki/6/65/%E7%AB%8B%E7%BB%98_%E7%BC%84%E9%BB%98%E5%BE%B7%E5%85%8B%E8%90%A8%E6%96%AF_1.png?image_process=format,webp/quality,Q_90" 
+                          class="relative w-full h-full object-cover object-top rounded-lg border border-slate-600/50 shadow-2xl"
+                          alt="Avatar">
+                 </div>
+                 <div>
+                     <h1 class="text-4xl md:text-5xl font-bold text-white tracking-tight mb-2 flex items-center gap-3">
+                         TEXAS
+                         <span class="text-lg font-normal text-rose-500 font-mono border border-rose-500/30 px-2 py-0.5 rounded text-sm tracking-widest">OMERTOSA</span>
+                     </h1>
+                     <p class="text-slate-400 font-mono text-sm max-w-lg">
+                        <span class="text-slate-500">CLASS:</span> EXECUTOR &nbsp;/&nbsp; 
+                        <span class="text-slate-500">CODE:</span> PENGUIN LOGISTICS &nbsp;/&nbsp; 
+                        <span class="text-yellow-500">★★★★★★</span>
+                     </p>
+                 </div>
             </div>
-        </div>
-
-        <!-- Tabs -->
-        <div class="flex space-x-1 rounded-xl bg-slate-800/50 p-1 mb-6 md:mb-8 backdrop-blur overflow-x-auto">
-            <button onclick="switchTab('status')" id="tab-status" class="flex-1 min-w-[100px] rounded-lg py-2.5 text-xs md:text-sm font-medium leading-5 text-blue-400 ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 bg-slate-700 shadow shadow-black/20 transition-all whitespace-nowrap">
-                📊 状态监控
-            </button>
-            <button onclick="switchTab('gallery')" id="tab-gallery" class="flex-1 min-w-[100px] rounded-lg py-2.5 text-xs md:text-sm font-medium leading-5 text-slate-400 hover:bg-slate-700/50 hover:text-white transition-all whitespace-nowrap">
-                🎨 CG 陈列馆
-            </button>
-            <button onclick="switchTab('stats')" id="tab-stats" class="flex-1 min-w-[100px] rounded-lg py-2.5 text-xs md:text-sm font-medium leading-5 text-slate-400 hover:bg-slate-700/50 hover:text-white transition-all whitespace-nowrap">
-                📈 数据分析
-            </button>
-        </div>
+            
+            <!-- Navigation Tabs -->
+            <div class="flex p-1 bg-slate-900/80 backdrop-blur border border-white/5 rounded-lg w-full md:w-auto">
+                <button onclick="switchTab('status')" id="tab-status" class="flex-1 md:flex-none px-6 py-2 text-sm font-medium rounded-md transition-all text-white bg-slate-800 shadow-lg border border-white/10">
+                    MONITOR
+                </button>
+                <button onclick="switchTab('gallery')" id="tab-gallery" class="flex-1 md:flex-none px-6 py-2 text-sm font-medium rounded-md transition-all text-slate-400 hover:text-white hover:bg-white/5">
+                    ARCHIVE
+                </button>
+                <button onclick="switchTab('stats')" id="tab-stats" class="flex-1 md:flex-none px-6 py-2 text-sm font-medium rounded-md transition-all text-slate-400 hover:text-white hover:bg-white/5">
+                    ANALYSIS
+                </button>
+            </div>
+        </header>
 
         <!-- Content Area: Status -->
         <div id="content-status" class="tab-content">
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 
-                <!-- Left Column: Live Monitor -->
+                <!-- Left Column: Live Monitor (Tactical Display) -->
                 <div class="lg:col-span-7 space-y-6">
                     <!-- Monitor Header -->
-                    <div class="glass-panel p-6 rounded-2xl flex items-center justify-between">
+                    <div class="glass-panel p-5 rounded-lg flex items-center justify-between border-l-4 border-emerald-500">
                         <div class="flex items-center gap-3">
-                            <div class="relative">
-                                <span class="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-75 hidden" id="live-indicator"></span>
-                                <span class="relative block w-3 h-3 rounded-full bg-slate-500" id="status-dot"></span>
-                            </div>
-                            <h2 class="text-xl font-bold text-white">实时状态监控</h2>
+                            <span class="relative flex h-3 w-3">
+                              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 hidden" id="live-indicator"></span>
+                              <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                            </span>
+                            <h2 class="text-sm font-bold text-white tracking-widest uppercase">Biometric Monitor</h2>
                         </div>
                         <div class="flex items-center gap-4">
-                            <label class="flex items-center cursor-pointer gap-2">
-                                <span class="text-sm text-slate-400 font-medium">自动刷新 (3s)</span>
-                                <div class="relative">
-                                    <input type="checkbox" id="auto-refresh-toggle" class="sr-only peer" onchange="toggleAutoRefresh()">
-                                    <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                            <label class="flex items-center cursor-pointer gap-2 group">
+                                <span class="text-[10px] text-slate-500 font-mono uppercase group-hover:text-emerald-400 transition">Auto-Sync</span>
+                                <input type="checkbox" id="auto-refresh-toggle" class="peer sr-only" onchange="toggleAutoRefresh()">
+                                <div class="w-8 h-4 bg-slate-800 rounded-full peer peer-checked:bg-emerald-900 peer-checked:border peer-checked:border-emerald-500/50 relative transition-colors">
+                                    <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-slate-500 rounded-full peer-checked:translate-x-4 peer-checked:bg-emerald-400 transition-all"></div>
                                 </div>
                             </label>
-                            <button onclick="loadCurrentState()" class="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            <button onclick="loadCurrentState()" class="text-slate-500 hover:text-white transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Main Stats Bars -->
-                    <div class="glass-panel p-6 rounded-2xl space-y-6">
+                    <!-- Main Stats Bars (Cyberpunk Style) -->
+                    <div class="glass-panel p-6 rounded-lg space-y-8 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 p-2 opacity-10">
+                            <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+                        </div>
+
                         <!-- Stamina -->
-                        <div>
-                            <div class="flex justify-between mb-2">
-                                <span class="text-slate-400 font-medium text-sm">体力 / Stamina</span>
-                                <span class="text-emerald-400 font-mono font-bold" id="display-stamina">--</span>
+                        <div class="relative">
+                            <div class="flex justify-between mb-1 items-end">
+                                <span class="text-xs font-mono text-emerald-500 uppercase tracking-widest">Stamina</span>
+                                <span class="text-xl font-mono font-bold text-white" id="display-stamina">--</span>
                             </div>
-                            <div class="w-full bg-slate-700/50 rounded-full h-4 overflow-hidden">
-                                <div id="bar-stamina" class="bg-gradient-to-r from-emerald-500 to-teal-400 h-4 rounded-full transition-all duration-700" style="width: 0%"></div>
+                            <div class="w-full bg-slate-800 h-2 rounded-sm overflow-hidden">
+                                <div id="bar-stamina" class="h-full bg-gradient-to-r from-emerald-600 to-teal-400 transition-all duration-700 w-0"></div>
+                            </div>
+                            <div class="flex justify-between mt-1">
+                                <span class="text-[10px] text-slate-600 font-mono">CRITICAL</span>
+                                <span class="text-[10px] text-slate-600 font-mono">OPTIMAL</span>
                             </div>
                         </div>
                         
                         <!-- Lust -->
-                        <div>
-                            <div class="flex justify-between mb-2">
-                                <span class="text-slate-400 font-medium text-sm">欲望 / Lust</span>
-                                <span class="text-pink-500 font-mono font-bold" id="display-lust">--</span>
+                        <div class="relative">
+                            <div class="flex justify-between mb-1 items-end">
+                                <span class="text-xs font-mono text-rose-500 uppercase tracking-widest">Arousal Level</span>
+                                <span class="text-xl font-mono font-bold text-white" id="display-lust">--</span>
                             </div>
-                            <div class="w-full bg-slate-700/50 rounded-full h-4 overflow-hidden">
-                                <div id="bar-lust" class="bg-gradient-to-r from-pink-500 to-rose-600 h-4 rounded-full transition-all duration-700" style="width: 0%"></div>
+                            <div class="w-full bg-slate-800 h-2 rounded-sm overflow-hidden">
+                                <div id="bar-lust" class="h-full bg-gradient-to-r from-rose-600 to-pink-500 transition-all duration-700 w-0"></div>
+                            </div>
+                            <div class="w-full flex gap-0.5 mt-1">
+                                <div class="h-1 w-1 bg-rose-900/50 flex-1"></div>
+                                <div class="h-1 w-1 bg-rose-900/50 flex-1"></div>
+                                <div class="h-1 w-1 bg-rose-900/50 flex-1"></div>
+                                <div class="h-1 w-1 bg-rose-900/50 flex-1"></div>
                             </div>
                         </div>
 
                         <!-- Sensitivity -->
-                        <div>
-                            <div class="flex justify-between mb-2">
-                                <span class="text-slate-400 font-medium text-sm">敏感度 / Sensitivity</span>
-                                <span class="text-purple-400 font-mono font-bold" id="display-sensitivity">--</span>
+                        <div class="relative">
+                            <div class="flex justify-between mb-1 items-end">
+                                <span class="text-xs font-mono text-violet-500 uppercase tracking-widest">Sensitivity</span>
+                                <span class="text-xl font-mono font-bold text-white" id="display-sensitivity">--</span>
                             </div>
-                            <div class="w-full bg-slate-700/50 rounded-full h-4 overflow-hidden">
-                                <div id="bar-sensitivity" class="bg-gradient-to-r from-purple-500 to-violet-600 h-4 rounded-full transition-all duration-700" style="width: 0%"></div>
+                            <div class="w-full bg-slate-800 h-2 rounded-sm overflow-hidden">
+                                <div id="bar-sensitivity" class="h-full bg-gradient-to-r from-violet-600 to-purple-500 transition-all duration-700 w-0"></div>
                             </div>
                         </div>
                     </div>
@@ -285,89 +306,91 @@
                     <!-- Detailed Info Cards Grid -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <!-- Mood PAD Model -->
-                        <div class="glass-panel p-6 rounded-2xl">
-                            <h3 class="text-slate-300 font-bold mb-4 flex items-center gap-2">
-                                <span>🧠 情绪模型 (PAD)</span>
-                            </h3>
-                            <div class="space-y-4">
-                                <div class="space-y-1">
-                                    <div class="flex justify-between text-xs text-slate-400">
-                                        <span>Pleasure (愉悦)</span>
-                                        <span id="display-pleasure" class="text-slate-200">0.0</span>
+                        <div class="glass-panel p-6 rounded-lg">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 border-b border-white/5 pb-2">PAD Emotional Matrix</h3>
+                            <div class="space-y-6">
+                                <div class="relative">
+                                    <div class="flex justify-between text-[10px] font-mono text-slate-500 mb-1 uppercase">
+                                        <span>Pleasure</span>
+                                        <span id="display-pleasure" class="text-white">0.0</span>
                                     </div>
-                                    <div class="w-full bg-slate-700/50 rounded-full h-2">
-                                        <div id="bar-pleasure" class="bg-green-400 h-2 rounded-full transition-all duration-500 relative" style="width: 50%; left: 0"></div>
-                                    </div>
-                                </div>
-                                <div class="space-y-1">
-                                    <div class="flex justify-between text-xs text-slate-400">
-                                        <span>Arousal (激活)</span>
-                                        <span id="display-arousal" class="text-slate-200">0.0</span>
-                                    </div>
-                                    <div class="w-full bg-slate-700/50 rounded-full h-2">
-                                        <div id="bar-arousal" class="bg-orange-400 h-2 rounded-full transition-all duration-500 relative" style="width: 50%; left: 0"></div>
+                                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden flex">
+                                        <div class="w-1/2 h-full bg-transparent border-r border-slate-600"></div> <!-- Center marker -->
+                                        <div id="bar-pleasure" class="absolute h-1.5 bg-emerald-500 transition-all duration-500" style="left: 50%; width: 0%"></div>
                                     </div>
                                 </div>
-                                <div class="space-y-1">
-                                    <div class="flex justify-between text-xs text-slate-400">
-                                        <span>Dominance (掌控)</span>
-                                        <span id="display-dominance" class="text-slate-200">0.0</span>
+                                <div class="relative">
+                                    <div class="flex justify-between text-[10px] font-mono text-slate-500 mb-1 uppercase">
+                                        <span>Arousal</span>
+                                        <span id="display-arousal" class="text-white">0.0</span>
                                     </div>
-                                    <div class="w-full bg-slate-700/50 rounded-full h-2">
-                                        <div id="bar-dominance" class="bg-purple-400 h-2 rounded-full transition-all duration-500 relative" style="width: 50%; left: 0"></div>
+                                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden flex">
+                                         <div class="w-1/2 h-full bg-transparent border-r border-slate-600"></div>
+                                        <div id="bar-arousal" class="absolute h-1.5 bg-orange-500 transition-all duration-500" style="left: 50%; width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div class="relative">
+                                    <div class="flex justify-between text-[10px] font-mono text-slate-500 mb-1 uppercase">
+                                        <span>Dominance</span>
+                                        <span id="display-dominance" class="text-white">0.0</span>
+                                    </div>
+                                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden flex">
+                                         <div class="w-1/2 h-full bg-transparent border-r border-slate-600"></div>
+                                        <div id="bar-dominance" class="absolute h-1.5 bg-purple-500 transition-all duration-500" style="left: 50%; width: 0%"></div>
                                     </div>
                                 </div>
                                 
-                                <div class="mt-4 pt-4 border-t border-slate-700/50">
-                                    <div class="text-center">
-                                        <div id="mood-flavor" class="text-lg font-bold text-white mb-1">--</div>
-                                        <div id="mood-desc" class="text-xs text-slate-400">--</div>
+                                <div class="mt-4 pt-4 border-t border-white/5 flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded bg-slate-800 flex items-center justify-center text-xl">💭</div>
+                                    <div>
+                                        <div id="mood-flavor" class="text-sm font-bold text-white font-mono">--</div>
+                                        <div id="mood-desc" class="text-[10px] text-slate-500 uppercase tracking-wider">--</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Bio Info -->
-                        <div class="glass-panel p-6 rounded-2xl space-y-4">
-                            <h3 class="text-slate-300 font-bold mb-2">📊 生理指标</h3>
+                        <div class="glass-panel p-6 rounded-lg flex flex-col justify-between">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 border-b border-white/5 pb-2">Physiological Data</h3>
                             
-                            <div class="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
-                                <span class="text-sm text-slate-400">生理周期</span>
-                                <div class="text-right">
-                                    <div id="display-cycle-day" class="text-white font-bold">Day --</div>
-                                    <div id="display-cycle-phase" class="text-xs text-blue-400">--</div>
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-slate-500 font-mono">CYCLE PHASE</span>
+                                    <div class="text-right">
+                                        <div id="display-cycle-day" class="text-white font-bold text-sm">DAY --</div>
+                                        <div id="display-cycle-phase" class="text-[10px] text-blue-400 uppercase">--</div>
+                                    </div>
+                                </div>
+
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-slate-500 font-mono">SENS. LEVEL</span>
+                                    <div class="text-right">
+                                        <div id="display-sens-level" class="text-white font-bold text-sm">LV.--</div>
+                                        <div id="display-sens-title" class="text-[10px] text-purple-400 uppercase">--</div>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
-                                <span class="text-sm text-slate-400">敏感等级</span>
-                                <div class="text-right">
-                                    <div id="display-sens-level" class="text-white font-bold">Lv.--</div>
-                                    <div id="display-sens-title" class="text-xs text-purple-400">--</div>
-                                </div>
-                            </div>
-
-                            <div class="p-3 bg-slate-800/50 rounded-lg">
-                                <div class="text-xs text-slate-500 uppercase mb-1">Desire State</div>
-                                <div id="display-lust-desc" class="text-sm text-slate-300 italic">--</div>
+                            <div class="mt-4 p-3 bg-slate-950/50 rounded border border-white/5">
+                                <div class="text-[10px] text-slate-600 uppercase mb-1 font-mono">Current Desire</div>
+                                <div id="display-lust-desc" class="text-xs text-slate-300 italic leading-relaxed">--</div>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Prompt Injection (Collapsible) -->
-                    <div id="prompt-container" class="glass-panel p-4 rounded-2xl hidden">
+                    <div id="prompt-container" class="glass-panel p-0 rounded-lg hidden overflow-hidden">
                         <details class="group">
-                            <summary class="flex items-center justify-between cursor-pointer text-slate-400 hover:text-white transition list-none">
-                                <span class="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                                    Active System Prompt
+                            <summary class="flex items-center justify-between cursor-pointer p-4 bg-slate-800/50 hover:bg-slate-800 transition">
+                                <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                                    <span class="w-1.5 h-1.5 bg-yellow-500 rounded-full"></span>
+                                    System Override Prompt
                                 </span>
-                                <span class="transition group-open:rotate-180">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                </span>
+                                <span class="text-slate-500 group-open:rotate-180 transition">▼</span>
                             </summary>
-                            <div class="mt-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
-                                <pre id="prompt-text" class="text-xs text-slate-300 font-mono whitespace-pre-wrap break-all leading-relaxed"></pre>
+                            <div class="p-4 bg-black/30 border-t border-white/5 max-h-60 overflow-y-auto custom-scrollbar">
+                                <pre id="prompt-text" class="text-[10px] text-green-400/80 font-mono whitespace-pre-wrap break-all leading-relaxed"></pre>
                             </div>
                         </details>
                     </div>
@@ -375,125 +398,115 @@
 
                 <!-- Right Column: Controls -->
                 <div class="lg:col-span-5 space-y-6">
-                    <div class="glass-panel p-6 rounded-2xl border-t-4 border-blue-500">
-                        <div class="flex items-center justify-between mb-6">
-                            <h2 class="text-xl font-bold text-white">状态干预</h2>
-                            <button onclick="fillCurrentValues()" class="text-xs px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-blue-300 transition">
-                                📋 同步当前值
+                    <div class="glass-panel p-6 rounded-lg border-t-2 border-rose-500">
+                        <div class="flex items-center justify-between mb-8">
+                            <h2 class="text-sm font-bold text-white uppercase tracking-widest">State Intervention</h2>
+                            <button onclick="fillCurrentValues()" class="text-[10px] px-3 py-1 bg-slate-800 hover:bg-slate-700 rounded-sm text-slate-300 border border-slate-600 transition font-mono">
+                                SYNC CURRENT
                             </button>
                         </div>
 
-                        <form id="updateForm" class="space-y-6">
+                        <form id="updateForm" class="space-y-8">
                             <!-- Sliders Group -->
-                            <div class="space-y-5">
+                            <div class="space-y-6">
                                 <!-- Stamina Slider -->
                                 <div>
                                     <div class="flex justify-between mb-2">
-                                        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">体力 (Stamina)</label>
-                                        <span id="val-stamina" class="text-sm font-mono text-emerald-400">--</span>
+                                        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Stamina</label>
+                                        <span id="val-stamina" class="text-xs font-mono text-emerald-400">--</span>
                                     </div>
                                     <input type="range" id="stamina" min="0" max="100" step="1" 
-                                           oninput="document.getElementById('val-stamina').innerText = this.value"
-                                           class="accent-emerald-500">
+                                           oninput="document.getElementById('val-stamina').innerText = this.value">
                                 </div>
 
                                 <!-- Lust Slider -->
                                 <div>
                                     <div class="flex justify-between mb-2">
-                                        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">欲望 (Lust)</label>
-                                        <span id="val-lust" class="text-sm font-mono text-pink-500">--</span>
+                                        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Lust</label>
+                                        <span id="val-lust" class="text-xs font-mono text-rose-400">--</span>
                                     </div>
                                     <input type="range" id="lust" min="0" max="100" step="1" 
-                                           oninput="document.getElementById('val-lust').innerText = this.value"
-                                           class="accent-pink-500">
+                                           oninput="document.getElementById('val-lust').innerText = this.value">
                                 </div>
 
                                 <!-- Sensitivity Slider -->
                                 <div>
                                     <div class="flex justify-between mb-2">
-                                        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">敏感度 (Sensitivity)</label>
-                                        <span id="val-sensitivity" class="text-sm font-mono text-purple-500">--</span>
+                                        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Sensitivity</label>
+                                        <span id="val-sensitivity" class="text-xs font-mono text-violet-400">--</span>
                                     </div>
                                     <input type="range" id="sensitivity" min="0" max="100" step="1" 
-                                           oninput="document.getElementById('val-sensitivity').innerText = this.value"
-                                           class="accent-purple-500">
+                                           oninput="document.getElementById('val-sensitivity').innerText = this.value">
                                 </div>
 
-                                <!-- Cycle Day Input (Number is better here) -->
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Cycle Day</label>
+                                <!-- Cycle & Sleep -->
+                                <div class="grid grid-cols-2 gap-4 pt-2">
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Cycle Day</label>
                                         <input type="number" id="cycle_day" min="1" max="28" 
-                                               class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-blue-500 focus:outline-none transition">
+                                               class="w-full bg-slate-900 border border-slate-700 rounded-sm p-2 text-white text-xs font-mono focus:border-rose-500 focus:outline-none transition text-center">
                                     </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Sleep State</label>
-                                        <select id="sleep_state" class="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-blue-500 focus:outline-none transition">
-                                            <option value="Awake">Awake</option>
-                                            <option value="DeepSleep">DeepSleep</option>
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Sleep State</label>
+                                        <select id="sleep_state" class="w-full bg-slate-900 border border-slate-700 rounded-sm p-2 text-white text-xs font-mono focus:border-rose-500 focus:outline-none transition">
+                                            <option value="Awake">AWAKE</option>
+                                            <option value="DeepSleep">DEEP SLEEP</option>
                                         </select>
                                     </div>
                                 </div>
 
-                                <!-- Mood Sliders -->
-                                <div class="pt-4 border-t border-slate-700/50 space-y-4">
-                                    <div class="text-xs font-bold text-slate-500 uppercase">Mood (PAD) Override</div>
+                                <!-- Mood Sliders (Collapsed Visual) -->
+                                <div class="pt-6 border-t border-white/5 space-y-4">
+                                    <div class="text-[10px] font-bold text-slate-600 uppercase tracking-widest font-mono mb-2">Mood Override (PAD)</div>
                                     
-                                    <div>
-                                        <div class="flex justify-between mb-1">
-                                            <span class="text-xs text-slate-400">Pleasure</span>
-                                            <span id="val-pleasure" class="text-xs font-mono text-green-400">--</span>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <div>
+                                            <label class="block text-[9px] text-center text-slate-500 mb-1">P</label>
+                                            <input type="range" id="pleasure" min="-10" max="10" step="0.1" class="h-1"
+                                                oninput="document.getElementById('val-pleasure').innerText = this.value">
+                                            <div id="val-pleasure" class="text-[9px] text-center text-slate-400 mt-1 font-mono">--</div>
                                         </div>
-                                        <input type="range" id="pleasure" min="-10" max="10" step="0.1" 
-                                               oninput="document.getElementById('val-pleasure').innerText = this.value"
-                                               class="slider-pleasure">
-                                    </div>
-                                    <div>
-                                        <div class="flex justify-between mb-1">
-                                            <span class="text-xs text-slate-400">Arousal</span>
-                                            <span id="val-arousal" class="text-xs font-mono text-orange-400">--</span>
+                                        <div>
+                                            <label class="block text-[9px] text-center text-slate-500 mb-1">A</label>
+                                            <input type="range" id="arousal" min="-10" max="10" step="0.1" class="h-1"
+                                                oninput="document.getElementById('val-arousal').innerText = this.value">
+                                             <div id="val-arousal" class="text-[9px] text-center text-slate-400 mt-1 font-mono">--</div>
                                         </div>
-                                        <input type="range" id="arousal" min="-10" max="10" step="0.1" 
-                                               oninput="document.getElementById('val-arousal').innerText = this.value"
-                                               class="slider-arousal">
-                                    </div>
-                                    <div>
-                                        <div class="flex justify-between mb-1">
-                                            <span class="text-xs text-slate-400">Dominance</span>
-                                            <span id="val-dominance" class="text-xs font-mono text-purple-400">--</span>
+                                        <div>
+                                            <label class="block text-[9px] text-center text-slate-500 mb-1">D</label>
+                                            <input type="range" id="dominance" min="-10" max="10" step="0.1" class="h-1"
+                                                oninput="document.getElementById('val-dominance').innerText = this.value">
+                                             <div id="val-dominance" class="text-[9px] text-center text-slate-400 mt-1 font-mono">--</div>
                                         </div>
-                                        <input type="range" id="dominance" min="-10" max="10" step="0.1" 
-                                               oninput="document.getElementById('val-dominance').innerText = this.value"
-                                               class="slider-dominance">
                                     </div>
                                 </div>
                             </div>
 
-                            <button type="button" onclick="updateState()" class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transform hover:-translate-y-1 transition-all duration-200">
-                                💾 应用修改 (Apply Changes)
+                            <button type="button" id="btn-save" onclick="updateState()" class="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-sm shadow-lg shadow-rose-900/20 border border-rose-500 transition-all font-mono tracking-widest text-sm">
+                                EXECUTE CHANGES
                             </button>
                         </form>
                     </div>
 
                     <!-- Quick Actions Grid -->
-                    <div class="glass-panel p-6 rounded-2xl">
-                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">快速操作 (Presets)</h3>
+                    <div class="glass-panel p-6 rounded-lg">
+                        <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 font-mono">Quick Protocols</h3>
                         <div class="grid grid-cols-2 gap-3">
-                            <button onclick="quickAction('reset')" class="p-3 bg-slate-700/50 hover:bg-emerald-500/20 border border-slate-600 hover:border-emerald-500/50 rounded-lg text-slate-300 hover:text-emerald-400 transition text-left group">
-                                <div class="text-xl mb-1 group-hover:scale-110 transition-transform">🔄</div>
-                                <div class="text-xs font-bold">完全重置</div>
+                            <button onclick="quickAction('reset')" class="p-3 bg-slate-800/50 hover:bg-emerald-900/30 border border-slate-700 hover:border-emerald-500/50 rounded-sm text-slate-400 hover:text-emerald-400 transition text-left group">
+                                <div class="text-[10px] font-bold uppercase tracking-widest mb-1">RESET</div>
+                                <div class="text-[9px] text-slate-600 group-hover:text-emerald-500/70">Normalize all vitals</div>
                             </button>
-                            <button onclick="quickAction('horny')" class="p-3 bg-slate-700/50 hover:bg-pink-500/20 border border-slate-600 hover:border-pink-500/50 rounded-lg text-slate-300 hover:text-pink-400 transition text-left group">
-                                <div class="text-xl mb-1 group-hover:scale-110 transition-transform">🔥</div>
-                                <div class="text-xs font-bold">发情状态</div>
+                            <button onclick="quickAction('horny')" class="p-3 bg-slate-800/50 hover:bg-pink-900/30 border border-slate-700 hover:border-pink-500/50 rounded-sm text-slate-400 hover:text-pink-400 transition text-left group">
+                                <div class="text-[10px] font-bold uppercase tracking-widest mb-1">AROUSAL</div>
+                                <div class="text-[9px] text-slate-600 group-hover:text-pink-500/70">Trigger high desire</div>
                             </button>
-                            <button onclick="quickAction('menstrual')" class="p-3 bg-slate-700/50 hover:bg-red-500/20 border border-slate-600 hover:border-red-500/50 rounded-lg text-slate-300 hover:text-red-400 transition text-left group">
-                                <div class="text-xl mb-1 group-hover:scale-110 transition-transform">🩸</div>
-                                <div class="text-xs font-bold">经期模拟</div>
+                            <button onclick="quickAction('menstrual')" class="p-3 bg-slate-800/50 hover:bg-red-900/30 border border-slate-700 hover:border-red-500/50 rounded-sm text-slate-400 hover:text-red-400 transition text-left group">
+                                <div class="text-[10px] font-bold uppercase tracking-widest mb-1">CYCLE</div>
+                                <div class="text-[9px] text-slate-600 group-hover:text-red-500/70">Simulate day 2</div>
                             </button>
-                            <button onclick="quickAction('tired')" class="p-3 bg-slate-700/50 hover:bg-blue-500/20 border border-slate-600 hover:border-blue-500/50 rounded-lg text-slate-300 hover:text-blue-400 transition text-left group">
-                                <div class="text-xl mb-1 group-hover:scale-110 transition-transform">😴</div>
-                                <div class="text-xs font-bold">力竭休息</div>
+                            <button onclick="quickAction('tired')" class="p-3 bg-slate-800/50 hover:bg-blue-900/30 border border-slate-700 hover:border-blue-500/50 rounded-sm text-slate-400 hover:text-blue-400 transition text-left group">
+                                <div class="text-[10px] font-bold uppercase tracking-widest mb-1">REST</div>
+                                <div class="text-[9px] text-slate-600 group-hover:text-blue-500/70">Deplete stamina</div>
                             </button>
                         </div>
                     </div>
@@ -503,125 +516,83 @@
 
         <!-- Content Area: Gallery -->
         <div id="content-gallery" class="tab-content hidden">
-            <div class="glass-panel p-6 rounded-2xl min-h-[500px] flex flex-col">
-                <div class="flex items-center justify-between mb-8">
-                    <h2 class="text-xl font-bold text-white flex items-center gap-2">
-                        <span>📸 CG 记录陈列</span>
-                        <span class="text-xs font-normal text-slate-400 px-2 py-1 bg-slate-800 rounded-full" id="gallery-count">0 records</span>
-                    </h2>
-                    <button onclick="loadGallery(0)" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition shadow-lg shadow-blue-600/20 flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                        刷新列表
-                    </button>
-                </div>
-                
-                <!-- Gallery Grid -->
-                <div id="galleryList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 flex-1">
-                    <!-- Gallery Items will be injected here -->
-                </div>
-
-                <!-- Pagination -->
-                <div id="galleryPagination" class="mt-8 flex justify-center gap-2 pt-4 border-t border-slate-700/50">
-                    <!-- Pagination buttons injected via JS -->
-                </div>
-            </div>
+             <!-- Will be populated by JS -->
         </div>
 
         <!-- Content Area: Stats -->
         <div id="content-stats" class="tab-content hidden">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Summary Card -->
-                <div class="glass-panel p-6 rounded-2xl lg:col-span-1">
-                    <h3 class="text-lg font-bold text-white mb-6">总体统计</h3>
-                    <div id="statsContent" class="space-y-4">
-                        <!-- Stats Summary Injected JS -->
-                    </div>
-                </div>
-
-                <!-- Chart Card -->
-                <div class="glass-panel p-6 rounded-2xl lg:col-span-2">
-                    <h3 class="text-lg font-bold text-white mb-6">部位触发分布</h3>
-                    <div class="relative h-64 w-full">
-                        <canvas id="bodyPartChart"></canvas>
-                    </div>
-                </div>
-            </div>
+             <!-- Will be populated by JS -->
         </div>
 
     </div>
 
-    <!-- Gallery Modal (Hidden) -->
-    <div id="galleryModal" class="hidden fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4">
-        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeModal()"></div>
-        <div class="relative w-full max-w-4xl h-[90vh] md:max-h-[90vh] md:h-auto overflow-y-auto glass-panel rounded-t-2xl md:rounded-2xl shadow-2xl p-6 md:p-8 animate-[slideUp_0.3s_ease-out] md:animate-[fadeIn_0.2s_ease-out]">
-            <button onclick="closeModal()" class="absolute top-4 right-4 p-2 bg-slate-800/50 rounded-full text-slate-400 hover:text-white transition z-10">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-            <div id="modalContent"></div>
+    <!-- Modal Template -->
+    <div id="galleryModal" class="hidden fixed inset-0 z-[100] flex items-end md:items-center justify-center">
+        <div class="absolute inset-0 bg-slate-950/90 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="relative w-full max-w-4xl h-[85vh] md:h-auto md:max-h-[85vh] glass-panel border-t border-white/10 md:border md:rounded-2xl p-0 flex flex-col animate-[slideUp_0.3s_ease-out]">
+            <!-- Modal Header -->
+            <div class="p-4 md:p-6 border-b border-white/5 flex items-center justify-between">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <span class="w-1 h-6 bg-rose-500 rounded-full"></span>
+                    RECORD DETAILS
+                </h3>
+                <button onclick="closeModal()" class="p-2 hover:bg-white/10 rounded-full transition text-slate-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <!-- Modal Content (Scrollable) -->
+            <div id="modalContent" class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
+                <!-- Injected via JS -->
+            </div>
         </div>
     </div>
 
     <script>
-        // Core Logic - PRESERVED STRICTLY
         const API_BASE = window.location.origin;
         let currentState = null;
         let currentPage = 0;
-        const pageSize = 12; // Increased for grid layout
+        const pageSize = 12;
         let autoRefreshInterval = null;
+        let isUserInteracting = false;
 
         function getApiKey() {
             if (!window.INJECTED_API_KEY) {
-                // In dev mode, this might fail if not injected, but production relies on it.
-                // alert('API密钥未正确加载，请刷新页面！');
-                // throw new Error('Missing injected API key');
-                
-                // Fallback for UI testing if needed, but strictly per rules we respect the injected one.
                 return window.INJECTED_API_KEY || '';
             }
             return window.INJECTED_API_KEY;
         }
 
+        function initInteractions() {
+            const inputs = document.querySelectorAll('input[type=range], input[type=number], select');
+            inputs.forEach(input => {
+                input.addEventListener('mousedown', () => isUserInteracting = true);
+                input.addEventListener('touchstart', () => isUserInteracting = true);
+                input.addEventListener('change', () => isUserInteracting = false);
+                input.addEventListener('mouseup', () => setTimeout(() => isUserInteracting = false, 1000));
+                input.addEventListener('touchend', () => setTimeout(() => isUserInteracting = false, 1000));
+            });
+        }
+
         function switchTab(tab) {
-            // UI Update
             ['status', 'gallery', 'stats'].forEach(t => {
                 const btn = document.getElementById(`tab-${t}`);
                 const content = document.getElementById(`content-${t}`);
                 
                 if (t === tab) {
-                    btn.classList.add('bg-slate-700', 'text-blue-400', 'shadow');
-                    btn.classList.remove('text-slate-400', 'hover:bg-slate-700/50');
+                    btn.classList.remove('text-slate-400', 'hover:text-white', 'hover:bg-white/5');
+                    btn.classList.add('text-white', 'bg-slate-800', 'shadow-lg', 'border', 'border-white/10');
                     content.classList.remove('hidden');
                 } else {
-                    btn.classList.remove('bg-slate-700', 'text-blue-400', 'shadow');
-                    btn.classList.add('text-slate-400', 'hover:bg-slate-700/50');
+                    btn.classList.add('text-slate-400', 'hover:text-white', 'hover:bg-white/5');
+                    btn.classList.remove('text-white', 'bg-slate-800', 'shadow-lg', 'border', 'border-white/10');
                     content.classList.add('hidden');
                 }
             });
 
-            // Logic Trigger
             if (tab === 'gallery') loadGallery();
             if (tab === 'stats') loadStats();
             if (tab === 'status') loadCurrentState();
-        }
-
-        // --- Logic Implementation ---
-        
-        let isUserInteracting = false; // Track if user is dragging sliders
-
-        function initInteractions() {
-            // Track user interaction to prevent auto-refresh conflict
-            const inputs = document.querySelectorAll('input[type=range], input[type=number], select');
-            inputs.forEach(input => {
-                input.addEventListener('mousedown', () => isUserInteracting = true);
-                input.addEventListener('touchstart', () => isUserInteracting = true);
-                input.addEventListener('change', () => {
-                    isUserInteracting = false;
-                    // Optional: Auto-save on change? Maybe too aggressive.
-                });
-                // Reset flag after delay if they just clicked
-                input.addEventListener('mouseup', () => setTimeout(() => isUserInteracting = false, 1000));
-                input.addEventListener('touchend', () => setTimeout(() => isUserInteracting = false, 1000));
-            });
         }
 
         function toggleAutoRefresh() {
@@ -631,13 +602,13 @@
             if (checkbox.checked) {
                 loadCurrentState();
                 autoRefreshInterval = setInterval(loadCurrentState, 3000);
-                indicator.classList.remove('hidden');
+                if(indicator) indicator.classList.remove('hidden');
             } else {
                 if (autoRefreshInterval) {
                     clearInterval(autoRefreshInterval);
                     autoRefreshInterval = null;
                 }
-                indicator.classList.add('hidden');
+                if(indicator) indicator.classList.add('hidden');
             }
         }
 
@@ -651,26 +622,12 @@
                 currentState = data;
                 updateStatusUI(data);
                 
-                // Auto-sync sliders ONLY if user is not interacting
                 if (!isUserInteracting) {
                     syncSlidersWithState(data);
                 }
                 
-                // Update status dot
-                const dot = document.getElementById('status-dot');
-                if(dot) {
-                    dot.classList.remove('bg-slate-500', 'bg-red-500');
-                    dot.classList.add('bg-emerald-500');
-                    setTimeout(() => dot.classList.remove('bg-emerald-500'), 500); 
-                }
-                
             } catch (error) {
                 console.error('Error loading state:', error);
-                const dot = document.getElementById('status-dot');
-                if(dot) {
-                    dot.classList.remove('bg-slate-500', 'bg-emerald-500');
-                    dot.classList.add('bg-red-500');
-                }
             }
         }
 
@@ -697,17 +654,14 @@
             const bio = data.bio;
             const mood = data.mood;
 
-            // 1. Update Bars & Text
             updateMetric('stamina', bio.stamina, 100, '', '');
             updateMetric('lust', bio.lust, 100, '', '');
             updateMetric('sensitivity', bio.sensitivity, 100, '', '');
 
-            // 2. Update PAD Model
             updatePAD('pleasure', mood.pleasure);
             updatePAD('arousal', mood.arousal);
             updatePAD('dominance', mood.dominance);
 
-            // 3. Detailed Info
             document.getElementById('display-cycle-day').innerText = `Day ${bio.cycle_day}`;
             document.getElementById('display-cycle-phase').innerText = data.detailed_info.cycle.phase;
             
@@ -719,7 +673,6 @@
             document.getElementById('mood-flavor').innerText = `${data.detailed_info.mood.flavor.role} / ${data.detailed_info.mood.flavor.tone}`;
             document.getElementById('mood-desc').innerText = data.detailed_info.mood.flavor.desc;
             
-            // 4. Update Prompt Injection (New)
             const promptContainer = document.getElementById('prompt-container');
             const promptText = document.getElementById('prompt-text');
             if (promptContainer && promptText) {
@@ -742,8 +695,6 @@
         }
 
         function updatePAD(id, value) {
-            // value is -10 to 10. 
-            // 0 -> 50%, -10 -> 0%, 10 -> 100%
             const percentage = ((value + 10) / 20) * 100;
             const bar = document.getElementById(`bar-${id}`);
             const text = document.getElementById(`display-${id}`);
@@ -751,27 +702,8 @@
             if (bar) bar.style.width = `${percentage}%`;
             if (text) {
                 text.innerText = value.toFixed(1);
-                // Colorize text
                 text.className = value > 0 ? 'text-emerald-400 font-mono' : (value < 0 ? 'text-rose-400 font-mono' : 'text-slate-400 font-mono');
             }
-        }
-
-        function fillCurrentValues() {
-            if (!currentState) { alert('请先加载状态 (Load State First)'); return; }
-            
-            const bio = currentState.bio;
-            const mood = currentState.mood;
-
-            setSlider('stamina', bio.stamina);
-            setSlider('lust', bio.lust);
-            setSlider('sensitivity', bio.sensitivity);
-            
-            document.getElementById('cycle_day').value = bio.cycle_day;
-            document.getElementById('sleep_state').value = bio.sleep_state;
-
-            setSlider('pleasure', mood.pleasure);
-            setSlider('arousal', mood.arousal);
-            setSlider('dominance', mood.dominance);
         }
 
         function setSlider(id, value) {
@@ -779,8 +711,13 @@
             const display = document.getElementById(`val-${id}`);
             if (input) {
                 input.value = value;
-                if (display) display.innerText = value; // Update the display next to slider
+                if (display) display.innerText = value;
             }
+        }
+
+        function fillCurrentValues() {
+            if (!currentState) { alert('请先加载状态'); return; }
+            syncSlidersWithState(currentState);
         }
 
         async function updateState() {
@@ -788,22 +725,16 @@
                 const k = getApiKey();
                 const payload = {};
 
-                // Helper to get value if changed (or just get all, simpler)
-                // We will send what's in the form.
                 payload.stamina = parseFloat(document.getElementById('stamina').value);
                 payload.lust = parseFloat(document.getElementById('lust').value);
                 payload.sensitivity = parseFloat(document.getElementById('sensitivity').value);
                 payload.cycle_day = parseInt(document.getElementById('cycle_day').value);
                 payload.sleep_state = document.getElementById('sleep_state').value;
 
-                // Mood
                 const p = document.getElementById('pleasure').value;
                 const a = document.getElementById('arousal').value;
                 const d = document.getElementById('dominance').value;
                 
-                // Only send mood if they were touched? Hard to tell with sliders.
-                // We'll send them if the user hit "Fill" or moved them.
-                // To be safe, let's just send them.
                 if (p && a && d) {
                     payload.mood = {
                         pleasure: parseFloat(p),
@@ -820,14 +751,16 @@
 
                 if (!response.ok) throw new Error('Failed');
                 
-                // Show success feedback
-                const btn = document.querySelector('button[onclick="updateState()"]');
-                const originalText = btn.innerText;
-                btn.innerText = "✅ Saved!";
-                btn.classList.add('bg-green-600');
+                const btn = document.getElementById('btn-save');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = `<span class="flex items-center gap-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> SAVED</span>`;
+                btn.classList.add('bg-emerald-600', 'border-emerald-500');
+                btn.classList.remove('bg-rose-600', 'border-rose-500');
+                
                 setTimeout(() => {
-                    btn.innerText = originalText;
-                    btn.classList.remove('bg-green-600');
+                    btn.innerHTML = originalText;
+                    btn.classList.remove('bg-emerald-600', 'border-emerald-500');
+                    btn.classList.add('bg-rose-600', 'border-rose-500');
                 }, 2000);
 
                 await loadCurrentState();
@@ -840,117 +773,90 @@
         async function quickAction(action) {
             const k = getApiKey();
             let payload = {};
-
             switch(action) {
-                case 'reset':
-                    payload = { stamina: 100, lust: 0, sleep_state: 'Awake', mood: { pleasure: 2.0, arousal: 0.0, dominance: 1.0 } };
-                    break;
-                case 'horny':
-                    payload = { lust: 90, sensitivity: 60, mood: { arousal: 8.0, pleasure: 5.0 } };
-                    break;
-                case 'menstrual':
-                    payload = { cycle_day: 2, stamina: 40, mood: { pleasure: -3.0, arousal: -2.0 } };
-                    break;
-                case 'tired':
-                    payload = { stamina: 15, sleep_state: 'Awake', mood: { arousal: -5.0 } };
-                    break;
+                case 'reset': payload = { stamina: 100, lust: 0, sleep_state: 'Awake', mood: { pleasure: 2.0, arousal: 0.0, dominance: 1.0 } }; break;
+                case 'horny': payload = { lust: 90, sensitivity: 60, mood: { arousal: 8.0, pleasure: 5.0 } }; break;
+                case 'menstrual': payload = { cycle_day: 2, stamina: 40, mood: { pleasure: -3.0, arousal: -2.0 } }; break;
+                case 'tired': payload = { stamina: 15, sleep_state: 'Awake', mood: { arousal: -5.0 } }; break;
             }
-
             try {
-                await fetch(`${API_BASE}/debug/texas-state/update?k=${k}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+                await fetch(`${API_BASE}/debug/texas-state/update?k=${k}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 await loadCurrentState();
             } catch (e) { alert(e.message); }
         }
 
-        // --- Gallery Logic ---
-
+        // Gallery & Stats Logic
         async function loadGallery(page = 0) {
             try {
                 const k = getApiKey();
                 currentPage = page;
                 const offset = page * pageSize;
-
                 const response = await fetch(`${API_BASE}/gallery/records?k=${k}&limit=${pageSize}&offset=${offset}`);
                 const records = await response.json();
-                
-                // Update count if available or separate call?
-                // Just display gallery
                 displayGallery(records);
-            } catch (error) {
-                console.error(error);
-            }
+            } catch (error) { console.error(error); }
         }
 
         function displayGallery(records) {
             const list = document.getElementById('galleryList');
             if (!records || records.length === 0) {
-                list.innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">No records found.</div>';
+                list.innerHTML = '<div class="col-span-full text-center py-20 text-slate-500 font-mono">NO RECORDS FOUND IN ARCHIVE</div>';
                 return;
             }
 
-            document.getElementById('gallery-count').innerText = `${records.length} items on page`;
+            document.getElementById('gallery-count').innerText = `${records.length} ITEMS`;
 
             list.innerHTML = records.map(record => {
                 const tags = record.tags || [];
                 const displayTags = tags.slice(0, 3);
                 const moreTags = tags.length - 3;
+                // Format date nicely
+                const d = new Date(record.recorded_at);
+                const dateStr = d.toLocaleDateString(undefined, {month:'2-digit', day:'2-digit'});
+                const timeStr = d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
 
                 return `
-                <div class="glass-card rounded-xl overflow-hidden group flex flex-col h-[280px] relative transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-1">
-                    <!-- Top Bar: Meta Info -->
-                    <div class="p-3 border-b border-white/5 flex justify-between items-center bg-slate-800/40 backdrop-blur-sm">
-                        <div class="flex gap-2 items-center">
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">${record.body_part}</span>
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20">${record.act_type}</span>
+                <div class="glass-card rounded-lg overflow-hidden group flex flex-col h-[260px] relative hover:border-rose-500/30">
+                    <!-- Tech header -->
+                    <div class="h-1 w-full bg-gradient-to-r from-slate-700 to-slate-800 group-hover:from-rose-500 group-hover:to-rose-600 transition-all"></div>
+                    
+                    <div class="p-3 flex justify-between items-start border-b border-white/5 bg-slate-900/40">
+                        <div class="flex flex-col">
+                             <div class="flex gap-2 mb-1">
+                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-wider">${record.body_part}</span>
+                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-pink-500/10 text-pink-400 border border-pink-500/20 uppercase tracking-wider">${record.act_type}</span>
+                            </div>
                         </div>
-                        <span class="text-[10px] font-mono text-slate-500">${new Date(record.recorded_at).toLocaleDateString(undefined, {month:'2-digit', day:'2-digit'})}</span>
+                        <div class="text-right">
+                            <div class="text-[10px] font-mono text-slate-400">${dateStr}</div>
+                            <div class="text-[10px] font-mono text-slate-600">${timeStr}</div>
+                        </div>
                     </div>
                     
-                    <!-- Content: Summary -->
-                    <div class="p-4 flex-1 overflow-y-auto scrollbar-thin">
-                        <p class="text-sm text-slate-300 leading-relaxed">${record.summary}</p>
+                    <div class="p-4 flex-1 overflow-y-auto custom-scrollbar">
+                        <p class="text-xs md:text-sm text-slate-300 leading-relaxed font-sans opacity-90 group-hover:opacity-100 transition">${record.summary}</p>
                     </div>
 
-                    <!-- Tags Row -->
-                    <div class="px-4 py-2 flex items-center gap-1.5 flex-wrap min-h-[32px]">
-                        ${displayTags.map(t => `<span class="text-[10px] px-1.5 py-0.5 bg-slate-700/50 rounded text-slate-400 whitespace-nowrap">#${t}</span>`).join('')}
-                        ${moreTags > 0 ? `<span class="text-[10px] px-1.5 py-0.5 bg-slate-800 rounded text-slate-500">+${moreTags}</span>` : ''}
+                    <div class="px-4 py-2 flex items-center gap-1.5 min-h-[30px] border-t border-white/5 bg-slate-900/20">
+                        ${displayTags.map(t => `<span class="text-[9px] px-1 py-0.5 bg-slate-800 rounded-sm text-slate-400 border border-slate-700">#${t}</span>`).join('')}
+                        ${moreTags > 0 ? `<span class="text-[9px] px-1 py-0.5 text-slate-600">+${moreTags}</span>` : ''}
                     </div>
 
-                    <!-- Footer: Actions -->
-                    <div class="p-3 mt-auto bg-slate-900/40 border-t border-white/5 flex justify-between items-center">
-                        <div class="flex items-center gap-1">
-                            <span class="text-xs text-yellow-500">⭐</span>
-                            <span class="text-xs font-mono text-slate-400">${record.intensity}</span>
-                        </div>
-                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 translate-y-2 group-hover:translate-y-0">
-                             <button onclick="showDetail('${record.id}')" class="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 transition">
-                                查看
-                            </button>
-                            <button onclick="event.stopPropagation(); deleteRecord('${record.id}')" class="text-xs px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition border border-red-500/20">
-                                删除
-                            </button>
-                        </div>
+                    <!-- Hidden Actions Overlay -->
+                    <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <button onclick="showDetail('${record.id}')" class="px-4 py-2 bg-slate-100 text-slate-900 rounded-sm font-bold text-xs hover:bg-white tracking-wider">VIEW LOG</button>
+                        <button onclick="event.stopPropagation(); deleteRecord('${record.id}')" class="px-4 py-2 border border-red-500 text-red-500 rounded-sm font-bold text-xs hover:bg-red-500 hover:text-white tracking-wider">DELETE</button>
                     </div>
                 </div>
             `}).join('');
-
-            // Pagination Controls
-            const prevDisabled = currentPage === 0 ? 'disabled opacity-50 cursor-not-allowed' : '';
-            const nextDisabled = records.length < pageSize ? 'disabled opacity-50 cursor-not-allowed' : ''; 
             
+            // Pagination
             document.getElementById('galleryPagination').innerHTML = `
-                <button onclick="loadGallery(${currentPage - 1})" ${prevDisabled} class="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-700 transition flex items-center gap-2">
+                <button onclick="loadGallery(${currentPage - 1})" ${currentPage===0?'disabled':''} class="p-2 bg-slate-800 border border-white/10 rounded disabled:opacity-50 hover:bg-slate-700">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                    Prev
                 </button>
-                <span class="px-4 py-2 text-slate-400 text-sm font-mono flex items-center">Page ${currentPage + 1}</span>
-                <button onclick="loadGallery(${currentPage + 1})" ${nextDisabled} class="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-slate-300 hover:bg-slate-700 transition flex items-center gap-2">
-                    Next
+                <span class="font-mono text-sm text-slate-400 px-4">PAGE ${currentPage + 1}</span>
+                <button onclick="loadGallery(${currentPage + 1})" ${records.length<pageSize?'disabled':''} class="p-2 bg-slate-800 border border-white/10 rounded disabled:opacity-50 hover:bg-slate-700">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                 </button>
             `;
@@ -966,24 +872,22 @@
             
             content.innerHTML = `
                 <div class="space-y-6">
-                    <div class="flex items-center gap-3">
-                        <span class="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 font-bold border border-blue-500/30">${record.body_part}</span>
-                        <span class="px-3 py-1 rounded-full bg-pink-500/20 text-pink-400 font-bold border border-pink-500/30">${record.act_type}</span>
-                        <span class="ml-auto text-slate-500 text-sm">${new Date(record.recorded_at).toLocaleString()}</span>
+                    <div class="flex flex-wrap items-center gap-3 pb-4 border-b border-white/10">
+                        <span class="px-2 py-1 bg-blue-500/20 text-blue-400 font-bold border border-blue-500/30 text-xs tracking-widest uppercase">${record.body_part}</span>
+                        <span class="px-2 py-1 bg-pink-500/20 text-pink-400 font-bold border border-pink-500/30 text-xs tracking-widest uppercase">${record.act_type}</span>
+                        <div class="ml-auto text-slate-500 font-mono text-xs">
+                            ID: ${record.id.substring(0,8)}... / ${new Date(record.recorded_at).toLocaleString()}
+                        </div>
                     </div>
 
-                    <div class="glass-card p-4 rounded-xl bg-slate-800/50">
-                        <h4 class="text-sm font-bold text-slate-400 uppercase mb-2">Summary</h4>
-                        <p class="text-white text-lg">${record.summary}</p>
+                    <div class="p-4 bg-slate-900/50 rounded border border-white/5">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Operational Summary</h4>
+                        <p class="text-white text-base font-medium">${record.summary}</p>
                     </div>
 
-                    <div class="glass-card p-4 rounded-xl bg-slate-800/50">
-                        <h4 class="text-sm font-bold text-slate-400 uppercase mb-2">Full Story</h4>
-                        <p class="text-slate-300 leading-relaxed whitespace-pre-wrap">${record.full_story}</p>
-                    </div>
-                    
-                    <div class="flex gap-2">
-                        ${(record.tags||[]).map(t => `<span class="px-2 py-1 bg-slate-700 rounded text-sm text-slate-300">#${t}</span>`).join('')}
+                    <div class="p-4 bg-slate-900/50 rounded border border-white/5 flex-1">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Complete Interaction Log</h4>
+                        <p class="text-slate-300 leading-7 whitespace-pre-wrap font-sans">${record.full_story}</p>
                     </div>
                 </div>
             `;
@@ -991,81 +895,64 @@
             modal.classList.remove('hidden');
         }
 
-        function closeModal() {
-            document.getElementById('galleryModal').classList.add('hidden');
-        }
+        function closeModal() { document.getElementById('galleryModal').classList.add('hidden'); }
         
         async function deleteRecord(id) {
-            if(!confirm('Delete this record?')) return;
+            if(!confirm('CONFIRM DELETION? This action is irreversible.')) return;
             const k = getApiKey();
             await fetch(`${API_BASE}/gallery/record/${id}?k=${k}`, { method: 'DELETE' });
             loadGallery(currentPage);
         }
 
-        // --- Stats Logic ---
-
         async function loadStats() {
             const k = getApiKey();
             const res = await fetch(`${API_BASE}/gallery/stats?k=${k}`);
             const stats = await res.json();
-            
-            // 1. Text Summary
             const total = Object.values(stats).reduce((a,b)=>a+b, 0);
             const sorted = Object.entries(stats).sort((a,b)=>b[1]-a[1]);
             
-            let html = `<div class="text-4xl font-bold text-blue-400 mb-2">${total}</div><div class="text-sm text-slate-500 uppercase">Total Interactions</div>`;
-            html += `<div class="mt-4 space-y-2">`;
+            let html = `<div class="text-5xl font-bold text-white mb-1 font-mono">${total}</div><div class="text-xs text-slate-500 uppercase tracking-widest">Total Interactions</div>`;
+            html += `<div class="mt-8 space-y-4">`;
             sorted.slice(0, 5).forEach(([key, val]) => {
                 const pct = ((val/total)*100).toFixed(1);
                 html += `
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-300">${key}</span>
-                        <span class="text-slate-500">${val} (${pct}%)</span>
-                    </div>
-                    <div class="w-full h-1 bg-slate-700 rounded-full overflow-hidden">
-                        <div class="h-full bg-blue-500" style="width: ${pct}%"></div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1 font-mono">
+                            <span class="text-slate-300 uppercase">${key}</span>
+                            <span class="text-slate-500">${val} <span class="text-slate-600">/</span> ${pct}%</span>
+                        </div>
+                        <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                            <div class="h-full bg-rose-500" style="width: ${pct}%"></div>
+                        </div>
                     </div>
                 `;
             });
             html += `</div>`;
             document.getElementById('statsContent').innerHTML = html;
 
-            // 2. Chart.js
             const ctx = document.getElementById('bodyPartChart').getContext('2d');
-            
             if (window.myChart) window.myChart.destroy();
-            
             window.myChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
                     labels: Object.keys(stats),
                     datasets: [{
                         data: Object.values(stats),
-                        backgroundColor: [
-                            'rgba(59, 130, 246, 0.8)',
-                            'rgba(168, 85, 247, 0.8)',
-                            'rgba(236, 72, 153, 0.8)',
-                            'rgba(34, 197, 94, 0.8)',
-                            'rgba(234, 179, 8, 0.8)'
-                        ],
-                        borderColor: '#1e293b',
-                        borderWidth: 2
+                        backgroundColor: ['#e11d48', '#f59e0b', '#8b5cf6', '#10b981', '#3b82f6'],
+                        borderColor: '#0f172a',
+                        borderWidth: 4
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right', labels: { color: '#94a3b8' } }
-                    }
+                    plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { family: 'monospace' } } } }
                 }
             });
         }
-        
-        // Initial Load
+
         document.addEventListener('DOMContentLoaded', () => {
              initInteractions();
-             // Auto load state
              loadCurrentState();
         });
     </script>
