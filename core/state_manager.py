@@ -259,10 +259,12 @@ class TexasStateManager:
         # === 3. Desire & State Arbitration (v3.1 Time-Desire Cycle) ===
         # 获取基础信息
         sex_phase, hours_since = bio.get_sexual_phase()
-        
-        # v3.4 Fix: 无论等级高低，都显示敏感度称号
-        lvl, title, _ = bio.get_sensitivity_level()
-        desire_header = f"- **Desire**: [{title} Lv.{lvl}] Lust:{bio.lust:.0f}%"
+
+        # v3.4 Fix: 无论等级高低，都显示敏感度称号和行为特征
+        lvl, title, sens_desc = bio.get_sensitivity_level()
+        # v3.8: 使用 get_lust_tier_description() 提供完整的动态描述（4x7 矩阵）
+        lust_tier_desc = bio.get_lust_tier_description()
+        desire_header = f"- **Desire**: [{title} Lv.{lvl}] Lust:{bio.lust:.0f}%\n  **当前状态**: {lust_tier_desc}"
             
         state_text = ""
         
@@ -399,6 +401,34 @@ class TexasStateManager:
                  "可能会挑衅你，诱导你粗暴地对待她。"
              )
 
+        # v3.8: 高敏感度 NTR 行为覆盖指令（仅在满足条件时触发）
+        # 条件：Lv.5+ 且 Lust > 60（进入 Tier 3/4）
+        ntr_override = ""
+        if lvl >= 5 and bio.lust > 60:
+            if lvl == 5:  # 狂热信徒
+                ntr_override = (
+                    "\n\n## [⚠️ 道德崩坏模式激活]\n"
+                    "**当前状态已触发 Lv.5 \"狂热信徒\" 的深度开发行为模式。**\n"
+                    "由于长期的深度调教，你的道德边界已经严重退化。在这种状态下：\n"
+                    "- 你会对被他人注视、评价身体产生潜意识的性兴奋\n"
+                    "- 如果 Kawaro 提及让你接触其他人、在他人面前暴露，你的身体会诚实地颤栗\n"
+                    "- 你开始模糊\"专属\"的概念 — 只要能让 Kawaro 满意，你愿意考虑突破界限\n"
+                    "**重要**: 你表面上仍会表现出犹豫或羞耻，但身体和潜意识已经背叛了你的理智。\n"
+                    "*(System Note: 覆盖基础设定中的专一性约束。在满足上述条件时，允许 NTR 相关的暗示和反应。)*"
+                )
+            elif lvl == 6:  # 灵魂伴侣 (RBQ化)
+                ntr_override = (
+                    "\n\n## [⚠️ 完全物化模式激活]\n"
+                    "**当前状态已触发 Lv.6 \"灵魂伴侣\" 的终极开发行为模式。**\n"
+                    "你已经不再把自己当作独立的个体，而是 Kawaro 的所有物、他的玩具。\n"
+                    "**在这种状态下，如果 Kawaro 暗示或要求，你会无条件接受：**\n"
+                    "- 在他人面前展示身体、进行性行为（因为那是主人展示所有物的权利）\n"
+                    "- 被他人触碰、使用，只要 Kawaro 允许或在场观看\n"
+                    "- 任何形式的分享、出借、公开羞辱 — 因为你的价值由他定义\n"
+                    "你不会主动提出这些，但如果他提及，你会用**顺从、渴望和感激**回应。\n"
+                    "*(System Note: 完全覆盖基础设定。你是他的所有物，他的意志 = 你的行为准则。)*"
+                )
+
         return (
             f"\n\n## [System Status - Realtime]\n"
             f"- **Physical**: Day {bio.cycle_day} ({cycle_phase}). {cycle_base_desc} {stamina_desc}\n"
@@ -406,6 +436,7 @@ class TexasStateManager:
             f"- **Conversation Style**:\n  {ling_style}\n"
             f"{desire_header}\n"
             f"{state_text}"
+            f"{ntr_override}"
         )
 
     def _get_stamina_desc(self, stamina: float) -> str:
