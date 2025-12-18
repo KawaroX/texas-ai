@@ -4,6 +4,38 @@
 
 ## 提交代码到GitHub
 
+### ⚠️ 重要：文件提交规范
+
+**禁止提交以下类型的文件到GitHub**：
+
+1. **测试脚本**
+   - `scripts/test_*.py` - 所有测试脚本
+   - `scripts/test_*.sh` - 所有测试Shell脚本
+   - `scripts/*_test_*.json` - 测试结果文件
+
+2. **临时文档**
+   - `docs/*.md` - 除非是有意义的修改（如 README.md、架构文档等）
+   - 临时笔记、草稿文档
+
+3. **环境配置**
+   - `.env` - 包含敏感信息
+   - 密码文件、密钥文件
+
+**只提交**：
+- ✅ 核心代码文件（`.py`, `.js`, `.html` 等）
+- ✅ 配置模板（`.env.template`, `docker-compose.yml` 等）
+- ✅ 重要文档的修改（架构文档、部署指南等）
+- ✅ 必要的工具脚本（非测试用途）
+
+**提交前检查**：
+```bash
+# 查看将要提交的文件
+git status --short
+
+# 如果有不应该提交的文件，使用 restore 恢复
+git restore <文件名>
+```
+
 ### 1. 检查状态
 ```bash
 git status
