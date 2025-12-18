@@ -66,8 +66,8 @@ class TexasStateManager:
 
             recovered_time = get_last_release_timestamp()
             if recovered_time > 0:
-                self.bio_state.last_release_time = recovered_time
-                self.bio_state.last_actual_release_time = recovered_time
+                self.bio_state.set_field("last_release_time", recovered_time)
+                self.bio_state.set_field("last_actual_release_time", recovered_time)
                 logger.info(f"[StateManager] ✅ 已从数据库恢复 last_release_time: {recovered_time}")
                 # v3.8.1 修复：恢复后立即保存到 Redis，防止数据丢失
                 self.save_state()
@@ -177,7 +177,8 @@ class TexasStateManager:
         # 额外扣除活动消耗
         if self.bio_state.sleep_state == "Awake":
             consumption = activity_rate * hours_passed
-            self.bio_state.stamina = max(0.0, self.bio_state.stamina - consumption)
+            new_stamina = max(0.0, self.bio_state.stamina - consumption)
+            self.bio_state.set_field("stamina", new_stamina)
         
         # 2. 更新情绪数值 (回归基准)
         self.mood_state.decay_to_base(hours_passed)
@@ -213,7 +214,8 @@ class TexasStateManager:
             # 获取基于周期和敏感度的修正系数
             lust_mod = self.bio_state.get_lust_modifier()
             lust_gain = intensity * 5.0 * lust_mod
-            self.bio_state.lust = min(100.0, self.bio_state.lust + lust_gain)
+            new_lust = min(100.0, self.bio_state.lust + lust_gain)
+            self.bio_state.set_field("lust", new_lust)
             
         elif intent == "Comfort":
             p_delta = 2.0 * intensity
@@ -243,7 +245,8 @@ class TexasStateManager:
         # 2. 应用欲望变化 (考虑敏感度加成)
         if lust_delta > 0:
             lust_mod = self.bio_state.get_lust_modifier()
-            self.bio_state.lust = min(100.0, self.bio_state.lust + lust_delta * lust_mod)
+            new_lust = min(100.0, self.bio_state.lust + lust_delta * lust_mod)
+            self.bio_state.set_field("lust", new_lust)
             
         # 3. 处理释放 (Release)
         if release:
@@ -254,15 +257,15 @@ class TexasStateManager:
                 return # 忽略情绪和体力变动（CG替换逻辑在ai_service处理）
 
             logger.info("[StateManager] 触发释放 (Release/Climax)")
-            self.bio_state.lust = 0.0
-            self.mood_state.pleasure = min(10.0, self.mood_state.pleasure + 5.0)
-            self.mood_state.arousal = max(-5.0, self.mood_state.arousal - 5.0) # 贤者模式：平静
-            self.bio_state.stamina = max(0.0, self.bio_state.stamina - 30.0) # 体力透支
+            self.bio_state.set_field("lust", 0.0)
+            self.mood_state.set_field("pleasure", min(10.0, self.mood_state.pleasure + 5.0))
+            self.mood_state.set_field("arousal", max(-5.0, self.mood_state.arousal - 5.0)) # 贤者模式：平静
+            self.bio_state.set_field("stamina", max(0.0, self.bio_state.stamina - 30.0)) # 体力透支
 
             # v3.8 修复：同时设置两个时间戳
             current_time = time.time()
-            self.bio_state.last_release_time = current_time  # 用于计算性欲阶段
-            self.bio_state.last_actual_release_time = current_time  # 用于防抖
+            self.bio_state.set_field("last_release_time", current_time)  # 用于计算性欲阶段
+            self.bio_state.set_field("last_actual_release_time", current_time)  # 用于防抖
             
             # v3.6 敏感度成长: 动态且可变
             base_growth = random.uniform(1.0, 5.0) # 基础成长值在 1.0 到 5.0 之间随机
@@ -275,8 +278,9 @@ class TexasStateManager:
                 logger.info(f"[StateManager] 经期突破，敏感度成长乘数: {growth_multiplier:.2f}")
 
             growth = base_growth * growth_multiplier
-            self.bio_state.sensitivity = min(100.0, self.bio_state.sensitivity + growth)
-            logger.info(f"[StateManager] 敏感度增长: +{growth:.2f}, 当前: {self.bio_state.sensitivity:.2f}")
+            new_sensitivity = min(100.0, self.bio_state.sensitivity + growth)
+            self.bio_state.set_field("sensitivity", new_sensitivity)
+            logger.info(f"[StateManager] 敏感度增长: +{growth:.2f}, 当前: {new_sensitivity:.2f}")
             
         self.save_state()
 

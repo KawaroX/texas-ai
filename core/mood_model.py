@@ -212,34 +212,34 @@ class MoodState(BaseModel):
         """
         if current_hour is None:
             current_hour = datetime.now().hour
-            
+
         defense = self.get_diurnal_damping(current_hour)
         impact_factor = 1.0 - defense + 0.1 # 修正：保证至少有一定影响，比如白天是 1-0.8+0.1 = 0.3
-        
+
         # 限制 impact_factor 最大为 1.0
         impact_factor = min(1.0, impact_factor)
-        
-        self.pleasure = max(-10.0, min(10.0, self.pleasure + p_delta * impact_factor))
-        self.arousal = max(-10.0, min(10.0, self.arousal + a_delta * impact_factor))
-        self.dominance = max(-10.0, min(10.0, self.dominance + d_delta * impact_factor))
-        
-        self.last_updated = time.time()
+
+        self.set_field("pleasure", max(-10.0, min(10.0, self.pleasure + p_delta * impact_factor)))
+        self.set_field("arousal", max(-10.0, min(10.0, self.arousal + a_delta * impact_factor)))
+        self.set_field("dominance", max(-10.0, min(10.0, self.dominance + d_delta * impact_factor)))
+
+        self.set_field("last_updated", time.time())
 
     def decay_to_base(self, hours_passed: float):
         """随时间回归基准情绪"""
         if hours_passed <= 0: return
-        
+
         # 每小时回归 10%
         rate = 0.1
         factor = (1 - rate) ** hours_passed
-        
+
         bp, ba, bd = self.base_mood
-        
-        self.pleasure = bp + (self.pleasure - bp) * factor
-        self.arousal = ba + (self.arousal - ba) * factor
-        self.dominance = bd + (self.dominance - bd) * factor
-        
-        self.last_updated = time.time()
+
+        self.set_field("pleasure", bp + (self.pleasure - bp) * factor)
+        self.set_field("arousal", ba + (self.arousal - ba) * factor)
+        self.set_field("dominance", bd + (self.dominance - bd) * factor)
+
+        self.set_field("last_updated", time.time())
 
     def get_description(self) -> str:
         """获取用于 Prompt 的情绪描述"""

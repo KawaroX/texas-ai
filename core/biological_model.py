@@ -40,15 +40,15 @@ class BiologicalState(BaseModel):
     def _generate_cycle_params(self):
         """生成新的周期参数 (长度、经期天数、痛感分布)"""
         # 1. 随机周期长度 (26-32天)
-        self.cycle_length = random.randint(26, 32)
-        
+        self.set_field("cycle_length", random.randint(26, 32))
+
         # 2. 随机经期长度 (4-6天)
-        self.menstrual_days = random.randint(4, 6)
-        
+        self.set_field("menstrual_days", random.randint(4, 6))
+
         # 3. 生成痛感曲线 (Peak 在 Day 1 或 2，然后递减)
         peak_day = random.randint(1, 2)
         base_pain = random.uniform(0.6, 0.9) # 基础峰值痛感
-        
+
         new_levels = {}
         for d in range(1, self.menstrual_days + 1):
             if d == peak_day:
@@ -59,10 +59,10 @@ class BiologicalState(BaseModel):
                 # 衰减
                 days_after_peak = d - peak_day
                 pain = max(0.0, base_pain - (0.2 * days_after_peak) - random.uniform(0.0, 0.1))
-            
+
             new_levels[d] = round(pain, 2)
-        
-        self.menstrual_pain_levels = new_levels
+
+        self.set_field("menstrual_pain_levels", new_levels)
 
     def get_cycle_phase(self) -> str:
         """获取当前生理周期阶段"""
@@ -266,33 +266,35 @@ class BiologicalState(BaseModel):
         if self.sleep_state != "Awake":
             # 睡眠恢复: 每小时恢复 10-15 点
             recovery = 12.0 * hours_passed
-            self.stamina = min(100.0, self.stamina + recovery)
+            self.set_field("stamina", min(100.0, self.stamina + recovery))
         else:
             # 清醒消耗: 自然消耗极低，主要靠事件扣除，这里仅做微量衰减
             decay = 1.0 * hours_passed
-            self.stamina = max(0.0, self.stamina - decay)
+            self.set_field("stamina", max(0.0, self.stamina - decay))
 
         # 2. Lust 自然衰减 (除非在高敏感度下)
         lust_decay = 5.0 * hours_passed
         # 高敏感度减缓衰减
         if self.sensitivity > 50:
             lust_decay *= 0.5
-        
+
         # 排卵期衰减减半
         if self.get_cycle_phase() == "Ovulation":
             lust_decay *= 0.5
-            
-        self.lust = max(0.0, self.lust - lust_decay)
-        
-        self.last_updated = time.time()
+
+        self.set_field("lust", max(0.0, self.lust - lust_decay))
+
+        self.set_field("last_updated", time.time())
 
     def advance_cycle(self):
         """推进一天生理周期"""
-        self.cycle_day += 1
-        if self.cycle_day > self.cycle_length:
-            self.cycle_day = 1
+        new_day = self.cycle_day + 1
+        if new_day > self.cycle_length:
+            self.set_field("cycle_day", 1)
             # 新周期：重新生成参数 (长度、痛感等)
             self._generate_cycle_params()
+        else:
+            self.set_field("cycle_day", new_day)
 
     def set_field(self, field_name: str, value):
         """设置字段并标记为已修改"""
