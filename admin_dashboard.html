@@ -516,12 +516,49 @@
 
         <!-- Content Area: Gallery -->
         <div id="content-gallery" class="tab-content hidden">
-             <!-- Will be populated by JS -->
+            <div class="glass-panel p-6 rounded-2xl min-h-[500px] flex flex-col">
+                <div class="flex items-center justify-between mb-8">
+                    <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                        <span>📸 CG ARCHIVE</span>
+                        <span class="text-[10px] font-mono text-slate-400 px-2 py-1 bg-slate-800 rounded-sm uppercase tracking-widest" id="gallery-count">0 RECORDS</span>
+                    </h2>
+                    <button onclick="loadGallery(0)" class="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-600/50 rounded-sm transition flex items-center gap-2 font-mono text-xs tracking-wider">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        REFRESH
+                    </button>
+                </div>
+                
+                <!-- Gallery Grid -->
+                <div id="galleryList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 flex-1">
+                    <!-- Gallery Items will be injected here -->
+                </div>
+
+                <!-- Pagination -->
+                <div id="galleryPagination" class="mt-8 flex justify-center gap-2 pt-4 border-t border-white/5">
+                    <!-- Pagination buttons injected via JS -->
+                </div>
+            </div>
         </div>
 
         <!-- Content Area: Stats -->
         <div id="content-stats" class="tab-content hidden">
-             <!-- Will be populated by JS -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Summary Card -->
+                <div class="glass-panel p-6 rounded-lg lg:col-span-1 border-l-4 border-rose-500">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Interaction Metrics</h3>
+                    <div id="statsContent" class="space-y-4">
+                        <!-- Stats Summary Injected JS -->
+                    </div>
+                </div>
+
+                <!-- Chart Card -->
+                <div class="glass-panel p-6 rounded-lg lg:col-span-2">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Touchpoint Distribution</h3>
+                    <div class="relative h-64 w-full">
+                        <canvas id="bodyPartChart"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
 
     </div>
