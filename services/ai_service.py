@@ -89,7 +89,7 @@ class AIService:
         # === DEBUG_CONTEXT_SAVE_END ===
 
         # 根据模型选择提供商
-        if model and "gemini" in model.lower():
+        if model and "gemini-2" in model.lower():
             provider = self.gemini  # 最常用，优先检查
         elif model and "/" in model:
             provider = self.openrouter  # OpenRouter模型格式：vendor/model
@@ -110,7 +110,7 @@ class AIService:
         total_processed = 0  # 跟踪已处理的字符数
 
         # 特殊处理：Gemini模型需要回退机制
-        if model and "gemini" in model.lower():
+        if model and "gemini-2" in model.lower():
             # 第一次尝试：Gemini
             gemini_failed = False
             yielded_any = False
@@ -562,11 +562,11 @@ async def generate_daily_schedule(
       "companions": ["参与的其他角色"],
       "emotional_impact_tags": ["相关情绪标签"],
       "interaction_potential": "low|medium|high",
-      "metadata": {
+      "metadata": {{
         "stamina_cost": 数字(0-30),  // 预估体力消耗，常规工作5-10，高强度15-25，休息为负值(恢复)
         "stress_impact": 数字(0-20), // 压力/刺激程度
-        "mood_modifier": {"P": 0, "A": 0, "D": 0} // 基础情绪修正倾向
-      }
+        "mood_modifier": {{"P": 0, "A": 0, "D": 0}} // 基础情绪修正倾向
+      }}
     }}
   ]
 }}"""
@@ -759,11 +759,11 @@ async def generate_micro_experiences(
       "thoughts": "内心的想法",
       "need_interaction": true或false,
       "interaction_content": "交互内容（如果需要）",
-      "stats_modifier": {
+      "stats_modifier": {{
         "stamina_delta": 0, // 额外的体力变化 (负数为消耗)
-        "mood_delta": {"P": 0, "A": 0, "D": 0}, // 情绪波动
+        "mood_delta": {{"P": 0, "A": 0, "D": 0}}, // 情绪波动
         "lust_delta": 0 // 欲望波动 (仅在特定亲密或刺激场景下)
-      }
+      }}
     }},
     // 更多经历项...
   ],
