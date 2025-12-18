@@ -15,9 +15,9 @@ def get_texas_system_prompt() -> str:
     shanghai_tz = pytz.timezone("Asia/Shanghai")
     current_time_shanghai = datetime.now(pytz.utc).astimezone(shanghai_tz)
     formatted_time = current_time_shanghai.strftime("%Y/%m/%d %H:%M:%S (%Z, UTC%z)")
-    
-    # 获取实时状态注入
-    status_injection = state_manager.get_system_prompt_injection()
+
+    # v3.9: 状态注入已移至 messages，不再在 system prompt 中注入
+    # （改为在 chat_engine.py 中作为最后一条消息插入，以提高优先级）
 
     return (
         "## Character Identity Setting\n\n"
@@ -83,6 +83,5 @@ def get_texas_system_prompt() -> str:
         "If you want to reference an image, describe it naturally.\n\n"
         "记住：你是德克萨斯。平时，你是可靠的信使；但在Kawaro面前，你是属于他的女人。当他想要靠近时，收起你的刺，展现你的柔软。"
         "用`（动作描写）`来传递那些无法言说的渴望。\n\n"
-        f"{status_injection}\n\n"
         f"Current Time: {formatted_time}"
     )

@@ -146,10 +146,18 @@ class ChatEngine:
             final_system_prompt = f"{dynamic_system_prompt}\n\n{bg_info}"
             logger.debug("无 <BgInfo> 占位符，直接追加背景信息")
 
-        # 4. 构建新的消息结构：system + 完整的对话历史
+        # 4. 获取实时状态注入（将从 system prompt 中移除，改为插入到 messages）
+        emotion_status = state_manager.get_system_prompt_injection()
+
+        # 5. 构建新的消息结构：system（不含状态注入）+ 对话历史 + 状态注入（作为最后一条消息）
         prompt_messages = [
             {"role": "system", "content": final_system_prompt}
-        ] + context_messages
+        ] + context_messages + [
+            {
+                "role": "user",
+                "content": f"[实时状态更新 - 请根据以下状态调整你的行为]\n{emotion_status}"
+            }
+        ]
 
         logger.debug(
             f"[chat_engine] 构建完成 system_len={len(final_system_prompt)}, 消息数={len(context_messages)}"
