@@ -29,7 +29,7 @@ class TexasStateManager:
         return cls._instance
 
     def _load_state(self):
-        """从 Redis 加载状态，如果不存在则使用默认值"""
+        """从 Redis 加载状态，如果不存在则使用默认值并尝试从 PostgreSQL 恢复"""
         try:
             data = self.redis.get(REDIS_KEY_STATE)
             if data:
@@ -39,14 +39,36 @@ class TexasStateManager:
                 if "mood" in state_dict:
                     self.mood_state = MoodState(**state_dict["mood"])
                 self.current_activity_rate = state_dict.get("current_activity_rate", 0.0)
-                logger.info("[StateManager] 状态已加载")
+                logger.info("[StateManager] 状态已从 Redis 加载")
+
+                # v3.8 修复：检查 last_release_time 是否为默认值，如果是则从数据库恢复
+                if self.bio_state.last_release_time == 0.0:
+                    self._recover_release_time_from_db()
             else:
-                logger.info("[StateManager] 无现有状态，初始化默认值")
-                self.save_state()
+                logger.warning("[StateManager] Redis 中无现有状态，使用默认值")
+                self._recover_release_time_from_db()
+                # 注意：不在这里调用 save_state()，避免用默认值覆盖可能存在的正确数据
+                # 让第一次实际的状态更新来触发保存
         except Exception as e:
             logger.error(f"[StateManager] 加载状态失败: {e}，重置为默认")
             self.bio_state = BiologicalState()
             self.mood_state = MoodState()
+            self._recover_release_time_from_db()
+
+    def _recover_release_time_from_db(self):
+        """从 PostgreSQL 恢复 last_release_time（v3.8 新增）"""
+        try:
+            from utils.postgres_service import get_last_release_timestamp
+
+            recovered_time = get_last_release_timestamp()
+            if recovered_time > 0:
+                self.bio_state.last_release_time = recovered_time
+                self.bio_state.last_actual_release_time = recovered_time
+                logger.info(f"[StateManager] ✅ 已从数据库恢复 last_release_time: {recovered_time}")
+            else:
+                logger.info("[StateManager] 数据库中无释放记录，保持默认值")
+        except Exception as e:
+            logger.error(f"[StateManager] 从数据库恢复状态失败: {e}")
 
     def save_state(self):
         """保存当前状态到 Redis"""
@@ -190,7 +212,11 @@ class TexasStateManager:
             self.mood_state.pleasure = min(10.0, self.mood_state.pleasure + 5.0)
             self.mood_state.arousal = max(-5.0, self.mood_state.arousal - 5.0) # 贤者模式：平静
             self.bio_state.stamina = max(0.0, self.bio_state.stamina - 30.0) # 体力透支
-            self.bio_state.last_actual_release_time = time.time() # 更新实际释放时间
+
+            # v3.8 修复：同时设置两个时间戳
+            current_time = time.time()
+            self.bio_state.last_release_time = current_time  # 用于计算性欲阶段
+            self.bio_state.last_actual_release_time = current_time  # 用于防抖
             
             # v3.6 敏感度成长: 动态且可变
             base_growth = random.uniform(1.0, 5.0) # 基础成长值在 1.0 到 5.0 之间随机
