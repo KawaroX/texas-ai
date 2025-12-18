@@ -251,16 +251,28 @@ class ChatEngine:
         # [NEW] Mood & Lust Tag Parsing
         p_delta = 0
         a_delta = 0
+        d_delta = 0
         lust_delta = 0
         release_triggered = False
-        
-        # 1. Mood Impact
-        mood_match = re.search(r"\[MOOD_IMPACT:\s*P([+-]?\d+)\s*A([+-]?\d+)\]", full_response)
+
+        # 1. Mood Impact (支持可选的 D 参数)
+        mood_match = re.search(r"\[MOOD_IMPACT:\s*P([+-]?\d+)\s*A([+-]?\d+)(?:\s*D([+-]?\d+))?\]", full_response)
         if mood_match:
             try:
                 p_delta = float(mood_match.group(1))
                 a_delta = float(mood_match.group(2))
-                logger.info(f"[chat_engine] 检测到情绪变化: P{p_delta:+.1f} A{a_delta:+.1f}")
+                d_delta = float(mood_match.group(3)) if mood_match.group(3) else 0
+
+                # 日常对话限制 D 变化幅度为 ±0.2
+                if abs(d_delta) > 0.2:
+                    original_d = d_delta
+                    d_delta = 0.2 if d_delta > 0 else -0.2
+                    logger.info(f"[chat_engine] D变化被限制: {original_d:+.1f} -> {d_delta:+.1f}")
+
+                if d_delta != 0:
+                    logger.info(f"[chat_engine] 检测到情绪变化: P{p_delta:+.1f} A{a_delta:+.1f} D{d_delta:+.1f}")
+                else:
+                    logger.info(f"[chat_engine] 检测到情绪变化: P{p_delta:+.1f} A{a_delta:+.1f}")
             except ValueError:
                 logger.warning(f"[chat_engine] 情绪标签解析失败: {mood_match.group(0)}")
         
@@ -280,8 +292,8 @@ class ChatEngine:
             asyncio.create_task(self._process_release_event(context_messages))
 
         # 应用变更
-        if p_delta != 0 or a_delta != 0 or lust_delta != 0 or release_triggered:
-            state_manager.apply_raw_impact(p_delta, a_delta, lust_delta, release_triggered)
+        if p_delta != 0 or a_delta != 0 or d_delta != 0 or lust_delta != 0 or release_triggered:
+            state_manager.apply_raw_impact(p_delta, a_delta, d_delta, lust_delta, release_triggered)
 
         # 清理 Tags
         tags_to_remove = []

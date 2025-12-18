@@ -923,7 +923,8 @@ async def merge_context(
             "Examples: [IMAGE_CAPTION:拍好了。] or [IMAGE_CAPTION:刚在办公室，给你看看。] "
             "If you don't add a caption, a random default will be used.\n\n"
             "**REQUIRED - Mood & Interaction Tags**: Analyze the user's intent and append these tags AT THE END (after SEND and other tags) if applicable:\n"
-            "1. [MOOD_IMPACT: P+x A+y] - If the message impacts your emotion. P(Pleasure): +Happy/-Sad, A(Arousal): +Excited/-Calm. Range: -5 to +5. Example: [MOOD_IMPACT: P+2 A-1]\n"
+            "1. [MOOD_IMPACT: P+x A+y D+z] - If the message impacts your emotion. P(Pleasure): +Happy/-Sad, A(Arousal): +Excited/-Calm, D(Dominance): +Confident/-Submissive. Range: P/A/D: -5 to +5. D is OPTIONAL - only add if there's clear power dynamic shift. Examples: [MOOD_IMPACT: P+2 A-1] or [MOOD_IMPACT: P+3 A+2 D-1]\n"
+            "   **When to include D**: Only when there's clear confidence/control change (being praised/affirmed -> D+1, being belittled/dominated -> D-1, actively leading conversation -> D+1, passively following/begging -> D-1). Most interactions DON'T need D parameter.\n"
             "2. [LUST_INCREASE: +x] - If the interaction contains intimacy, flirting, or triggers your desire. Range: +5 to +30. Example: [LUST_INCREASE: +10]\n"
             "3. [RELEASE_TRIGGERED] - ONLY if the interaction reaches a climax, orgasm, or deep physical satisfaction that releases pent-up desire.\n"
         )

@@ -232,15 +232,22 @@ class TexasStateManager:
         
         self.save_state()
 
-    def apply_raw_impact(self, p_delta: float, a_delta: float, lust_delta: float, release: bool = False):
+    def apply_raw_impact(self, p_delta: float, a_delta: float, d_delta: float, lust_delta: float, release: bool = False):
         """
         直接应用数值变化（由 LLM 分析得出）
+
+        Args:
+            p_delta: Pleasure 变化量
+            a_delta: Arousal 变化量
+            d_delta: Dominance 变化量（日常对话已限制在±0.2）
+            lust_delta: Lust 变化量
+            release: 是否触发释放
         """
         self.update_time_based_stats()
         current_hour = datetime.now().hour
-        
-        # 1. 应用情绪变化
-        self.mood_state.apply_stimulus(p_delta, a_delta, 0, current_hour)
+
+        # 1. 应用情绪变化（现在包括 d_delta）
+        self.mood_state.apply_stimulus(p_delta, a_delta, d_delta, current_hour)
         
         # 2. 应用欲望变化 (考虑敏感度加成)
         if lust_delta > 0:
@@ -266,11 +273,17 @@ class TexasStateManager:
             current_time = time.time()
             self.bio_state.set_field("last_release_time", current_time)  # 用于计算性欲阶段
             self.bio_state.set_field("last_actual_release_time", current_time)  # 用于防抖
-            
+
+            # v3.9 新增：Dominance 调整逻辑（高潮时的较大变化）
+            d_change = self._calculate_release_d_impact()
+            new_d = max(-10.0, min(10.0, self.mood_state.dominance + d_change))
+            self.mood_state.set_field("dominance", new_d)
+            logger.info(f"[Release] Dominance 变化: {self.mood_state.dominance - d_change:.2f} -> {new_d:.2f} (Δ{d_change:+.2f})")
+
             # v3.6 敏感度成长: 动态且可变
             base_growth = random.uniform(1.0, 5.0) # 基础成长值在 1.0 到 5.0 之间随机
             growth_multiplier = 1.0
-            
+
             # 月经状态下突破防线，敏感度增长系数更高
             if self.bio_state.get_cycle_phase() == "Menstrual" and self.bio_state.get_current_pain_level() > 0.3:
                 # 痛感等级 > 0.3 且在经期，突破防线敏感度成长更高
@@ -283,6 +296,82 @@ class TexasStateManager:
             logger.info(f"[StateManager] 敏感度增长: +{growth:.2f}, 当前: {new_sensitivity:.2f}")
             
         self.save_state()
+
+    def _calculate_release_d_impact(self) -> float:
+        """
+        计算高潮时 Dominance 的变化量 (v3.9)
+
+        设计原则：
+        1. 基础变化幅度与 Sensitivity 正相关
+        2. 主导/被动状态决定方向（基于 PAD 象限）
+        3. 当前 D 值产生正反馈（马太效应）
+        4. Sensitivity 强化正反馈效应
+
+        Returns:
+            float: Dominance 变化量（±0.5 到 ±3.0）
+        """
+
+        # === 1. 基础变化幅度（与 Sensitivity 正相关）===
+        sens = self.bio_state.sensitivity
+        base_magnitude = 0.5 + (sens / 100.0) * 2.0  # 0.5 到 2.5
+        # Sens=0  -> 0.5
+        # Sens=50 -> 1.5
+        # Sens=100 -> 2.5
+
+        # === 2. 判断主导/被动状态 ===
+        # 根据当前 PAD 象限判断
+        current_d = self.mood_state.dominance
+        flavor = self.mood_state.get_resonance_flavor()
+        quadrant = flavor.get("quadrant", "Q3")
+
+        # 主导型象限：Q1(Exuberant), Q3(Relaxed), Q5(Hostile), Q7(Disdainful)
+        # 被动型象限：Q2(Dependent), Q4(Docile), Q6(Anxious), Q8(Depressed), Neutral
+        is_dominant = quadrant in ["Q1", "Q3", "Q5", "Q7"]
+
+        # 特殊情况：极高 Lust (>90) 强制判定为被动（失控）
+        if self.bio_state.lust > 90:
+            is_dominant = False
+            logger.debug("[D计算] Lust>90 强制判定为被动")
+
+        direction = 1.0 if is_dominant else -1.0
+
+        # === 3. 正反馈机制（马太效应）===
+        # D>1: 增加容易(x1.5)，减少困难(x0.5)
+        # D<-1: 减少容易(x1.5)，增加困难(x0.5)
+        # -1<=D<=1: 无修正(x1.0)
+
+        if current_d > 1.0:  # 自信状态
+            if direction > 0:  # 想增加（主导）
+                feedback_factor = 1.5
+            else:  # 想减少（被动）
+                feedback_factor = 0.5
+        elif current_d < -1.0:  # 顺从状态
+            if direction < 0:  # 想减少（更顺从）
+                feedback_factor = 1.5
+            else:  # 想增加（挣扎）
+                feedback_factor = 0.5
+        else:  # 平衡状态
+            feedback_factor = 1.0
+
+        # === 4. Sensitivity 对正反馈的强化 ===
+        # Sensitivity 越高，正反馈越强（越难逆转）
+        sens_amplifier = 1.0 + (sens / 100.0) * 0.5  # 1.0 到 1.5
+        final_feedback = feedback_factor ** sens_amplifier
+
+        # === 5. 计算最终变化量 ===
+        d_change = base_magnitude * direction * final_feedback
+
+        # === 6. 硬性上限保护（单次变化不超过 ±3.0）===
+        d_change = max(-3.0, min(3.0, d_change))
+
+        logger.info(
+            f"[D计算] Sens={sens:.0f}, Base={base_magnitude:.2f}, "
+            f"Dir={'主导' if is_dominant else '被动'}({quadrant}), "
+            f"CurrentD={current_d:.2f}, Feedback={final_feedback:.2f}, "
+            f"FinalΔ={d_change:+.2f}"
+        )
+
+        return d_change
 
     def get_system_prompt_injection(self) -> str:
         """
