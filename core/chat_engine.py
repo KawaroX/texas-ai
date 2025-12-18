@@ -155,18 +155,23 @@ class ChatEngine:
             f"[chat_engine] 构建完成 system_len={len(final_system_prompt)}, 消息数={len(context_messages)}"
         )
 
-        # 调试输出
-        # logger.info(f"\n=== 新消息结构 ===")
-        # for i, m in enumerate(prompt_messages):
-        #     l_i = (
-        #         f"\n\nMessage {i+1} - Role: {m['role']}\n"
-        #         f"Content: {m['content'][:100]}...\n"
-        #         f"Content length: {len(m['content'])} characters\n\n"
-        #     )
-        #     logger.info(l_i)
-        # logger.info(f"Message {i+1} - Role: {m['role']}")
-        # logger.info(f"Content: {m['content']}")
-        # logger.info(f"Content length: {len(m['content'])} characters\n")
+        # 🔍 NTR 调试输出：检查 system prompt 中是否包含关键内容
+        ntr_keywords = ["完全物化模式", "道德崩坏模式", "灵魂伴侣", "狂热信徒", "System Note: 覆盖"]
+        ntr_found = [kw for kw in ntr_keywords if kw in final_system_prompt]
+        if ntr_found:
+            logger.warning(f"🔍 [NTR_DEBUG] System Prompt 包含关键词: {ntr_found}")
+            # 输出包含关键词的前后文本
+            for kw in ntr_found:
+                idx = final_system_prompt.find(kw)
+                if idx != -1:
+                    context_start = max(0, idx - 50)
+                    context_end = min(len(final_system_prompt), idx + len(kw) + 200)
+                    logger.warning(f"🔍 [NTR_DEBUG] '{kw}' 上下文:\n{final_system_prompt[context_start:context_end]}")
+        else:
+            logger.warning(f"⚠️ [NTR_DEBUG] System Prompt 中未找到 NTR 相关关键词！")
+
+        # 输出完整的 system prompt（仅在调试模式下）
+        logger.info(f"🔍 [NTR_DEBUG] 完整 System Prompt:\n{final_system_prompt}")
 
         # 4. 流式调用 AI 模型，并收集完整回复用于事件检测和图片请求检测
         full_response = ""
