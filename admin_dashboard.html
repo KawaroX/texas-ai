@@ -1027,37 +1027,54 @@
             const k = getApiKey();
             const res = await fetch(`${API_BASE}/gallery/stats?k=${k}`);
             const stats = await res.json();
-            const total = Object.values(stats).reduce((a,b)=>a+b, 0);
-            const sorted = Object.entries(stats).sort((a,b)=>b[1]-a[1]);
+            
+            // Handle both new structure (nested) and legacy (flat) just in case
+            const bodyParts = stats.body_parts || stats; 
+            const actTypes = stats.act_types || {};
+
+            const total = Object.values(bodyParts).reduce((a,b)=>a+b, 0);
+            
+            // --- Summary HTML ---
+            const sortedBody = Object.entries(bodyParts).sort((a,b)=>b[1]-a[1]);
             
             let html = `<div class="text-5xl font-bold text-white mb-1 font-mono">${total}</div><div class="text-xs text-slate-500 uppercase tracking-widest">Total Interactions</div>`;
-            html += `<div class="mt-8 space-y-4">`;
-            sorted.slice(0, 5).forEach(([key, val]) => {
-                const pct = ((val/total)*100).toFixed(1);
-                html += `
-                    <div>
-                        <div class="flex justify-between text-xs mb-1 font-mono">
-                            <span class="text-slate-300 uppercase">${key}</span>
-                            <span class="text-slate-500">${val} <span class="text-slate-600">/</span> ${pct}%</span>
+            
+            if (total > 0) {
+                html += `<div class="mt-8 space-y-4">`;
+                sortedBody.slice(0, 5).forEach(([key, val]) => {
+                    const pct = ((val/total)*100).toFixed(1);
+                    html += `
+                        <div>
+                            <div class="flex justify-between text-xs mb-1 font-mono">
+                                <span class="text-slate-300 uppercase">${key}</span>
+                                <span class="text-slate-500">${val} <span class="text-slate-600">/</span> ${pct}%</span>
+                            </div>
+                            <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                                <div class="h-full bg-rose-500" style="width: ${pct}%"></div>
+                            </div>
                         </div>
-                        <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                            <div class="h-full bg-rose-500" style="width: ${pct}%"></div>
-                        </div>
-                    </div>
-                `;
-            });
-            html += `</div>`;
+                    `;
+                });
+                html += `</div>`;
+            } else {
+                html += `<div class="mt-8 text-xs text-slate-500 font-mono">NO DATA AVAILABLE</div>`;
+            }
             document.getElementById('statsContent').innerHTML = html;
 
+            // --- Chart 1: Body Parts ---
             const ctx = document.getElementById('bodyPartChart').getContext('2d');
             if (window.myChart) window.myChart.destroy();
+            
+            const bodyLabels = Object.keys(bodyParts);
+            const bodyData = Object.values(bodyParts);
+
             window.myChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: Object.keys(stats),
+                    labels: bodyLabels.length ? bodyLabels : ['No Data'],
                     datasets: [{
-                        data: Object.values(stats),
-                        backgroundColor: ['#e11d48', '#f59e0b', '#8b5cf6', '#10b981', '#3b82f6'],
+                        data: bodyData.length ? bodyData : [1], // Placeholder if empty
+                        backgroundColor: bodyData.length ? ['#e11d48', '#f59e0b', '#8b5cf6', '#10b981', '#3b82f6'] : ['#1e293b'],
                         borderColor: '#0f172a',
                         borderWidth: 2
                     }]
@@ -1065,27 +1082,27 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { family: 'monospace' }, boxWidth: 10 } } }
+                    plugins: { 
+                        legend: { position: 'right', labels: { color: '#94a3b8', font: { family: 'monospace' }, boxWidth: 10 } },
+                        tooltip: { enabled: bodyData.length > 0 }
+                    }
                 }
             });
 
-            // Act Type Chart (Mock data for now, or aggregate from gallery if backend doesn't provide)
-            // Ideally backend should provide this. For now let's use a placeholder or derived data.
-            // Since /gallery/stats only returns body parts, we can't accurately render Act Type without backend support.
-            // I will render a placeholder message for now until backend is updated.
+            // --- Chart 2: Act Types ---
             const ctx2 = document.getElementById('actTypeChart').getContext('2d');
+            if (window.actChart) window.actChart.destroy();
             
-            // Temporary: Aggregate Act Types from current page gallery records (Not ideal but shows something)
-            // Better: Just show "Coming Soon" or request backend update.
-            // Let's draw an empty chart for visual consistency
-             if (window.actChart) window.actChart.destroy();
-             window.actChart = new Chart(ctx2, {
+            const actLabels = Object.keys(actTypes);
+            const actData = Object.values(actTypes);
+            
+            window.actChart = new Chart(ctx2, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Pending Backend'],
+                    labels: actLabels.length ? actLabels : ['No Data'],
                     datasets: [{
-                        data: [100],
-                        backgroundColor: ['#334155'],
+                        data: actData.length ? actData : [1],
+                        backgroundColor: actData.length ? ['#3b82f6', '#ec4899', '#6366f1', '#14b8a6', '#f97316'] : ['#1e293b'],
                         borderColor: '#0f172a',
                         borderWidth: 2
                     }]
@@ -1093,7 +1110,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } }
+                    plugins: { 
+                        legend: { position: 'right', labels: { color: '#94a3b8', font: { family: 'monospace' }, boxWidth: 10 } },
+                        tooltip: { enabled: actData.length > 0 }
+                    }
                 }
             });
         }
