@@ -937,10 +937,11 @@ def get_intimacy_record_detail(record_id: str) -> dict:
         conn.close()
 
 def get_intimacy_stats() -> dict:
-    """获取部位统计"""
+    """获取部位和行为方式统计"""
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
+            # 1. Body Part Stats
             cur.execute(
                 """
                 SELECT body_part, COUNT(*) as count
@@ -949,7 +950,23 @@ def get_intimacy_stats() -> dict:
                 ORDER BY count DESC;
                 """
             )
-            return {row[0]: row[1] for row in cur.fetchall()}
+            body_parts = {row[0]: row[1] for row in cur.fetchall()}
+
+            # 2. Act Type Stats
+            cur.execute(
+                """
+                SELECT act_type, COUNT(*) as count
+                FROM intimacy_records
+                GROUP BY act_type
+                ORDER BY count DESC;
+                """
+            )
+            act_types = {row[0]: row[1] for row in cur.fetchall()}
+
+            return {
+                "body_parts": body_parts,
+                "act_types": act_types
+            }
     finally:
         conn.close()
 
