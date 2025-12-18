@@ -31,6 +31,8 @@ class BiologicalState(BaseModel):
 
     def __init__(self, **data):
         super().__init__(**data)
+        # 初始化修改追踪字典
+        object.__setattr__(self, '_modified', {})
         # 初始化如果没有痛感数据
         if not self.menstrual_pain_levels:
             self._generate_cycle_params()
@@ -291,3 +293,19 @@ class BiologicalState(BaseModel):
             self.cycle_day = 1
             # 新周期：重新生成参数 (长度、痛感等)
             self._generate_cycle_params()
+
+    def set_field(self, field_name: str, value):
+        """设置字段并标记为已修改"""
+        setattr(self, field_name, value)
+        if not hasattr(self, '_modified'):
+            object.__setattr__(self, '_modified', {})
+        self._modified[field_name] = value
+
+    def get_modified_fields(self) -> dict:
+        """获取被修改的字段"""
+        return getattr(self, '_modified', {})
+
+    def clear_modified_fields(self):
+        """清除修改标记"""
+        if hasattr(self, '_modified'):
+            self._modified.clear()

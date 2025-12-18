@@ -41,6 +41,10 @@ class TexasStateManager:
                 self.current_activity_rate = state_dict.get("current_activity_rate", 0.0)
                 logger.info("[StateManager] 状态已从 Redis 加载")
 
+                # 加载后清除修改标记，因为这是"干净"的状态
+                self.bio_state.clear_modified_fields()
+                self.mood_state.clear_modified_fields()
+
                 # v3.8 修复：检查 last_release_time 是否为默认值，如果是则从数据库恢复
                 if self.bio_state.last_release_time == 0.0:
                     self._recover_release_time_from_db()
@@ -73,26 +77,65 @@ class TexasStateManager:
             logger.error(f"[StateManager] 从数据库恢复状态失败: {e}")
 
     def save_state(self):
-        """保存当前状态到 Redis"""
+        """保存状态到Redis - 增量更新，只保存修改的字段"""
         try:
-            # 在保存前打印当前关键状态，便于调试观察
+            # 1. 从Redis读取最新状态
+            existing_data = self.redis.get(REDIS_KEY_STATE)
+            if existing_data:
+                state_dict = json.loads(existing_data)
+            else:
+                # 如果Redis中没有数据，创建新的
+                state_dict = {
+                    "bio": {},
+                    "mood": {},
+                    "current_activity_rate": 0.0,
+                    "updated_at": 0.0
+                }
+
+            # 2. 获取当前进程修改的字段
+            bio_modified = self.bio_state.get_modified_fields()
+            mood_modified = self.mood_state.get_modified_fields()
+
+            # 3. 只更新被修改的字段
+            current_bio = self.bio_state.model_dump()
+            current_mood = self.mood_state.model_dump()
+
+            # 3.1 更新bio字段
+            if bio_modified:
+                for field_name in bio_modified:
+                    if field_name in current_bio:
+                        state_dict["bio"][field_name] = current_bio[field_name]
+                logger.info(f"[State] 💾 保存Bio修改字段: {list(bio_modified.keys())}")
+
+            # 3.2 更新mood字段
+            if mood_modified:
+                for field_name in mood_modified:
+                    if field_name in current_mood:
+                        state_dict["mood"][field_name] = current_mood[field_name]
+                logger.info(f"[State] 💾 保存Mood修改字段: {list(mood_modified.keys())}")
+
+            # 3.3 更新其他字段（这些总是保存）
+            state_dict["current_activity_rate"] = getattr(self, "current_activity_rate", 0.0)
+            state_dict["updated_at"] = time.time()
+
+            # 4. 写回Redis
+            self.redis.set(REDIS_KEY_STATE, json.dumps(state_dict))
+
+            # 5. 清除修改标记
+            self.bio_state.clear_modified_fields()
+            self.mood_state.clear_modified_fields()
+
+            # 6. 日志
             bio = self.bio_state
             mood = self.mood_state
             logger.info(
-                f"[State] 💾 保存状态: "
+                f"[State] ✅ 状态已保存: "
                 f"Bio(Day{bio.cycle_day}/Sta{bio.stamina:.1f}/Lust{bio.lust:.1f}/Sens{bio.sensitivity:.1f}) "
                 f"Mood(P{mood.pleasure:.1f}/A{mood.arousal:.1f}/D{mood.dominance:.1f})"
             )
 
-            state_dict = {
-                "bio": self.bio_state.model_dump(),
-                "mood": self.mood_state.model_dump(),
-                "current_activity_rate": getattr(self, "current_activity_rate", 0.0),
-                "updated_at": time.time()
-            }
-            self.redis.set(REDIS_KEY_STATE, json.dumps(state_dict))
         except Exception as e:
-            logger.error(f"[StateManager] 保存状态失败: {e}")
+            logger.error(f"[StateManager] 保存状态失败: {e}", exc_info=True)
 
     def update_current_activity(self, stamina_cost_per_hour: float, is_sleeping: bool = False):
         """
@@ -100,14 +143,15 @@ class TexasStateManager:
         由外部系统（如 LifeDataService）在检测到日程变更时调用
         """
         self.current_activity_rate = stamina_cost_per_hour
-        
+
         # 更新睡眠状态
         new_sleep_state = "DeepSleep" if is_sleeping else "Awake"
         if self.bio_state.sleep_state != new_sleep_state:
             logger.info(f"[StateManager] 睡眠状态切换: {self.bio_state.sleep_state} -> {new_sleep_state}")
-            self.bio_state.sleep_state = new_sleep_state
-            
-        self.save_state()
+            # 使用 set_field 标记修改
+            self.bio_state.set_field("sleep_state", new_sleep_state)
+
+        self.save_state()  # 现在只会保存 sleep_state 字段
 
     def update_time_based_stats(self):
         """

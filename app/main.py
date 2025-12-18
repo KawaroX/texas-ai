@@ -409,21 +409,25 @@ async def update_texas_state_endpoint(
         bio_fields = state_manager.bio_state.model_fields.keys()
         for key, value in payload.items():
             if key in bio_fields:
-                setattr(state_manager.bio_state, key, value)
-        
+                # 使用 set_field 标记修改
+                state_manager.bio_state.set_field(key, value)
+
         # 更新情绪状态 (MoodState)
         if "mood" in payload and isinstance(payload["mood"], dict):
             mood_data = payload["mood"]
             mood_fields = state_manager.mood_state.model_fields.keys()
             for key, value in mood_data.items():
                 if key in mood_fields:
-                    setattr(state_manager.mood_state, key, value)
-        
+                    # 使用 set_field 标记修改
+                    state_manager.mood_state.set_field(key, value)
+
         # 保存并刷新
         state_manager.save_state()
-        
+
         return {
             "message": "状态更新成功",
+            "modified_bio": list(state_manager.bio_state.get_modified_fields().keys()),
+            "modified_mood": list(state_manager.mood_state.get_modified_fields().keys()),
             "new_state": {
                 "bio": state_manager.bio_state.model_dump(),
                 "mood": state_manager.mood_state.model_dump()

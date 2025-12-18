@@ -12,9 +12,14 @@ class MoodState(BaseModel):
     pleasure: float = Field(default=0.0, ge=-10.0, le=10.0, description="愉悦度 (P)")
     arousal: float = Field(default=0.0, ge=-10.0, le=10.0, description="激活度 (A)")
     dominance: float = Field(default=0.0, ge=-10.0, le=10.0, description="掌控度 (D)")
-    
+
     last_updated: float = Field(default_factory=time.time, description="最后更新时间戳")
     base_mood: Tuple[float, float, float] = Field(default=(1.0, -1.0, 1.0), description="基准情绪回归点")
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        # 初始化修改追踪字典
+        object.__setattr__(self, '_modified', {})
 
     def get_pad_quadrant(self) -> str:
         """
@@ -240,16 +245,32 @@ class MoodState(BaseModel):
         """获取用于 Prompt 的情绪描述"""
         # 简单的最近邻分类
         intensity = math.sqrt(self.pleasure**2 + self.arousal**2 + self.dominance**2)
-        
+
         label = "平静"
         if self.pleasure > 3: label = "开心"
         if self.pleasure > 7: label = "非常快乐"
         if self.pleasure < -3: label = "不悦"
         if self.pleasure < -7: label = "痛苦"
-        
+
         if self.arousal > 5: label += "/激动"
         if self.arousal < -5: label += "/困倦"
-        
+
         if self.dominance < -5: label += "/顺从"
-        
+
         return f"{label} (P:{self.pleasure:.1f}, A:{self.arousal:.1f}, D:{self.dominance:.1f})"
+
+    def set_field(self, field_name: str, value):
+        """设置字段并标记为已修改"""
+        setattr(self, field_name, value)
+        if not hasattr(self, '_modified'):
+            object.__setattr__(self, '_modified', {})
+        self._modified[field_name] = value
+
+    def get_modified_fields(self) -> dict:
+        """获取被修改的字段"""
+        return getattr(self, '_modified', {})
+
+    def clear_modified_fields(self):
+        """清除修改标记"""
+        if hasattr(self, '_modified'):
+            self._modified.clear()
