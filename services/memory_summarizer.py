@@ -247,7 +247,7 @@ class MemorySummarizer:
 
         # 修改为标准的 messages 格式
         payload = {
-            "model": "gemini-2.5-flash",  # 明确指定支持结构化输出的模型
+            "model": "gemini-3-flash-preview",  # 明确指定支持结构化输出的模型
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3,
             "response_format": {

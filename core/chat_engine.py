@@ -188,7 +188,7 @@ class ChatEngine:
         image_marker = "[IMAGE_REQUESTED]"
 
         # 先收集所有segments
-        async for segment in stream_ai_chat(prompt_messages, "grok-4.1-thinking"):
+        async for segment in stream_ai_chat(prompt_messages, "gemini-3-flash-preview"):
             full_response += segment
             segments_list.append(segment)
             # 调试：每个segment是否包含标记
@@ -275,15 +275,16 @@ class ChatEngine:
                     logger.info(f"[chat_engine] 检测到情绪变化: P{p_delta:+.1f} A{a_delta:+.1f}")
             except ValueError:
                 logger.warning(f"[chat_engine] 情绪标签解析失败: {mood_match.group(0)}")
-        
+
         # 2. Lust Increase
         lust_match = re.search(r"\[LUST_INCREASE:\s*([+-]?\d+)\]", full_response)
         if lust_match:
             try:
                 lust_delta = float(lust_match.group(1))
                 logger.info(f"[chat_engine] 检测到欲望变化: {lust_delta:+.1f}")
-            except ValueError: pass
-            
+            except ValueError:
+                pass
+
         # 3. Release
         if "[RELEASE_TRIGGERED]" in full_response:
             release_triggered = True
@@ -300,7 +301,7 @@ class ChatEngine:
         if mood_match: tags_to_remove.append(mood_match.group(0))
         if lust_match: tags_to_remove.append(lust_match.group(0))
         if release_triggered: tags_to_remove.append("[RELEASE_TRIGGERED]")
-        
+
         if tags_to_remove:
             for i, seg in enumerate(segments_list):
                 for tag in tags_to_remove:

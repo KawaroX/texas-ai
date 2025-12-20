@@ -37,19 +37,23 @@ class AIService:
         }
         return providers.get(provider_name)
 
-    async def stream_ai_chat(self, messages: list, model: Optional[str] = None) -> AsyncGenerator[str, None]:
+    async def stream_ai_chat(
+        self, messages: list, model: Optional[str] = None
+    ) -> AsyncGenerator[str, None]:
         """
         流式生成AI回复，按分隔符分段输出 - 完整恢复原有功能
         包含：模型路由、文本清理、分段处理、回退机制、Bark通知
         """
         import re
+
         # === DEBUG_CONTEXT_SAVE_START === 临时调试代码，用于保存AI上下文
         import os
         import json
         from datetime import datetime
+
         # === DEBUG_CONTEXT_SAVE_END ===
         from .ai_providers.utils import send_bark_notification
-        
+
         # === DEBUG_CONTEXT_SAVE_START === 保存发送给AI的完整上下文到本地文件用于调试
         # 修改这里的 True/False 来启用/禁用调试功能，无需重启服务
         DEBUG_SAVE_CONTEXT = False
@@ -57,17 +61,23 @@ class AIService:
             try:
                 debug_dir = "/app/debug_output"
                 os.makedirs(debug_dir, exist_ok=True)
-                
-                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # 包含毫秒
-                
+
+                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[
+                    :-3
+                ]  # 包含毫秒
+
                 # 1. 保存原始messages JSON
-                messages_json_file = f"{debug_dir}/ai_context_messages_{timestamp_str}.json"
-                with open(messages_json_file, 'w', encoding='utf-8') as f:
+                messages_json_file = (
+                    f"{debug_dir}/ai_context_messages_{timestamp_str}.json"
+                )
+                with open(messages_json_file, "w", encoding="utf-8") as f:
                     json.dump(messages, f, ensure_ascii=False, indent=2)
-                
+
                 # 2. 保存人类可读格式
-                messages_readable_file = f"{debug_dir}/ai_context_readable_{timestamp_str}.txt"
-                with open(messages_readable_file, 'w', encoding='utf-8') as f:
+                messages_readable_file = (
+                    f"{debug_dir}/ai_context_readable_{timestamp_str}.txt"
+                )
+                with open(messages_readable_file, "w", encoding="utf-8") as f:
                     f.write("=" * 80 + "\n")
                     f.write("AI CONTEXT - 发送给AI的完整上下文\n")
                     f.write("=" * 80 + "\n")
@@ -75,15 +85,15 @@ class AIService:
                     f.write(f"模型: {model}\n")
                     f.write(f"消息总数: {len(messages)}\n")
                     f.write("=" * 80 + "\n\n")
-                    
+
                     for i, msg in enumerate(messages):
                         f.write(f"[消息 {i+1}] 角色: {msg['role']}\n")
                         f.write("-" * 40 + "\n")
-                        f.write(msg['content'])
+                        f.write(msg["content"])
                         f.write("\n" + "=" * 40 + "\n\n")
-                
+
                 logger.debug(f"上下文已保存: {messages_json_file}")
-                
+
             except Exception as e:
                 logger.warning(f"保存上下文失败: {e}")
         # === DEBUG_CONTEXT_SAVE_END ===
@@ -140,18 +150,34 @@ class AIService:
                                 break
 
                             # 将紧随其后的收尾字符一并包含
-                            closers = set([
-                                "”", "’", "】", "」", "』", "）", "》", "〉",
-                                ")", "]", "'", '"',
-                            ])
+                            closers = set(
+                                [
+                                    "”",
+                                    "’",
+                                    "】",
+                                    "」",
+                                    "』",
+                                    "）",
+                                    "》",
+                                    "〉",
+                                    ")",
+                                    "]",
+                                    "'",
+                                    '"',
+                                ]
+                            )
                             end_index = earliest_index + 1
-                            while end_index < len(buffer) and buffer[end_index] in closers:
+                            while (
+                                end_index < len(buffer) and buffer[end_index] in closers
+                            ):
                                 end_index += 1
 
                             segment = buffer[:end_index].strip()
                             cleaned_segment = clean_segment(segment)
                             if cleaned_segment:
-                                logger.debug(f"stream_ai_chat: yield sentence='{cleaned_segment[:50]}'")
+                                logger.debug(
+                                    f"stream_ai_chat: yield sentence='{cleaned_segment[:50]}'"
+                                )
                                 yield cleaned_segment
                             buffer = buffer[end_index:]
                             total_processed += end_index
@@ -166,9 +192,11 @@ class AIService:
                             segment = buffer[:newline_index].strip()
                             cleaned_segment = clean_segment(segment)
                             if cleaned_segment:
-                                logger.debug(f"stream_ai_chat: yield line='{cleaned_segment[:50]}'")
+                                logger.debug(
+                                    f"stream_ai_chat: yield line='{cleaned_segment[:50]}'"
+                                )
                                 yield cleaned_segment
-                            buffer = buffer[newline_index + 1:]
+                            buffer = buffer[newline_index + 1 :]
                             total_processed += newline_index + 1
                             continue
 
@@ -178,7 +206,9 @@ class AIService:
                 if buffer.strip():
                     final_segment = clean_segment(buffer)
                     if final_segment:
-                        logger.debug(f"stream_ai_chat: yield final='{final_segment[:80]}'")
+                        logger.debug(
+                            f"stream_ai_chat: yield final='{final_segment[:80]}'"
+                        )
                         yield final_segment
 
                 # 如果Gemini失败或无输出，立即尝试OpenAI协议
@@ -200,7 +230,6 @@ class AIService:
                                 openai_yielded = True
                             buffer += chunk
 
-
                         # OpenAI分段处理逻辑
                         while True:
                             indices = []
@@ -212,9 +241,27 @@ class AIService:
                                 earliest_index = min(indices)
                                 if earliest_index == len(buffer) - 1:
                                     break
-                                closers = set(["”", "’", "】", "」", "』", "）", "》", "〉", ")", "]", "'", '"'])
+                                closers = set(
+                                    [
+                                        "”",
+                                        "’",
+                                        "】",
+                                        "」",
+                                        "』",
+                                        "）",
+                                        "》",
+                                        "〉",
+                                        ")",
+                                        "]",
+                                        "'",
+                                        '"',
+                                    ]
+                                )
                                 end_index = earliest_index + 1
-                                while end_index < len(buffer) and buffer[end_index] in closers:
+                                while (
+                                    end_index < len(buffer)
+                                    and buffer[end_index] in closers
+                                ):
                                     end_index += 1
                                 segment = buffer[:end_index].strip()
                                 cleaned_segment = clean_segment(segment)
@@ -231,7 +278,7 @@ class AIService:
                                 cleaned_segment = clean_segment(segment)
                                 if cleaned_segment:
                                     yield cleaned_segment
-                                buffer = buffer[newline_index + 1:]
+                                buffer = buffer[newline_index + 1 :]
                                 continue
                             break
 
@@ -277,7 +324,22 @@ class AIService:
                         if earliest_index == len(buffer) - 1:
                             break
 
-                        closers = set(["”", "’", "】", "」", "』", "）", "》", "〉", ")", "]", "'", '"'])
+                        closers = set(
+                            [
+                                "”",
+                                "’",
+                                "】",
+                                "」",
+                                "』",
+                                "）",
+                                "》",
+                                "〉",
+                                ")",
+                                "]",
+                                "'",
+                                '"',
+                            ]
+                        )
                         end_index = earliest_index + 1
                         while end_index < len(buffer) and buffer[end_index] in closers:
                             end_index += 1
@@ -285,7 +347,9 @@ class AIService:
                         segment = buffer[:end_index].strip()
                         cleaned_segment = clean_segment(segment)
                         if cleaned_segment:
-                            logger.debug(f"stream_ai_chat: yield sentence='{cleaned_segment[:50]}'")
+                            logger.debug(
+                                f"stream_ai_chat: yield sentence='{cleaned_segment[:50]}'"
+                            )
                             yield cleaned_segment
                         buffer = buffer[end_index:]
                         total_processed += end_index
@@ -299,9 +363,11 @@ class AIService:
                         segment = buffer[:newline_index].strip()
                         cleaned_segment = clean_segment(segment)
                         if cleaned_segment:
-                            logger.debug(f"stream_ai_chat: yield line='{cleaned_segment[:50]}'")
+                            logger.debug(
+                                f"stream_ai_chat: yield line='{cleaned_segment[:50]}'"
+                            )
                             yield cleaned_segment
-                        buffer = buffer[newline_index + 1:]
+                        buffer = buffer[newline_index + 1 :]
                         total_processed += newline_index + 1
                         continue
 
@@ -324,7 +390,9 @@ class AIService:
         logger.info(f"开始AI摘要，模型={model}")
         return await self.openrouter.call_chat(messages, model)
 
-    async def call_structured_generation(self, messages: list, max_retries: int = 3) -> dict:
+    async def call_structured_generation(
+        self, messages: list, max_retries: int = 3
+    ) -> dict:
         """
         结构化生成接口
         兼容原有的call_structured_generation函数
@@ -338,7 +406,10 @@ ai_service = AIService()
 
 # ===== 兼容性函数：保持原有API不变 =====
 
-async def stream_ai_chat(messages: list, model: Optional[str] = None) -> AsyncGenerator[str, None]:
+
+async def stream_ai_chat(
+    messages: list, model: Optional[str] = None
+) -> AsyncGenerator[str, None]:
     """兼容原有接口的流式对话函数"""
     async for chunk in ai_service.stream_ai_chat(messages, model):
         yield chunk
@@ -373,7 +444,7 @@ async def call_openrouter(messages, model="mistralai/mistral-7b-instruct:free") 
     return await ai_service.openrouter.call_chat(messages, model)
 
 
-async def call_gemini(messages, model="gemini-2.5-flash") -> str:
+async def call_gemini(messages, model="gemini-3-flash-preview") -> str:
     """兼容原有接口的Gemini调用函数"""
     return await ai_service.gemini.call_chat(messages, model)
 
@@ -403,6 +474,7 @@ import httpx
 from typing import Optional
 import uuid
 
+
 def get_weather_info(date: str, location: str = "") -> str:
     """
     获取指定日期和地点的天气信息（接入和风天气API，失败时退回伪随机生成）
@@ -416,9 +488,26 @@ def get_weather_info(date: str, location: str = "") -> str:
     """
     # 默认location列表
     default_locations = [
-        "101320101", "101320103", "14606", "1B6D3", "1D255", "1DC87", "275A5",
-        "28FE1", "2BBD1", "2BC09", "39CD9", "407DA", "4622E", "55E7E",
-        "8A9CA", "8E1C5", "9173", "D5EC3", "DD9B5", "E87DC",
+        "101320101",
+        "101320103",
+        "14606",
+        "1B6D3",
+        "1D255",
+        "1DC87",
+        "275A5",
+        "28FE1",
+        "2BBD1",
+        "2BC09",
+        "39CD9",
+        "407DA",
+        "4622E",
+        "55E7E",
+        "8A9CA",
+        "8E1C5",
+        "9173",
+        "D5EC3",
+        "DD9B5",
+        "E87DC",
     ]
     if not location:
         location = random.choice(default_locations)
@@ -526,7 +615,9 @@ async def generate_daily_schedule(
 - 是否处于大事件中: {"是" if is_in_major_event else "否"}"""
 
     if is_in_major_event and major_event_context:
-        prompt += f"\n- 大事件背景: {json.dumps(major_event_context, ensure_ascii=False)}"
+        prompt += (
+            f"\n- 大事件背景: {json.dumps(major_event_context, ensure_ascii=False)}"
+        )
     if special_flags:
         prompt += f"\n- 特殊情况: {', '.join(special_flags)}"
 
@@ -621,7 +712,9 @@ async def generate_major_event(
 - 持续天数: {duration_days}天"""
 
     if weather_forecast:
-        prompt += f"\n- 期间天气预报: {json.dumps(weather_forecast, ensure_ascii=False)}"
+        prompt += (
+            f"\n- 期间天气预报: {json.dumps(weather_forecast, ensure_ascii=False)}"
+        )
 
     prompt += f"""
 
@@ -702,7 +795,10 @@ async def generate_micro_experiences(
     # ✅ 改进：处理完整的上下文信息
     if previous_experiences:
         # 检查是否为新格式（字典包含previous_experiences列表）
-        if isinstance(previous_experiences, dict) and "previous_experiences" in previous_experiences:
+        if (
+            isinstance(previous_experiences, dict)
+            and "previous_experiences" in previous_experiences
+        ):
             prev_exps = previous_experiences.get("previous_experiences", [])
 
             # 构建详细的上下文提示
@@ -720,7 +816,9 @@ async def generate_micro_experiences(
             prompt += f"\n- 之前的经历摘要: {json.dumps(previous_experiences, ensure_ascii=False)}"
 
     if major_event_context:
-        prompt += f"\n- 大事件背景: {json.dumps(major_event_context, ensure_ascii=False)}"
+        prompt += (
+            f"\n- 大事件背景: {json.dumps(major_event_context, ensure_ascii=False)}"
+        )
 
     prompt += f"""
 
@@ -780,7 +878,9 @@ async def generate_micro_experiences(
 
         # 确保返回的是列表格式
         if "items" not in response or not isinstance(response["items"], list):
-            return [{"error": "AI返回格式错误: 缺少items列表", "raw_response": response}]
+            return [
+                {"error": "AI返回格式错误: 缺少items列表", "raw_response": response}
+            ]
 
         # 为每个经历项添加唯一ID
         for item in response["items"]:
@@ -831,8 +931,7 @@ async def summarize_past_micro_experiences(experiences: list) -> str:
 
 
 async def ai_decide_images_globally(
-    candidates: list,
-    target_count_range: tuple = (5, 15)
+    candidates: list, target_count_range: tuple = (5, 15)
 ) -> list:
     """
     AI全局评估哪些微观经历需要生成图片
@@ -861,7 +960,9 @@ async def ai_decide_images_globally(
     """
     min_count, max_count = target_count_range
 
-    logger.info(f"[AI图片决策] 开始评估 {len(candidates)} 个候选微观经历，目标选择 {min_count}-{max_count} 张")
+    logger.info(
+        f"[AI图片决策] 开始评估 {len(candidates)} 个候选微观经历，目标选择 {min_count}-{max_count} 张"
+    )
 
     if not candidates:
         logger.warning("[AI图片决策] 没有候选项，返回空列表")
@@ -869,7 +970,9 @@ async def ai_decide_images_globally(
 
     # 如果候选项少于最小数量，调整目标范围
     if len(candidates) < min_count:
-        logger.warning(f"[AI图片决策] 候选项({len(candidates)})少于最小数量({min_count})，调整范围")
+        logger.warning(
+            f"[AI图片决策] 候选项({len(candidates)})少于最小数量({min_count})，调整范围"
+        )
         min_count = max(1, len(candidates))
         max_count = len(candidates)
 
@@ -974,7 +1077,9 @@ async def ai_decide_images_globally(
 
         # 验证数量
         if not (min_count <= len(selected) <= max_count):
-            logger.warning(f"[AI图片决策] AI选择了{len(selected)}张图片，不在范围{min_count}-{max_count}内")
+            logger.warning(
+                f"[AI图片决策] AI选择了{len(selected)}张图片，不在范围{min_count}-{max_count}内"
+            )
 
         # 验证每个选择的ID是否有效
         valid_ids = {c["id"] for c in candidates}
@@ -986,19 +1091,27 @@ async def ai_decide_images_globally(
                 logger.warning(f"[AI图片决策] 无效的ID: {exp_id}，跳过")
                 continue
 
-            validated_selected.append({
-                "micro_experience_id": exp_id,
-                "need_image": True,  # 强制为True
-                "image_type": item.get("image_type", "selfie"),
-                "image_reason": item.get("image_reason", "值得记录的时刻")
-            })
+            validated_selected.append(
+                {
+                    "micro_experience_id": exp_id,
+                    "need_image": True,  # 强制为True
+                    "image_type": item.get("image_type", "selfie"),
+                    "image_reason": item.get("image_reason", "值得记录的时刻"),
+                }
+            )
 
         logger.info(f"[AI图片决策] 成功选择 {len(validated_selected)} 张图片")
 
         # 统计图片类型
-        selfie_count = sum(1 for item in validated_selected if item["image_type"] == "selfie")
-        scene_count = sum(1 for item in validated_selected if item["image_type"] == "scene")
-        logger.info(f"[AI图片决策] 图片类型分布: selfie={selfie_count}, scene={scene_count}")
+        selfie_count = sum(
+            1 for item in validated_selected if item["image_type"] == "selfie"
+        )
+        scene_count = sum(
+            1 for item in validated_selected if item["image_type"] == "scene"
+        )
+        logger.info(
+            f"[AI图片决策] 图片类型分布: selfie={selfie_count}, scene={scene_count}"
+        )
 
         return validated_selected
 
@@ -1010,10 +1123,10 @@ async def ai_decide_images_globally(
 async def analyze_intimacy_event(context_messages: list) -> dict:
     """
     分析亲密互动事件 (CG Gallery Analysis)
-    
+
     Args:
         context_messages: 最近的聊天记录 (list of dict)
-        
+
     Returns:
         {
             "body_part": "Mouth",
@@ -1025,13 +1138,13 @@ async def analyze_intimacy_event(context_messages: list) -> dict:
         }
     """
     logger.info(f"[AI分析] 开始分析亲密事件，上下文长度: {len(context_messages)}")
-    
+
     # 转换上下文为文本
     context_text = ""
-    for msg in context_messages[-20:]: # 取最近20条
+    for msg in context_messages[-20:]:  # 取最近20条
         role = "德克萨斯" if msg["role"] == "assistant" else "Kawaro"
         context_text += f"{role}: {msg['content']}\n"
-        
+
     prompt = f"""You are an erotic literature analyst. Analyze the following roleplay interaction between Texas and Kawaro.
 The interaction has just reached a "Release" or "Climax" point. Your job is to document this event for a gallery record.
 
@@ -1058,19 +1171,19 @@ Extract the following details from the interaction:
 }}
 """
     messages = [{"role": "user", "content": prompt}]
-    
+
     try:
         # 使用结构化生成或普通调用（如果是 OpenAI/Gemini）
         # 这里为了稳妥，使用普通调用并解析 JSON，或者复用 structured generation
         # 假设 call_structured_generation 内部使用的是能处理 JSON 的模型
         response = await call_structured_generation(messages)
-        
+
         if "error" in response:
             logger.error(f"[AI分析] 分析失败: {response['error']}")
             return None
-            
+
         return response
-        
+
     except Exception as e:
         logger.error(f"[AI分析] 调用异常: {e}")
         return None

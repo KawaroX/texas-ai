@@ -29,12 +29,12 @@ SUMMARY_API_URL = os.getenv(
 
 STRUCTURED_API_KEY = os.getenv("STRUCTURED_API_KEY")
 STRUCTURED_API_URL = os.getenv("STRUCTURED_API_URL", OPENAI_API_URL)
-STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-2.5-flash")
+STRUCTURED_API_MODEL = os.getenv("STRUCTURED_API_MODEL", "gemini-3-flash-preview")
 
 
 class OpenAIProvider(ConfigurableProvider):
     """OpenAI兼容API服务提供商"""
-    
+
     def _load_default_config(self) -> Dict[str, Any]:
         return {
             "api_key": OPENAI_API_KEY,
@@ -49,23 +49,25 @@ class OpenAIProvider(ConfigurableProvider):
             "structured_api_url": STRUCTURED_API_URL,
             "structured_model": STRUCTURED_API_MODEL,
         }
-    
+
     def get_provider_name(self) -> str:
         return "OpenAI"
-    
+
     def validate_config(self, config: Dict[str, Any]) -> bool:
         """验证配置"""
         required_keys = ["api_key", "api_url"]
         return all(key in config and config[key] for key in required_keys)
-    
-    def _build_payload_for_model(self, messages: list, model: str, stream: bool = True) -> Dict[str, Any]:
+
+    def _build_payload_for_model(
+        self, messages: list, model: str, stream: bool = True
+    ) -> Dict[str, Any]:
         """根据不同模型构建不同的payload"""
         base_payload = {
             "model": model,
             "messages": messages,
             "stream": stream,
         }
-        
+
         # if model == "gemini-2.5-pro":
         #     base_payload.update({
         #         "frequency_penalty": 0.3,
@@ -109,14 +111,16 @@ class OpenAIProvider(ConfigurableProvider):
         #     base_payload.update({
         #         "max_tokens": 512,
         #     })
-        
+
         return base_payload
-    
-    async def stream_chat(self, messages: list, model: Optional[str] = None, **kwargs) -> AsyncGenerator[str, None]:
+
+    async def stream_chat(
+        self, messages: list, model: Optional[str] = None, **kwargs
+    ) -> AsyncGenerator[str, None]:
         """流式对话"""
         model = model or self._config["default_model"]
         logger.info(f"[OpenAI] 开始流式对话，模型={model}")
-        
+
         headers = {
             "Authorization": f"Bearer {self._config['api_key']}",
             "Content-Type": "application/json",
@@ -189,7 +193,9 @@ class OpenAIProvider(ConfigurableProvider):
                     try:
                         error_content = await http_err.response.aread()
                         error_text = (
-                            error_content.decode("utf-8") if error_content else "无响应内容"
+                            error_content.decode("utf-8")
+                            if error_content
+                            else "无响应内容"
                         )
                     except Exception as read_err:
                         error_text = f"无法读取错误详情: {read_err}"
@@ -212,10 +218,12 @@ class OpenAIProvider(ConfigurableProvider):
                     yield ""
                     return
 
-    async def call_chat(self, messages: list, model: Optional[str] = None, **kwargs) -> str:
+    async def call_chat(
+        self, messages: list, model: Optional[str] = None, **kwargs
+    ) -> str:
         """非流式对话"""
         model = model or "gpt-4o-mini"
-        
+
         # 判断使用哪个API配置
         use_summary = kwargs.get("use_summary", False)
         if use_summary:
@@ -224,7 +232,7 @@ class OpenAIProvider(ConfigurableProvider):
         else:
             api_key = self._config["api_key"]
             api_url = self._config["api_url"]
-        
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
@@ -234,16 +242,16 @@ class OpenAIProvider(ConfigurableProvider):
         async def _call_request():
             logger.info(f"[OpenAI] 开始非流式调用，模型={model}")
             async with httpx.AsyncClient(timeout=self._config["timeout"]) as client:
-                response = await client.post(
-                    api_url, headers=headers, json=payload
-                )
+                response = await client.post(api_url, headers=headers, json=payload)
                 logger.debug(f"[OpenAI] 状态码: {response.status_code}")
                 logger.debug(f"[OpenAI] 返回内容: {response.text}")
                 response.raise_for_status()
                 return response.json()["choices"][0]["message"]["content"]
 
         try:
-            return await retry_with_backoff(_call_request, self._config["max_retries"], self._config["base_delay"])
+            return await retry_with_backoff(
+                _call_request, self._config["max_retries"], self._config["base_delay"]
+            )
         except httpx.HTTPStatusError as http_err:
             status_code = http_err.response.status_code
             if status_code == 429:
@@ -265,26 +273,32 @@ class OpenAIProvider(ConfigurableProvider):
         except Exception as e:
             logger.error(f"OpenAI 调用失败: 未知错误: {e}")
             return ""
-    
-    async def call_structured_generation(self, messages: list, max_retries: int = 3) -> dict:
+
+    async def call_structured_generation(
+        self, messages: list, max_retries: int = 3
+    ) -> dict:
         """结构化生成调用"""
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self._config['structured_api_key']}",
         }
-        payload = self._build_payload_for_model(messages, self._config["structured_model"], stream=False)
+        payload = self._build_payload_for_model(
+            messages, self._config["structured_model"], stream=False
+        )
         # 强制JSON输出格式
         payload["response_format"] = {"type": "json_object"}
 
         async def _call_request():
-            logger.info(f"[OpenAI] 开始结构化生成，模型={self._config['structured_model']}")
+            logger.info(
+                f"[OpenAI] 开始结构化生成，模型={self._config['structured_model']}"
+            )
             async with httpx.AsyncClient(timeout=360.0) as client:  # 恢复360秒超时
                 response = await client.post(
                     self._config["structured_api_url"], headers=headers, json=payload
                 )
                 response.raise_for_status()
                 content = response.json()["choices"][0]["message"]["content"]
-                
+
                 # 完整的JSON解析逻辑（恢复原版处理方式）
                 try:
                     # 如果内容以```json开头，去除标记
@@ -298,7 +312,7 @@ class OpenAIProvider(ConfigurableProvider):
                         content = content.strip().replace("```", "", 1)
                         if content.endswith("```"):
                             content = content[:-3].strip()
-                    
+
                     # 尝试直接解析
                     try:
                         result = json.loads(content)
@@ -323,7 +337,9 @@ class OpenAIProvider(ConfigurableProvider):
                     return {"raw_content": content, "parse_error": str(e)}
 
         try:
-            return await retry_with_backoff(_call_request, max_retries, self._config["base_delay"])
+            return await retry_with_backoff(
+                _call_request, max_retries, self._config["base_delay"]
+            )
         except Exception as e:
             logger.error(f"结构化生成失败: {e}")
             return {"error": str(e)}

@@ -44,18 +44,125 @@ from .character_manager import character_manager
 # 监控功能在 tasks 层使用，这里不需要导入
 # from .image_generation_monitor import image_generation_monitor
 
+# Mattermost 提示词日志频道配置
+PROMPT_LOG_CHANNEL_ID = "eqgikba1opnpupiy3w16icdxoo"  # 使用与预分析相同的通知频道
+
+
+async def send_prompt_log_to_mattermost(
+    prompt: str,
+    image_type: str,
+    scene_analysis: Optional[Dict] = None,
+    detected_characters: Optional[List[str]] = None,
+    clothing_source: str = "未知"
+):
+    """
+    发送图片生成提示词日志到Mattermost
+
+    Args:
+        prompt: 完整的生成提示词
+        image_type: 图片类型（"自拍" 或 "场景图"）
+        scene_analysis: AI场景分析结果（可选）
+        detected_characters: 检测到的角色列表（可选）
+        clothing_source: 服装建议来源（"AI预分析" 或 "默认建议" 或 "天气系统"）
+    """
+    try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # 构建场景分析信息
+        analysis_info = ""
+        if scene_analysis:
+            analysis_fields = []
+            if scene_analysis.get("location"):
+                analysis_fields.append(f"• 地点: {scene_analysis['location']}")
+            if scene_analysis.get("time_atmosphere"):
+                analysis_fields.append(f"• 时间: {scene_analysis['time_atmosphere']}")
+            if scene_analysis.get("weather_context"):
+                analysis_fields.append(f"• 天气: {scene_analysis['weather_context']}")
+
+            # 🔍 关键：检查是否有服装建议
+            has_clothing_details = "✅ 有" if scene_analysis.get("clothing_details") else "❌ 无"
+            analysis_fields.append(f"• **服装建议字段**: {has_clothing_details}")
+
+            if scene_analysis.get("clothing_details"):
+                clothing_preview = scene_analysis['clothing_details'][:150] + "..." if len(scene_analysis.get('clothing_details', '')) > 150 else scene_analysis.get('clothing_details', '')
+                analysis_fields.append(f"• 服装详情: {clothing_preview}")
+
+            if analysis_fields:
+                analysis_info = "\n\n**📊 AI预分析信息:**\n" + "\n".join(analysis_fields)
+
+        # 构建角色信息
+        characters_info = ""
+        if detected_characters:
+            characters_info = f"\n**🎭 检测到的角色:** {', '.join(detected_characters)}"
+
+        # 截取提示词预览（防止过长）
+        prompt_preview = prompt[:800] + "..." if len(prompt) > 800 else prompt
+
+        # 服装建议来源标记
+        clothing_badge = ""
+        if clothing_source == "AI预分析":
+            clothing_badge = "🤖 **服装来源:** AI场景预分析"
+        elif clothing_source == "默认建议":
+            clothing_badge = "⚠️ **服装来源:** 默认建议（预分析缺失）"
+        elif clothing_source == "天气系统":
+            clothing_badge = "🌤️ **服装来源:** 天气系统"
+        else:
+            clothing_badge = f"❓ **服装来源:** {clothing_source}"
+
+        message = f"""## 📝 图片生成提示词日志 ({image_type})
+
+**⏰ 生成时间:** `{timestamp}`{characters_info}
+{clothing_badge}{analysis_info}
+
+**📜 完整提示词:**
+```
+{prompt_preview}
+```
+
+---
+*💡 此日志用于调试图片生成提示词，检查服装建议是否符合场景*"""
+
+        # 发送消息到Mattermost
+        mattermost_url = "https://prts.kawaro.space/api/v4/posts"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer 8or4yqexc3r6brji6s4acp1ycr"
+        }
+
+        payload = {
+            "channel_id": PROMPT_LOG_CHANNEL_ID,
+            "message": message
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(mattermost_url, headers=headers, json=payload)
+
+            if response.status_code == 201:
+                logger.debug(f"[prompt_log] 提示词日志发送成功")
+            else:
+                logger.warning(f"[prompt_log] 提示词日志发送失败: {response.status_code}")
+
+    except Exception as e:
+        logger.error(f"[prompt_log] 发送提示词日志时出错: {e}")
+
+
 # 导入图片生成 Provider
 from .image_providers import (
     ImageGenerationRequest,
     ImageGenerationResponse,
     SeeDreamProvider,
-    GeminiImageProvider
+    GeminiImageProvider,
+    GPTImageProvider
 )
 
 # ============================================================
-# 图片生成模型配置 - 直接在这里修改模型选择
+# 图片生成模型配置 - 混合模型策略
 # ============================================================
-IMAGE_PROVIDER = "seedream"  # 可选值: "gemini" 或 "seedream"
+# 不同场景使用不同的模型以优化成本和性能：
+# - gpt-image: 纯文字生成和单图生图（成本更低，速度快）
+# - seedream: 多图生图（支持多角色场景）
+SINGLE_IMAGE_PROVIDER = "gpt-image"  # 单图生图和纯文字生成
+MULTI_IMAGE_PROVIDER = "seedream"    # 多图生图
 # ============================================================
 
 IMAGE_SAVE_DIR = "/app/generated_content/images"  # 在 Docker 容器内的路径
@@ -67,21 +174,44 @@ class ImageGenerationService:
         # 使用专用的图片生成API Key
         self.api_key = settings.IMAGE_GENERATION_API_KEY
 
-        # 🆕 根据配置初始化 Provider
-        if IMAGE_PROVIDER == "gemini":
-            self.provider = GeminiImageProvider(
-                api_key=self.api_key,
-                api_url="https://yunwu.ai/v1beta"
-            )
-            logger.info("📸 图片生成模型: Gemini-2.5-Flash-Image")
-        elif IMAGE_PROVIDER == "seedream":
-            self.provider = SeeDreamProvider(
+        # 🆕 混合模型策略：根据场景使用不同的 Provider
+        # 初始化单图/纯文字 Provider (GPT-Image-1.5-All)
+        if SINGLE_IMAGE_PROVIDER == "gpt-image":
+            self.single_image_provider = GPTImageProvider(
                 api_key=self.api_key,
                 api_url="https://yunwu.ai/v1"
             )
-            logger.info("📸 图片生成模型: SeeDream (doubao-seedream-4-5-251128)")
+            logger.info("📸 单图/纯文字生成模型: GPT-Image-1.5-All")
+        elif SINGLE_IMAGE_PROVIDER == "gemini":
+            self.single_image_provider = GeminiImageProvider(
+                api_key=self.api_key,
+                api_url="https://yunwu.ai/v1beta"
+            )
+            logger.info("📸 单图/纯文字生成模型: Gemini-2.5-Flash-Image")
+        elif SINGLE_IMAGE_PROVIDER == "seedream":
+            self.single_image_provider = SeeDreamProvider(
+                api_key=self.api_key,
+                api_url="https://yunwu.ai/v1"
+            )
+            logger.info("📸 单图/纯文字生成模型: SeeDream")
         else:
-            raise ValueError(f"未知的图片生成 Provider: {IMAGE_PROVIDER}")
+            raise ValueError(f"未知的单图 Provider: {SINGLE_IMAGE_PROVIDER}")
+
+        # 初始化多图 Provider (SeeDream)
+        if MULTI_IMAGE_PROVIDER == "seedream":
+            self.multi_image_provider = SeeDreamProvider(
+                api_key=self.api_key,
+                api_url="https://yunwu.ai/v1"
+            )
+            logger.info("📸 多图生成模型: SeeDream (doubao-seedream-4-5-251128)")
+        elif MULTI_IMAGE_PROVIDER == "gemini":
+            self.multi_image_provider = GeminiImageProvider(
+                api_key=self.api_key,
+                api_url="https://yunwu.ai/v1beta"
+            )
+            logger.info("📸 多图生成模型: Gemini-2.5-Flash-Image")
+        else:
+            raise ValueError(f"未知的多图 Provider: {MULTI_IMAGE_PROVIDER}")
 
         # 超时配置 (秒) - 保留用于其他操作
         self.generation_timeout = 300
@@ -217,7 +347,7 @@ class ImageGenerationService:
         size: Optional[str] = None
     ) -> Optional[str]:
         """
-        使用配置的 Provider 生成图片
+        使用配置的 Provider 生成图片（混合模型策略）
 
         Args:
             prompt: 生成提示词
@@ -234,7 +364,17 @@ class ImageGenerationService:
             watermark=False
         )
 
-        response = await self.provider.generate_image(request)
+        # 🆕 根据图片数量选择合适的 Provider
+        if images and len(images) > 1:
+            # 多图模式：使用多图 Provider
+            logger.info(f"🎨 使用多图 Provider: {self.multi_image_provider.get_provider_name()}")
+            provider = self.multi_image_provider
+        else:
+            # 单图或纯文字模式：使用单图 Provider
+            logger.info(f"🎨 使用单图 Provider: {self.single_image_provider.get_provider_name()}")
+            provider = self.single_image_provider
+
+        response = await provider.generate_image(request)
 
         if response.success and response.image_data:
             filepath = self._save_image(response.image_data)
@@ -335,6 +475,18 @@ class ImageGenerationService:
         # 场景图：使用AI推荐的尺寸，默认16:9横屏4K
         recommended_size = scene_analysis.get("recommended_image_size", "3840x2160") if scene_analysis else "3840x2160"
 
+        # 📝 发送提示词日志到Mattermost（用于调试）
+        try:
+            await send_prompt_log_to_mattermost(
+                prompt=prompt,
+                image_type="场景图（无角色）",
+                scene_analysis=scene_analysis,
+                detected_characters=None,
+                clothing_source="不适用（无人物）"
+            )
+        except Exception as e:
+            logger.warning(f"发送提示词日志失败（不影响图片生成）: {e}")
+
         # 🆕 使用新的 Provider 接口
         filepath = await self._generate_with_provider(prompt=prompt, images=None, size=recommended_size)
 
@@ -404,6 +556,15 @@ class ImageGenerationService:
 
         # 🆕 服装建议：结合AI预分析和天气系统
         clothing_parts = []
+        clothing_source = "未知"  # 记录服装建议来源
+
+        # 🎨 优先使用AI预分析的服装细节建议
+        if scene_analysis and scene_analysis.get("clothing_details"):
+            clothing_parts.append(f"💃 AI建议服装细节: {scene_analysis['clothing_details']}")
+            clothing_source = "AI预分析"
+        else:
+            # 如果没有AI建议，使用天气系统建议
+            clothing_source = "天气系统"
 
         # 添加天气情况描述（来自AI预分析）
         if scene_analysis and scene_analysis.get("weather_context"):
@@ -449,6 +610,18 @@ class ImageGenerationService:
 
         # 场景图（含角色）：使用AI推荐的尺寸，默认16:9横屏4K
         recommended_size = scene_analysis.get("recommended_image_size", "3840x2160") if scene_analysis else "3840x2160"
+
+        # 📝 发送提示词日志到Mattermost（用于调试）
+        try:
+            await send_prompt_log_to_mattermost(
+                prompt=prompt,
+                image_type="场景图（含角色）",
+                scene_analysis=scene_analysis,
+                detected_characters=detected_characters,
+                clothing_source=clothing_source
+            )
+        except Exception as e:
+            logger.warning(f"发送提示词日志失败（不影响图片生成）: {e}")
 
         # 🆕 使用新的 Provider 接口（支持多图输入）
         filepath = await self._generate_with_provider(prompt=prompt, images=character_images, size=recommended_size)
@@ -536,13 +709,16 @@ class ImageGenerationService:
 
         # 💃 服装建议：结合AI预分析、天气系统和性感元素
         clothing_parts = []
+        clothing_source = "未知"  # 记录服装建议来源
 
         # 🎨 优先使用AI预分析的服装细节建议（包含性感元素）
         if scene_analysis and scene_analysis.get("clothing_details"):
             clothing_parts.append(f"💃 AI建议服装细节: {scene_analysis['clothing_details']}")
+            clothing_source = "AI预分析"
         else:
             # 如果没有AI建议，使用更开放大胆的默认建议
             clothing_parts.append("服装风格：展现身材曲线的时尚服装，可以包含露肩、开叉、贴身剪裁等性感元素，体现自信魅力")
+            clothing_source = "默认建议"
 
         # 添加天气情况描述（来自AI预分析）
         if scene_analysis and scene_analysis.get("weather_context"):
@@ -621,6 +797,18 @@ class ImageGenerationService:
 
         # 自拍照：使用AI推荐的尺寸，默认9:16竖屏2K
         recommended_size = scene_analysis.get("recommended_image_size", "1080x1920") if scene_analysis else "1080x1920"
+
+        # 📝 发送提示词日志到Mattermost（用于调试）
+        try:
+            await send_prompt_log_to_mattermost(
+                prompt=prompt,
+                image_type="自拍",
+                scene_analysis=scene_analysis,
+                detected_characters=detected_characters,
+                clothing_source=clothing_source
+            )
+        except Exception as e:
+            logger.warning(f"发送提示词日志失败（不影响图片生成）: {e}")
 
         # 🆕 使用新的 Provider 接口
         filepath = await self._generate_with_provider(prompt=prompt, images=[base_image_data], size=recommended_size)
